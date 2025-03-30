@@ -75,7 +75,8 @@ class VMAFAnalyzer(QObject):
             csv_path = output_csv.replace('\\', '/')
             
             # Use single output for simplicity (instead of trying to use both JSON and CSV)
-            filter_str = f"libvmaf=log_path={json_path}:log_fmt=json"
+            # Properly escape Windows paths - enclose the entire path in quotes
+            filter_str = f"libvmaf=log_path='{json_path}':log_fmt=json"
             
             # Create FFmpeg command with hide_banner for cleaner output
             cmd = [
@@ -174,7 +175,9 @@ class VMAFAnalyzer(QObject):
                 error_msg = "Could not extract VMAF score from output"
                 logger.error(error_msg)
                 logger.error(f"STDERR: {stderr_output}")
-                self.error_occurred.emit(error_msg)
+                # Provide more detailed error message to user
+                detailed_error = f"{error_msg}\nCommand: {' '.join(cmd)}\nFFmpeg error: {stderr_output.splitlines()[0] if stderr_output else 'Unknown error'}"
+                self.error_occurred.emit(detailed_error)
                 return None
                 
         except Exception as e:
