@@ -74,28 +74,33 @@ class VMAFAnalyzer(QObject):
             json_path = output_json.replace('\\', '/')
             csv_path = output_csv.replace('\\', '/')
             
-            # Use single output for simplicity (instead of trying to use both JSON and CSV)
-            # Properly escape Windows paths - enclose the entire path in quotes
-            filter_str = f"libvmaf=log_path='{json_path}':log_fmt=json"
+            # Run separate FFmpeg commands for JSON and CSV output
+            # First run for JSON output
+            json_filter = f"libvmaf=log_path='{json_path}':log_fmt=json"
             
-            # Create FFmpeg command with hide_banner for cleaner output
-            cmd = [
+            # Create FFmpeg command for JSON output
+            json_cmd = [
                 "ffmpeg",
                 "-hide_banner",
                 "-i", dist_path_ffmpeg,
                 "-i", ref_path_ffmpeg,
-                "-lavfi", filter_str
+                "-lavfi", json_filter
             ]
             
             # Add duration limit if specified
             if duration:
-                cmd.extend(["-t", str(duration)])
-                    
+                json_cmd.extend(["-t", str(duration)])
+                
             # Add output format
-            cmd.extend(["-f", "null", "-"])
+            json_cmd.extend(["-f", "null", "-"])
             
+            self.status_update.emit("Running VMAF analysis for JSON output...")
+            logger.info(f"VMAF JSON command: {' '.join(json_cmd)}")
+            
+            # Execute the JSON command first
             self.status_update.emit("Running VMAF analysis...")
-            logger.info(f"VMAF command: {' '.join(cmd)}")
+            logger.info(f"VMAF command: {' '.join(json_cmd)}")
+            cmd = json_cmd  # We'll use this for running the process
             
             # Run the process with progress monitoring
             process = subprocess.Popen(
@@ -134,16 +139,61 @@ class VMAFAnalyzer(QObject):
             stdout, stderr = process.communicate()
             stderr_output += stderr
             
-            # Complete progress
-            self.analysis_progress.emit(100)
+            # Set progress to 50% after JSON run
+            self.analysis_progress.emit(50)
             
-            # Parse VMAF score from output (since we're not using JSON output)
+            # Parse VMAF score from output
             vmaf_match = re.search(r'VMAF score: (\d+\.\d+)', stderr_output)
+            vmaf_score = None
             if vmaf_match:
                 vmaf_score = float(vmaf_match.group(1))
                 logger.info(f"Extracted VMAF score from output: {vmaf_score}")
+            
+            # Now run the CSV command if the JSON command succeeded
+            if vmaf_score is not None:
+                # Second run for CSV output
+                csv_filter = f"libvmaf=log_path='{csv_path}':log_fmt=csv"
                 
-                # Create results object
+                # Create FFmpeg command for CSV output
+                csv_cmd = [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-i", dist_path_ffmpeg,
+                    "-i", ref_path_ffmpeg,
+                    "-lavfi", csv_filter
+                ]
+                
+                # Add duration limit if specified
+                if duration:
+                    csv_cmd.extend(["-t", str(duration)])
+                    
+                # Add output format
+                csv_cmd.extend(["-f", "null", "-"])
+                
+                self.status_update.emit("Running VMAF analysis for CSV output...")
+                logger.info(f"VMAF CSV command: {' '.join(csv_cmd)}")
+                
+                # Run the CSV command
+                try:
+                    csv_result = subprocess.run(
+                        csv_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    
+                    if csv_result.returncode != 0:
+                        logger.warning(f"CSV output generation failed: {csv_result.stderr}")
+                    else:
+                        logger.info("CSV output generation succeeded")
+                except Exception as e:
+                    logger.warning(f"Error generating CSV output: {str(e)}")
+            
+            # Complete progress
+            self.analysis_progress.emit(100)
+            
+            # Create results object if we have a VMAF score
+            if vmaf_score is not None:
                 formatted_results = {
                     'vmaf_score': vmaf_score,
                     'psnr': None,  # Will need to be extracted from JSON if needed
