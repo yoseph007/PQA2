@@ -157,8 +157,12 @@ class TriggerDetectorThread(QThread):
         if self.process and self.process.poll() is None:
             try:
                 self.process.terminate()
-                self.process.wait(timeout=2)
-                if self.process.poll() is None:
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    logger.warning("FFmpeg process didn't terminate, killing it")
                     self.process.kill()
-            except:
+                    self.process.wait()
+            except Exception as e:
+                logger.error(f"Error stopping FFmpeg process: {e}")
                 pass

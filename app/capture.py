@@ -7,6 +7,7 @@ import platform
 from datetime import datetime
 import cv2
 import numpy as np
+import psutil
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, pyqtSlot, QTimer
 from enum import Enum
 from .trigger_detector import TriggerDetectorThread
@@ -276,14 +277,16 @@ class CaptureManager(QObject):
         
         # Stop the detector now that we've found the trigger
         if self.trigger_detector:
+            logger.info("Stopping trigger detector")
             self.trigger_detector.stop()
+            self.trigger_detector.wait()  # Wait for thread to finish
             self.trigger_detector = None
             
         # Get ready to start capturing
         self._prepare_output_path()
         
-        # Delay slightly to make sure we're past the trigger frame
-        QTimer.singleShot(500, self._start_capture_after_trigger)
+        # Add a proper delay to allow DeckLink driver to release
+        QTimer.singleShot(1500, self._start_capture_after_trigger)
         
     def _on_trigger_error(self, error_msg):
         """Handle trigger detection errors"""
@@ -348,6 +351,27 @@ class CaptureManager(QObject):
         
         logger.info(f"Output path set to: {self.current_output_path}")
             
+    def _kill_all_ffmpeg(self):
+        """Kill any lingering FFmpeg processes to avoid device conflicts"""
+        try:
+            logger.info("Looking for lingering FFmpeg processes to terminate")
+            killed_count = 0
+            for proc in psutil.process_iter(['pid', 'name']):
+                if proc.info['name'] and 'ffmpeg' in proc.info['name'].lower():
+                    try:
+                        proc.kill()
+                        killed_count += 1
+                        logger.info(f"Killed FFmpeg process with PID {proc.info['pid']}")
+                    except Exception as e:
+                        logger.warning(f"Failed to kill FFmpeg process with PID {proc.info['pid']}: {e}")
+            
+            if killed_count > 0:
+                logger.info(f"Killed {killed_count} lingering FFmpeg processes")
+                # Brief pause to ensure processes are fully terminated
+                time.sleep(0.5)
+        except Exception as e:
+            logger.error(f"Error killing FFmpeg processes: {e}")
+    
     def _start_capture_after_trigger(self):
         """Start the actual FFmpeg capture process after trigger"""
         # Reset state from WAITING_FOR_TRIGGER to IDLE before starting capture
@@ -358,6 +382,9 @@ class CaptureManager(QObject):
             logger.error(error_msg)
             self.capture_finished.emit(False, error_msg)
             return
+            
+        # Kill any lingering FFmpeg processes before starting new capture
+        self._kill_all_ffmpeg()
             
         # Calculate duration based on reference, subtracting time for trigger frame
         duration = self.reference_info['duration']
@@ -391,6 +418,9 @@ class CaptureManager(QObject):
             self.status_update.emit(error_msg)
             self.capture_finished.emit(False, error_msg)
             return False
+            
+        # Kill any lingering FFmpeg processes before starting new capture
+        self._kill_all_ffmpeg()
         
         # Try to connect to the device with retries
         connected, message = self._try_connect_device(device_name, max_retries=3)

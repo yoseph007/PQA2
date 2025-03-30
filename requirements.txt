@@ -3,3 +3,4 @@ opencv-python==4.8.1.78
 numpy==1.26.4
 tqdm==4.66.1
 reportlab==4.0.4  # For PDF generation
+psutil
