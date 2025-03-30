@@ -1,0 +1,48 @@
+# === Python cache and log files ===
+*.log
+__pycache__/
+*.py[cod]
+*$py.class
+__init__.py
+
+# === Virtual environments ===
+.venv/
+env/
+venv/
+
+# === IDE/editor folders ===
+.vscode/
+.idea/
+*.swp
+
+# === OS-generated files ===
+.DS_Store
+Thumbs.db
+
+# === Build and distribution ===
+build/
+dist/
+*.egg-info/
+
+# === Project-specific folders ===
+archive/
+capture/
+default_test/
+
+# === Test and coverage files ===
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.xml
+.cache/
+.pytest_cache/
+nosetests.xml
+test-results/
+
+# === Jupyter Notebook checkpoints ===
+.ipynb_checkpoints/
+
+# === Misc ===
+*.bak
+*.tmp
