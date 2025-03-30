@@ -63,12 +63,22 @@ class VMAFAnalyzer(QObject):
             ref_path_ffmpeg = reference_path.replace('\\', '/')
             dist_path_ffmpeg = distorted_path.replace('\\', '/')
             
-            # SIMPLIFIED APPROACH: Use minimal VMAF filter string to avoid parsing issues
-            filter_str = "libvmaf"
+            # Create output paths for VMAF results
+            output_dir = os.path.dirname(reference_path)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_json = os.path.join(output_dir, f"vmaf_results_{timestamp}.json")
+            output_csv = os.path.join(output_dir, f"vmaf_results_{timestamp}.csv")
             
-            # Create FFmpeg command
+            # Advanced filter chain for both JSON and CSV output
+            filter_str = "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];[ref1][dist1]libvmaf=log_path={}:log_fmt=json;[ref2][dist2]libvmaf=log_path={}:log_fmt=csv".format(
+                output_json.replace('\\', '/'), 
+                output_csv.replace('\\', '/')
+            )
+            
+            # Create FFmpeg command with hide_banner for cleaner output
             cmd = [
                 "ffmpeg",
+                "-hide_banner",
                 "-i", dist_path_ffmpeg,
                 "-i", ref_path_ffmpeg,
                 "-filter_complex", filter_str
@@ -133,14 +143,24 @@ class VMAFAnalyzer(QObject):
                 # Create results object
                 formatted_results = {
                     'vmaf_score': vmaf_score,
-                    'psnr': None,  # Not available in simplified approach
-                    'ssim': None,  # Not available in simplified approach
+                    'psnr': None,  # Will need to be extracted from JSON if needed
+                    'ssim': None,  # Will need to be extracted from JSON if needed
                     'reference_path': reference_path,
                     'distorted_path': distorted_path,
                     'model_path': model_path,
-                    'json_path': None,
+                    'json_path': output_json,
+                    'csv_path': output_csv,
                     'raw_results': {'vmaf': {'score': vmaf_score}}
                 }
+                
+                # Parse JSON results if available
+                if os.path.exists(output_json):
+                    try:
+                        with open(output_json, 'r') as f:
+                            json_data = json.load(f)
+                            formatted_results['raw_results'] = json_data
+                    except Exception as e:
+                        logger.warning(f"Error parsing JSON results: {str(e)}")
                 
                 # Log and emit results
                 logger.info(f"VMAF analysis complete. Score: {vmaf_score}")
