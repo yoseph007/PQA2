@@ -70,14 +70,12 @@ class VMAFAnalyzer(QObject):
             output_csv = os.path.join(output_dir, f"vmaf_results_{timestamp}.csv")
             
             # Advanced filter chain for both JSON and CSV output
-            # Escape colons in Windows paths to prevent parsing errors
-            json_path = output_json.replace('\\', '/').replace(':', '\\:')
-            csv_path = output_csv.replace('\\', '/').replace(':', '\\:')
+            # Windows paths need special handling in filter_complex
+            json_path = output_json.replace('\\', '/')
+            csv_path = output_csv.replace('\\', '/')
             
-            filter_str = "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];[ref1][dist1]libvmaf=log_path={}:log_fmt=json;[ref2][dist2]libvmaf=log_path={}:log_fmt=csv".format(
-                json_path, 
-                csv_path
-            )
+            # Use single output for simplicity (instead of trying to use both JSON and CSV)
+            filter_str = f"libvmaf=log_path={json_path}:log_fmt=json"
             
             # Create FFmpeg command with hide_banner for cleaner output
             cmd = [
@@ -85,7 +83,7 @@ class VMAFAnalyzer(QObject):
                 "-hide_banner",
                 "-i", dist_path_ffmpeg,
                 "-i", ref_path_ffmpeg,
-                "-filter_complex", filter_str
+                "-lavfi", filter_str
             ]
             
             # Add duration limit if specified
