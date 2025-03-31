@@ -138,11 +138,11 @@ class VMAFAnalyzer(QObject):
             if not (test_name.startswith("20") and "_" in test_name[:15]):
                 test_name = f"{timestamp}_vmaf_analysis"
                 
-            # Create final output directory
+            # Create final output directory - ensure it exists
             output_dir = os.path.join(base_results_dir, test_name)
             os.makedirs(output_dir, exist_ok=True)
             
-            # Set output file paths
+            # Set output file paths with consistent naming
             output_json = os.path.join(output_dir, f"vmaf_results_{timestamp}.json")
             output_csv = os.path.join(output_dir, f"vmaf_results_{timestamp}.csv")
             psnr_log = os.path.join(output_dir, f"psnr_log_{timestamp}.txt")
