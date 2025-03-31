@@ -253,10 +253,15 @@ class ImprovedFileManager:
         from datetime import datetime
         safe_test_name = (test_name or "default_test").replace('/', '_').replace('\\', '_')
 
-        # If test name doesn't already have a timestamp prefix, add one
-        if not (safe_test_name.startswith("20") and "_" in safe_test_name[:15]):
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_test_name = f"{timestamp}_{safe_test_name}"
+        # Format as "user-entered test name_datestamp"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # If test name already has timestamp, remove it first
+        if safe_test_name.startswith("20") and "_" in safe_test_name[:15]:
+            safe_test_name = safe_test_name[16:]  # Remove timestamp part
+            
+        # Create folder with format "test_name_timestamp"
+        safe_test_name = f"{safe_test_name}_{timestamp}"
 
         # Create the test directory path
         test_dir = os.path.join(results_dir, safe_test_name)

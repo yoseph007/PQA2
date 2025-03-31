@@ -171,9 +171,37 @@ class VMAFAnalyzer(QObject):
                 logger.error(f"Error processing results: {str(e)}")
                 raise
 
+            # Extract PSNR and SSIM values from logs
+            psnr_value = None
+            ssim_value = None
+            
+            if os.path.exists(psnr_log):
+                try:
+                    with open(psnr_log, 'r') as f:
+                        psnr_content = f.read()
+                        # Look for average PSNR value
+                        psnr_matches = re.findall(r'average:(\d+\.\d+)', psnr_content)
+                        if psnr_matches:
+                            psnr_value = float(psnr_matches[-1])  # Use the last one (summary)
+                except Exception as e:
+                    logger.warning(f"Error extracting PSNR value: {e}")
+            
+            if os.path.exists(ssim_log):
+                try:
+                    with open(ssim_log, 'r') as f:
+                        ssim_content = f.read()
+                        # Look for average SSIM value
+                        ssim_matches = re.findall(r'All:(\d+\.\d+)', ssim_content)
+                        if ssim_matches:
+                            ssim_value = float(ssim_matches[-1])  # Use the last one (summary)
+                except Exception as e:
+                    logger.warning(f"Error extracting SSIM value: {e}")
+            
             # Format the results object
             formatted_results = {
                 'vmaf_score': vmaf_score,
+                'psnr': psnr_value,
+                'ssim': ssim_value,
                 'psnr_log': psnr_log if os.path.exists(psnr_log) else None,
                 'ssim_log': ssim_log if os.path.exists(ssim_log) else None,
                 'json_path': output_json,

@@ -870,28 +870,47 @@ class VMafTestApp(QMainWindow):
         psnr = results.get('psnr')
         ssim = results.get('ssim')
         
-        # Update UI with null checks
-        self.lbl_vmaf_status.setText(f"VMAF Score: {vmaf_score:.2f}" if vmaf_score is not None else "VMAF Score: N/A")
-        self.log_to_analysis(f"VMAF analysis complete! Score: {vmaf_score:.2f}" if vmaf_score is not None else "VMAF analysis complete! Score: N/A")
-        
-        # Add null checks for metrics
-        if psnr is not None and ssim is not None:
-            self.log_to_analysis(f"PSNR: {psnr:.2f}, SSIM: {ssim:.4f}")
-        elif psnr is not None:
-            self.log_to_analysis(f"PSNR: {psnr:.2f}, SSIM: N/A")
-        elif ssim is not None:
-            self.log_to_analysis(f"PSNR: N/A, SSIM: {ssim:.4f}")
+        # Update UI with vmaf score
+        if vmaf_score is not None:
+            self.lbl_vmaf_status.setText(f"VMAF Score: {vmaf_score:.2f}")
+            self.log_to_analysis(f"VMAF analysis complete! Score: {vmaf_score:.2f}")
         else:
-            self.log_to_analysis("PSNR: N/A, SSIM: N/A")
+            self.lbl_vmaf_status.setText("VMAF Score: N/A")
+            self.log_to_analysis("VMAF analysis complete! Score: N/A")
+        
+        # Add PSNR/SSIM metrics to log
+        if psnr is not None:
+            self.log_to_analysis(f"PSNR: {psnr:.2f} dB")
+        else:
+            self.log_to_analysis("PSNR: N/A")
+            
+        if ssim is not None:
+            self.log_to_analysis(f"SSIM: {ssim:.4f}")
+        else:
+            self.log_to_analysis("SSIM: N/A")
         
         # Enable results tab
         self.btn_next_to_results.setEnabled(True)
         
-        # Update results tab
-        self.lbl_results_summary.setText(f"VMAF Analysis Results for {self.txt_test_name.currentText()}")
-        self.lbl_vmaf_score.setText(f"VMAF Score: {vmaf_score:.2f}" if vmaf_score is not None else "VMAF Score: N/A")
-        self.lbl_psnr_score.setText(f"PSNR: {psnr:.2f} dB" if psnr is not None else "PSNR: N/A")
-        self.lbl_ssim_score.setText(f"SSIM: {ssim:.4f}" if ssim is not None else "SSIM: N/A")
+        # Update results tab header with test name
+        test_name = self.txt_test_name.currentText()
+        self.lbl_results_summary.setText(f"VMAF Analysis Results for {test_name}")
+        
+        # Update metrics display
+        if vmaf_score is not None:
+            self.lbl_vmaf_score.setText(f"VMAF Score: {vmaf_score:.2f}")
+        else:
+            self.lbl_vmaf_score.setText("VMAF Score: N/A")
+            
+        if psnr is not None:
+            self.lbl_psnr_score.setText(f"PSNR: {psnr:.2f} dB")
+        else:
+            self.lbl_psnr_score.setText("PSNR: N/A")
+            
+        if ssim is not None:
+            self.lbl_ssim_score.setText(f"SSIM: {ssim:.4f}")
+        else:
+            self.lbl_ssim_score.setText("SSIM: N/A")
         
         # Enable export buttons
         self.btn_export_pdf.setEnabled(True)
@@ -905,6 +924,24 @@ class VMafTestApp(QMainWindow):
         if json_path and os.path.exists(json_path):
             item = QListWidgetItem(f"VMAF Results: {os.path.basename(json_path)}")
             item.setData(Qt.UserRole, json_path)
+            self.list_result_files.addItem(item)
+            
+        psnr_log = results.get('psnr_log')
+        if psnr_log and os.path.exists(psnr_log):
+            item = QListWidgetItem(f"PSNR Log: {os.path.basename(psnr_log)}")
+            item.setData(Qt.UserRole, psnr_log)
+            self.list_result_files.addItem(item)
+            
+        ssim_log = results.get('ssim_log')
+        if ssim_log and os.path.exists(ssim_log):
+            item = QListWidgetItem(f"SSIM Log: {os.path.basename(ssim_log)}")
+            item.setData(Qt.UserRole, ssim_log)
+            self.list_result_files.addItem(item)
+            
+        csv_path = results.get('csv_path')
+        if csv_path and os.path.exists(csv_path):
+            item = QListWidgetItem(f"VMAF CSV: {os.path.basename(csv_path)}")
+            item.setData(Qt.UserRole, csv_path)
             self.list_result_files.addItem(item)
             
         ref_path = results.get('reference_path')
@@ -928,15 +965,112 @@ class VMafTestApp(QMainWindow):
         
     def export_pdf_certificate(self):
         """Export VMAF results as PDF certificate"""
-        # TODO: Implement PDF generation
-        QMessageBox.information(self, "Not Implemented", 
-                              "PDF certificate export is not yet implemented")
-        
+        if not self.vmaf_results:
+            QMessageBox.warning(self, "No Results", "No VMAF analysis results available to export")
+            return
+            
+        try:
+            # Get test name
+            test_name = self.txt_test_name.currentText()
+            
+            # Get paths of videos
+            reference_path = self.reference_info['path'] if self.reference_info else "Unknown"
+            captured_path = self.capture_path or "Unknown"
+            
+            # Get aligned paths if available
+            if self.aligned_paths:
+                reference_path = self.aligned_paths.get('reference', reference_path)
+                captured_path = self.aligned_paths.get('captured', captured_path)
+                
+            # Create file dialog for saving
+            output_dir = os.path.dirname(self.vmaf_results.get('json_path', os.getcwd()))
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_filename = f"vmaf_certificate_{test_name}_{timestamp}.pdf"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Save PDF Certificate", 
+                os.path.join(output_dir, default_filename),
+                "PDF Files (*.pdf)"
+            )
+            
+            if not file_path:
+                return  # User cancelled
+                
+            # Create PDF generator and generate certificate
+            from .pdf_generator import PDFCertificateGenerator
+            generator = PDFCertificateGenerator()
+            
+            self.statusBar().showMessage("Generating PDF certificate...")
+            output_path = generator.generate_certificate(
+                test_name,
+                reference_path,
+                captured_path,
+                self.vmaf_results,
+                file_path
+            )
+            
+            if output_path:
+                self.statusBar().showMessage(f"PDF certificate saved to: {output_path}")
+                QMessageBox.information(self, "Export Complete", 
+                                       f"PDF certificate saved to:\n{output_path}")
+                
+                # Add to results list
+                item = QListWidgetItem(f"PDF Certificate: {os.path.basename(output_path)}")
+                item.setData(Qt.UserRole, output_path)
+                self.list_result_files.addItem(item)
+            else:
+                QMessageBox.warning(self, "Export Failed", "Failed to generate PDF certificate")
+        except Exception as e:
+            error_msg = f"Error generating PDF: {str(e)}"
+            self.statusBar().showMessage(error_msg)
+            QMessageBox.critical(self, "Export Error", error_msg)
+            
     def export_csv_data(self):
         """Export VMAF results as CSV data"""
-        # TODO: Implement CSV export
-        QMessageBox.information(self, "Not Implemented", 
-                              "CSV data export is not yet implemented")
+        if not self.vmaf_results:
+            QMessageBox.warning(self, "No Results", "No VMAF analysis results available to export")
+            return
+            
+        try:
+            # Get test name
+            test_name = self.txt_test_name.currentText()
+            
+            # Create file dialog for saving
+            output_dir = os.path.dirname(self.vmaf_results.get('json_path', os.getcwd()))
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_filename = f"vmaf_data_{test_name}_{timestamp}.csv"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Save CSV Data", 
+                os.path.join(output_dir, default_filename),
+                "CSV Files (*.csv)"
+            )
+            
+            if not file_path:
+                return  # User cancelled
+                
+            # Create PDF generator and use its CSV export method
+            from .pdf_generator import PDFCertificateGenerator
+            generator = PDFCertificateGenerator()
+            
+            self.statusBar().showMessage("Exporting data to CSV...")
+            output_path = generator.export_csv(self.vmaf_results, file_path)
+            
+            if output_path:
+                self.statusBar().showMessage(f"CSV data saved to: {output_path}")
+                QMessageBox.information(self, "Export Complete", 
+                                       f"CSV data saved to:\n{output_path}")
+                
+                # Add to results list
+                item = QListWidgetItem(f"CSV Data: {os.path.basename(output_path)}")
+                item.setData(Qt.UserRole, output_path)
+                self.list_result_files.addItem(item)
+            else:
+                QMessageBox.warning(self, "Export Failed", "Failed to export CSV data")
+        except Exception as e:
+            error_msg = f"Error exporting CSV: {str(e)}"
+            self.statusBar().showMessage(error_msg)
+            QMessageBox.critical(self, "Export Error", error_msg)
         
     def open_result_file(self, item):
         """Open selected result file"""
