@@ -4,6 +4,7 @@ import json
 import subprocess
 import re
 import tempfile
+import glob
 from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
 import shutil
@@ -197,6 +198,19 @@ class VMAFAnalyzer(QObject):
                 except Exception as e:
                     logger.warning(f"Error extracting SSIM value: {e}")
             
+            # Copy the reference and captured videos to the output directory
+            final_ref_path = os.path.join(output_dir, f"reference_{timestamp}.mp4")
+            final_cap_path = os.path.join(output_dir, f"captured_{timestamp}.mp4")
+            
+            try:
+                shutil.copy2(reference_path, final_ref_path)
+                shutil.copy2(distorted_path, final_cap_path)
+                logger.info(f"Copied video files to result directory: {output_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to copy video files to result directory: {e}")
+                final_ref_path = reference_path
+                final_cap_path = distorted_path
+            
             # Format the results object
             formatted_results = {
                 'vmaf_score': vmaf_score,
@@ -206,11 +220,49 @@ class VMAFAnalyzer(QObject):
                 'ssim_log': ssim_log if os.path.exists(ssim_log) else None,
                 'json_path': output_json,
                 'csv_path': output_csv if os.path.exists(output_csv) else None,
-                'reference_path': reference_path,
-                'distorted_path': distorted_path,
+                'reference_path': final_ref_path,
+                'distorted_path': final_cap_path,
                 'model_path': model_path,
+                'test_dir': output_dir,
                 'raw_results': data
             }
+            
+            # Clean up intermediary files
+            try:
+                # Attempt to delete intermediary files (temp files used during processing)
+                intermediary_patterns = [
+                    "*capture_stub_normalized*", 
+                    "*stab_normalize*",
+                    "*_temp_*",
+                    "*_tmp_*",
+                    "*intermediate*"
+                ]
+                
+                # Use temp_dir for cleanup if it exists (file_manager integration)
+                script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                temp_dir = os.path.join(script_dir, "temp_files")
+                
+                if os.path.exists(temp_dir):
+                    for pattern in intermediary_patterns:
+                        for file in glob.glob(os.path.join(temp_dir, pattern)):
+                            try:
+                                os.remove(file)
+                                logger.info(f"Removed intermediary file: {file}")
+                            except Exception as e:
+                                logger.warning(f"Failed to remove intermediary file {file}: {e}")
+                
+                # Also try to cleanup any intermediaries in test_data directory
+                test_data_dir = os.path.join(script_dir, "tests", "tests_data")
+                if os.path.exists(test_data_dir):
+                    for pattern in intermediary_patterns:
+                        for file in glob.glob(os.path.join(test_data_dir, pattern)):
+                            try:
+                                os.remove(file)
+                                logger.info(f"Removed intermediary file: {file}")
+                            except Exception as e:
+                                logger.warning(f"Failed to remove intermediary file {file}: {e}")
+            except Exception as e:
+                logger.warning(f"Error during intermediary file cleanup: {e}")
 
             logger.info(f"VMAF analysis complete. Score: {vmaf_score:.2f}")
             self.status_update.emit(f"VMAF Score: {vmaf_score:.2f}")
