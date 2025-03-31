@@ -564,7 +564,7 @@ class CaptureManager(QObject):
             self.capture_finished.emit(False, error_msg)
             return False
             
-    def stop_capture(self):
+    def stop_capture(self, cleanup_temp=False):
         """Stop any active capture process"""
         if not self.is_capturing:
             return
@@ -605,16 +605,33 @@ class CaptureManager(QObject):
         self.state_changed.emit(self.state)
         self.ffmpeg_process = None
         
+        # Clean up temporary files if requested
+        if cleanup_temp and self.current_output_path and os.path.exists(self.current_output_path):
+            try:
+                logger.info(f"Cleaning up temporary capture file: {self.current_output_path}")
+                os.remove(self.current_output_path)
+                self.current_output_path = None
+            except Exception as e:
+                logger.error(f"Error removing temporary file: {e}")
+        
         # Add delay before allowing another capture
         time.sleep(1)  # 1 second delay
         
         self.status_update.emit("Capture stopped by user")
-        self.capture_finished.emit(True, self.current_output_path)
+        
+        # If we're cleaning up, don't report success
+        if cleanup_temp:
+            self.capture_finished.emit(False, "Capture cancelled by user")
+        else:
+            self.capture_finished.emit(True, self.current_output_path)
         
     def _on_capture_complete(self):
         """Handle successful capture"""
         output_path = self.current_output_path
         logger.info(f"Capture completed: {output_path}")
+        
+        # Ensure progress shows 100% when complete to fix stuck progress issue
+        self.progress_update.emit(100)
         
         # Verify the output file
         if not os.path.exists(output_path):

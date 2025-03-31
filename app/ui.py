@@ -29,8 +29,10 @@ class VMafTestApp(QMainWindow):
         # Set up logger
         self._setup_logging()
         
-        # Create improved file manager
-        self.file_manager = ImprovedFileManager()
+        # Create improved file manager with tests/test_results as base dir
+        base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests", "test_results")
+        os.makedirs(base_dir, exist_ok=True)
+        self.file_manager = ImprovedFileManager(base_dir=base_dir)
         
         # Initialize managers
         self.reference_analyzer = ReferenceAnalyzer()
@@ -120,29 +122,9 @@ class VMafTestApp(QMainWindow):
         self.lbl_reference_details = QLabel("Reference details: None")
         reference_layout.addWidget(self.lbl_reference_details)
         
-
-        
         # Add to group
         reference_group.setLayout(reference_layout)
         layout.addWidget(reference_group)
-        
-        # Device selection group
-        device_group = QGroupBox("Capture Device")
-        device_layout = QVBoxLayout()
-        
-        device_select_layout = QHBoxLayout()
-        device_select_layout.addWidget(QLabel("Device:"))
-        self.device_combo = QComboBox()
-        self.device_combo.addItem("Intensity Shuttle", "Intensity Shuttle")
-        device_select_layout.addWidget(self.device_combo)
-        self.btn_refresh_devices = QPushButton("Refresh")
-        self.btn_refresh_devices.clicked.connect(self.refresh_devices)
-        device_select_layout.addWidget(self.btn_refresh_devices)
-        device_layout.addLayout(device_select_layout)
-        
-        # Add to group
-        device_group.setLayout(device_layout)
-        layout.addWidget(device_group)
         
         # Output settings
         output_group = QGroupBox("Output Settings")
@@ -203,6 +185,24 @@ class VMafTestApp(QMainWindow):
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         
+        # Device selection group
+        device_group = QGroupBox("Capture Device")
+        device_layout = QVBoxLayout()
+        
+        device_select_layout = QHBoxLayout()
+        device_select_layout.addWidget(QLabel("Device:"))
+        self.device_combo = QComboBox()
+        self.device_combo.addItem("Intensity Shuttle", "Intensity Shuttle")
+        device_select_layout.addWidget(self.device_combo)
+        self.btn_refresh_devices = QPushButton("Refresh")
+        self.btn_refresh_devices.clicked.connect(self.refresh_devices)
+        device_select_layout.addWidget(self.btn_refresh_devices)
+        device_layout.addLayout(device_select_layout)
+        
+        # Add to group
+        device_group.setLayout(device_layout)
+        left_layout.addWidget(device_group)
+        
         # Trigger options
         trigger_group = QGroupBox("Trigger Detection")
         trigger_layout = QVBoxLayout()
@@ -222,7 +222,7 @@ class VMafTestApp(QMainWindow):
         trigger_settings.addWidget(QLabel("Consecutive frames:"))
         self.sb_trigger_frames = QSpinBox()
         self.sb_trigger_frames.setRange(1, 10)
-        self.sb_trigger_frames.setValue(3)
+        self.sb_trigger_frames.setValue(2)  # Changed default to 2
         trigger_settings.addWidget(self.sb_trigger_frames)
         
         trigger_layout.addLayout(trigger_settings)
@@ -252,35 +252,39 @@ class VMafTestApp(QMainWindow):
         capture_group.setLayout(capture_layout)
         left_layout.addWidget(capture_group)
         
-        # Capture log
-        log_group = QGroupBox("Capture Log")
-        log_layout = QVBoxLayout()
-        self.txt_capture_log = QTextEdit()
-        self.txt_capture_log.setReadOnly(True)
-        log_layout.addWidget(self.txt_capture_log)
-        log_group.setLayout(log_layout)
-        left_layout.addWidget(log_group)
-        
-        # Right side - video preview
+        # Right side - video preview and log
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         
+        # Preview at the top
         preview_group = QGroupBox("Video Preview")
         preview_layout = QVBoxLayout()
         
         self.lbl_preview = QLabel("No video feed")
         self.lbl_preview.setAlignment(Qt.AlignCenter)
         self.lbl_preview.setMinimumSize(480, 270)
-        self.lbl_preview.setStyleSheet("background-color: black; color: white;")
+        self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black;")  # Light grey background
         preview_layout.addWidget(self.lbl_preview)
         
         preview_group.setLayout(preview_layout)
         right_layout.addWidget(preview_group)
         
+        # Capture log at the bottom with fixed height
+        log_group = QGroupBox("Capture Log")
+        log_layout = QVBoxLayout()
+        self.txt_capture_log = QTextEdit()
+        self.txt_capture_log.setReadOnly(True)
+        self.txt_capture_log.setLineWrapMode(QTextEdit.WidgetWidth)  # Enable line wrapping
+        self.txt_capture_log.setMinimumHeight(150)
+        self.txt_capture_log.setMaximumHeight(200)  # Fix height to prevent stretching
+        log_layout.addWidget(self.txt_capture_log)
+        log_group.setLayout(log_layout)
+        right_layout.addWidget(log_group)
+        
         # Add widgets to splitter
         splitter.addWidget(left_widget)
         splitter.addWidget(right_widget)
-        splitter.setSizes([400, 600])
+        splitter.setSizes([350, 650])
         
         # Add splitter to layout
         layout.addWidget(splitter)
@@ -626,7 +630,12 @@ class VMafTestApp(QMainWindow):
         if output_dir == "Default output directory":
             output_dir = self.file_manager.get_default_base_dir()
         
-        test_name = self.txt_test_name.currentText()
+        # Add timestamp prefix to test name to prevent overwriting
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_test_name = self.txt_test_name.currentText()
+        test_name = f"{timestamp}_{base_test_name}"
+        
+        self.log_to_capture(f"Using test name with timestamp: {test_name}")
         
         # Update file manager base directory
         self.file_manager.base_dir = output_dir
@@ -662,7 +671,10 @@ class VMafTestApp(QMainWindow):
     def stop_capture(self):
         """Stop the capture process"""
         self.log_to_capture("Stopping capture...")
-        self.capture_manager.stop_capture()
+        self.capture_manager.stop_capture(cleanup_temp=True)
+        
+        # Reset progress bar to avoid stuck state
+        self.pb_capture_progress.setValue(0)
   
 
         
