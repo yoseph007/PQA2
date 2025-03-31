@@ -92,6 +92,10 @@ def get_video_info(video_path):
         logger.error(f"Error getting video info for {video_path}: {str(e)}")
         return None
 
+
+
+
+
 def trim_video_frame_accurate(input_path, output_path, start_frame, frame_count, frame_rate):
     """
     Trim video with frame-perfect accuracy
@@ -115,19 +119,14 @@ def trim_video_frame_accurate(input_path, output_path, start_frame, frame_count,
         
         # Build FFmpeg command for frame-accurate trimming
         cmd = [
-            "ffmpeg",
-            "-y",                      # Overwrite output
-            "-ss", f"{start_time:.6f}",# Start time with microsecond precision
+            "ffmpeg", "-y",
             "-i", input_path,
-            "-an",                     # No audio
-            "-c:v", "libx264",         # H.264 codec
-            "-preset", "slow",         # Higher quality encoding
-            "-crf", "18",              # High quality
-            "-vframes", str(frame_count),  # Exact frame count
-            "-r", str(frame_rate),     # Force exact frame rate
-            "-vsync", "0",             # Preserve frame timing
-            "-sn",                     # No subtitles
-            "-map_metadata", "-1",     # Remove metadata
+            "-vf", f"select='between(n,{start_frame},{start_frame+frame_count-1})'," 
+                   f"setpts=N/{frame_rate}/TB",
+            "-vsync", "0",
+            "-c:v", "libx264",
+            "-preset", "slow",
+            "-crf", "18",
             output_path
         ]
         
@@ -158,6 +157,10 @@ def trim_video_frame_accurate(input_path, output_path, start_frame, frame_count,
     except Exception as e:
         logger.error(f"Error trimming video: {str(e)}")
         return False
+
+
+
+
 
 def force_exact_frame_count(input_path, output_path, target_frames, frame_rate):
     """

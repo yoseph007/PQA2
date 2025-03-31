@@ -14,7 +14,7 @@ from .reference_analyzer import ReferenceAnalyzer, ReferenceAnalysisThread
 from .capture import CaptureManager, CaptureState
 from .alignment import VideoAligner, AlignmentThread
 from .analysis import VMAFAnalyzer, VMAFAnalysisThread
-from .file_manager import VideoFileManager
+from .improved_file_manager import ImprovedFileManager
 from .frame_alignment import align_videos_frame_perfect, get_video_info
 from .improved_vmaf_analyzer import ImprovedVMAFAnalyzer, ImprovedVMAFAnalysisThread
 from .improved_file_manager import ImprovedFileManager

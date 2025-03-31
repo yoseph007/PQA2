@@ -20,7 +20,107 @@ class VideoAligner(QObject):
     
     def __init__(self):
         super().__init__()
-        
+
+    def _stabilize_video(self, input_path):
+        """Apply vid.stab stabilization"""
+        try:
+            output_path = os.path.splitext(input_path)[0] + "_stab.mp4"
+            # Analysis pass
+            subprocess.run([
+                "ffmpeg", "-i", input_path,
+                "-vf", "vidstabdetect=result=transforms.trf",
+                "-f", "null", "-"
+            ], check=True)
+            
+            # Application pass
+            subprocess.run([
+                "ffmpeg", "-i", input_path,
+                "-vf", "vidstabtransform=input=transforms.trf:zoom=0:smoothing=10",
+                "-c:v", "libx264", output_path
+            ], check=True)
+            return output_path
+        except Exception as e:
+            logger.error(f"Stabilization failed: {str(e)}")
+            return input_path
+
+
+        # Add to VideoAligner class
+
+    def _add_timestamps_to_video(self, input_path, output_path):
+        """Add high-precision timestamps to video using FFmpeg"""
+        try:
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", input_path,
+                "-vf", "drawtext=text='%{pts\\:hms\\:6}':x=10:y=50:fontsize=24:fontcolor=white:box=1:boxcolor=black",
+                "-c:a", "copy",
+                output_path
+            ]
+            subprocess.run(cmd, check=True)
+            return output_path
+        except Exception as e:
+            logger.error(f"Timestamp overlay failed: {str(e)}")
+            return input_path
+
+    def _read_frame_timestamp(self, frame):
+        """Read timestamp from frame using OCR (requires pytesseract)"""
+        try:
+            import pytesseract
+            # Crop timestamp area (adjust coordinates based on your overlay position)
+            timestamp_roi = frame[40:80, 10:400]  # y:y+h, x:x+w
+            gray = cv2.cvtColor(timestamp_roi, cv2.COLOR_BGR2GRAY)
+            text = pytesseract.image_to_string(gray, config='--psm 6 digits')
+            return float(text.strip().replace(':', '').replace('.', ''))
+        except ImportError:
+            logger.error("pytesseract not installed")
+            return None
+
+        # Modify existing _align_ssim method
+        def _align_ssim(self, reference_path, captured_path, max_offset_frames):
+            # Create timestamped versions
+            ref_ts_path = self._add_timestamps_to_video(reference_path, "ref_ts.mp4")
+            cap_ts_path = self._add_timestamps_to_video(captured_path, "cap_ts.mp4")
+            
+            # Existing SSIM alignment logic with timestamp verification
+            # ... [original code] ...
+            
+            # Add timestamp-based verification
+            best_offset = self._verify_with_timestamps(ref_ts_path, cap_ts_path, best_offset)
+            return best_offset, best_score
+
+        def _verify_with_timestamps(self, ref_path, cap_path, initial_offset):
+            """Improve offset accuracy using timestamp OCR"""
+            ref_cap = cv2.VideoCapture(ref_path)
+            cap_cap = cv2.VideoCapture(cap_path)
+            
+            # Sample middle frames for better reliability
+            sample_points = [0.3, 0.5, 0.7]
+            offsets = []
+            
+            for point in sample_points:
+                ref_frame_idx = int(ref_cap.get(cv2.CAP_PROP_FRAME_COUNT) * point)
+                ref_cap.set(cv2.CAP_PROP_POS_FRAMES, ref_frame_idx)
+                ref_frame = ref_cap.read()
+                
+                cap_frame_idx = ref_frame_idx + initial_offset
+                cap_cap.set(cv2.CAP_PROP_POS_FRAMES, cap_frame_idx)
+                cap_frame = cap_cap.read()
+                
+                ref_ts = self._read_frame_timestamp(ref_frame)
+                cap_ts = self._read_frame_timestamp(cap_frame)
+                
+                if ref_ts and cap_ts:
+                    offsets.append(cap_ts - ref_ts)
+            
+            if offsets:
+                return int(np.median(offsets))
+            return initial_offset
+
+
+
+
+
+
     def align_videos(self, reference_path, captured_path, max_offset_seconds=5):
         """
         Align two videos and return the frame offset
@@ -31,6 +131,21 @@ class VideoAligner(QObject):
         - aligned_reference: Path to trimmed reference video
         - aligned_captured: Path to trimmed captured video
         """
+     
+
+
+
+        # Stabilize videos before alignment
+        try:
+            self.status_update.emit("Stabilizing videos...")
+            ref_stab = self._stabilize_video(reference_path)
+            cap_stab = self._stabilize_video(captured_path)
+            reference_path = ref_stab
+            captured_path = cap_stab
+        except Exception as e:
+            logger.warning(f"Stabilization failed: {str(e)}")        
+        
+
         try:
             self.status_update.emit(f"Loading reference video: {os.path.basename(reference_path)}")
             
