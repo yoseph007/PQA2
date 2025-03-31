@@ -122,13 +122,32 @@ class VMAFAnalyzer(QObject):
                 logger.error(f"FFmpeg STDERR: {stderr_output}")
                 raise FileNotFoundError(f"VMAF output file not created")
 
-            # Prepare output paths for final destination
+            # Prepare output paths for final destination in test_results
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_dir = os.path.dirname(reference_path)
+            
+            # Get test_results directory path
+            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            base_results_dir = os.path.join(script_dir, "tests", "test_results")
+            
+            # Extract test name from reference path if possible
+            ref_dir = os.path.dirname(reference_path)
+            test_name = os.path.basename(ref_dir)
+            
+            # If test_name doesn't look like a timestamped test folder, use a default
+            if not (test_name.startswith("20") and "_" in test_name[:15]):
+                test_name = f"{timestamp}_vmaf_analysis"
+                
+            # Create final output directory
+            output_dir = os.path.join(base_results_dir, test_name)
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Set output file paths
             output_json = os.path.join(output_dir, f"vmaf_results_{timestamp}.json")
             output_csv = os.path.join(output_dir, f"vmaf_results_{timestamp}.csv")
             psnr_log = os.path.join(output_dir, f"psnr_log_{timestamp}.txt")
             ssim_log = os.path.join(output_dir, f"ssim_log_{timestamp}.txt")
+            
+            logger.info(f"Saving VMAF results to: {output_dir}")
 
             # Read results from JSON file
             try:

@@ -606,6 +606,17 @@ class CaptureManager(QObject):
                 logger.info(f"Cleaning up temporary capture file: {self.current_output_path}")
                 os.remove(self.current_output_path)
                 self.current_output_path = None
+                
+                # Also clean up any other temp files in the same directory
+                temp_dir = os.path.dirname(self.current_output_path)
+                for file in os.listdir(temp_dir):
+                    if file.startswith("temp_") or file.startswith("tmp_"):
+                        try:
+                            file_path = os.path.join(temp_dir, file)
+                            logger.info(f"Removing additional temp file: {file_path}")
+                            os.remove(file_path)
+                        except Exception as e:
+                            logger.warning(f"Could not remove temp file {file}: {e}")
             except Exception as e:
                 logger.error(f"Error removing temporary file: {e}")
         

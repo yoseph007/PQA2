@@ -34,6 +34,7 @@ class VMafTestApp(QMainWindow):
         base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests", "test_results")
         os.makedirs(base_dir, exist_ok=True)
         self.file_manager = ImprovedFileManager(base_dir=base_dir)
+        logger.info(f"Using test results directory: {base_dir}")
         
         # Initialize managers
         self.reference_analyzer = ReferenceAnalyzer()
@@ -570,23 +571,28 @@ class VMafTestApp(QMainWindow):
                               "Adding trigger frames is not yet implemented")
 
     def browse_output_dir(self):
-        """Browse for output directory"""
-        # Start in the default test_results directory
+        """Browse for output directory (always uses test_results)"""
+        # Always use the default test_results directory
         default_dir = self.file_manager.get_default_base_dir()
         
+        # Show the browser but only for visual confirmation
         directory = QFileDialog.getExistingDirectory(
             self, "Select Output Directory", default_dir
         )
         
-        if directory:
-            self.lbl_output_dir.setText(directory)
-            self.lbl_output_dir.setToolTip(directory)
-            
-            # Update file manager base directory
-            self.file_manager.base_dir = directory
-            
-            # Update capture manager
-            self.capture_manager.set_output_directory(directory)
+        # Always use test_results regardless of selection
+        self.lbl_output_dir.setText(default_dir)
+        self.lbl_output_dir.setToolTip(default_dir)
+        
+        # Update file manager base directory (even though it should already be set)
+        self.file_manager.base_dir = default_dir
+        
+        # Update capture manager
+        self.capture_manager.set_output_directory(default_dir)
+        
+        # Show message about standard directory
+        self.log_to_setup(f"Using standard output directory: {default_dir}")
+        logger.info(f"Output directory set/confirmed: {default_dir}")
 
 
           

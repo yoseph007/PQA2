@@ -237,21 +237,18 @@ class ImprovedFileManager:
         Compatibility method for CaptureManager
 
         Args:
-            base_dir: Base directory for test output
+            base_dir: Base directory for test output (ignored - always using tests/test_results)
             test_name: Test name
             filename: Optional filename
 
         Returns:
             Complete path to output file or directory
         """
-        # Temporarily use the provided base_dir for this specific output
-        # (without changing self.base_dir)
-        temp_base_dir = self.base_dir
-
-        if base_dir and os.path.exists(base_dir):
-            # Use the provided base_dir for this call only
-            temp_base_dir = base_dir
-
+        # Always use tests/test_results as the base directory
+        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        results_dir = os.path.join(script_dir, "tests", "test_results")
+        os.makedirs(results_dir, exist_ok=True)
+        
         # Make safe test name
         from datetime import datetime
         safe_test_name = (test_name or "default_test").replace('/', '_').replace('\\', '_')
@@ -262,10 +259,13 @@ class ImprovedFileManager:
             safe_test_name = f"{timestamp}_{safe_test_name}"
 
         # Create the test directory path
-        test_dir = os.path.join(temp_base_dir, safe_test_name)
+        test_dir = os.path.join(results_dir, safe_test_name)
 
         # Ensure directory exists
         os.makedirs(test_dir, exist_ok=True)
+
+        # Log the directory being used
+        logger.info(f"Using test directory: {test_dir}")
 
         # If no filename, just return the test directory path
         if not filename:
