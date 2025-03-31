@@ -28,10 +28,9 @@ dist/
 # === Project-specific folders ===
 archive/
 capture/
-default_test/
+
 
 # === Test and coverage files ===
-htmlcov/
 .tox/
 .nox/
 .coverage
@@ -39,7 +38,9 @@ coverage.xml
 .cache/
 .pytest_cache/
 nosetests.xml
-test-results/
+tests/
+tests_data/
+test_results/
 
 # === Jupyter Notebook checkpoints ===
 .ipynb_checkpoints/
@@ -47,3 +48,4 @@ test-results/
 # === Misc ===
 *.bak
 *.tmp
+*.pm4
