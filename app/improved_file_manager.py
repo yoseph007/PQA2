@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import logging
 from pathlib import Path
+from datetime import datetime 
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,6 @@ class ImprovedFileManager:
         """
         # If no base directory provided, use default in tests/test_results
         if base_dir is None:
-            import os
             script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             base_dir = os.path.join(script_dir, "tests", "test_results")
             # Ensure it exists
@@ -213,7 +213,6 @@ class ImprovedFileManager:
 
         # Otherwise, create default in project tests/test_results folder
         try:
-            import os
             script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             base_path = os.path.join(script_dir, "tests", "test_results")
 
@@ -222,7 +221,6 @@ class ImprovedFileManager:
             return base_path
         except Exception as e:
             # Fallback to current directory
-            import os
             fallback_path = os.path.join(os.getcwd(), 'test_results')
             os.makedirs(fallback_path, exist_ok=True)
             return fallback_path
@@ -255,7 +253,6 @@ class ImprovedFileManager:
             temp_base_dir = base_dir
 
         # Make safe test name
-        import os
         from datetime import datetime
         safe_test_name = (test_name or "default_test").replace('/', '_').replace('\\', '_')
 

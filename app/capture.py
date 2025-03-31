@@ -299,13 +299,8 @@ class CaptureManager(QObject):
         # Get ready to start capturing
         self._prepare_output_path()
         
-<<<<<<< HEAD
         # Add a proper delay to allow DeckLink driver to release
         QTimer.singleShot(1500, self._start_capture_after_trigger)
-=======
-        # Delay slightly to make sure we're past the trigger frame
-        QTimer.singleShot(1500, self._start_capture_after_trigger)  # Increased from 500ms to 1500ms
->>>>>>> 4dc75e8d4b35c81540ce5d3ee150488851a666ff
         
     def _on_trigger_error(self, error_msg):
         """Handle trigger detection errors"""
