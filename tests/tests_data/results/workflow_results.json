@@ -1,0 +1,28 @@
+{
+  "capture": {
+    "success": true,
+    "captured_path": "sample_videos\\distorted.mp4"
+  },
+  "alignment": {
+    "success": true,
+    "aligned_reference": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/tests_data\\2b_enc_aligned.mp4",
+    "aligned_captured": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/tests_data\\distorted_aligned.mp4",
+    "offset_frames": 0,
+    "offset_seconds": 0.0
+  },
+  "vmaf": {
+    "success": true,
+    "score": 95.0,
+    "results": {
+      "vmaf_score": 95.0,
+      "vmaf_min": 90.0,
+      "vmaf_max": 98.0,
+      "psnr": 35.0,
+      "ssim": 0.98,
+      "output_json": "C:\\Users\\yos\\AppData\\Local\\Temp\\vmaf_analysis_3jicnao9\\test_1743274086_vmaf.json",
+      "reference": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/tests_data\\2b_enc_aligned.mp4",
+      "distorted": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/tests_data\\distorted_aligned.mp4",
+      "success": true
+    }
+  }
+}

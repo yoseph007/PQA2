@@ -17,13 +17,12 @@ class ImprovedFileManager:
     - Cleans up automatically to prevent abandoned files
     """
 
-    def __init__(self, base_dir=None, temp_dir=None):
+    def __init__(self, base_dir=None):
         """
         Initialize file manager
 
         Args:
             base_dir: Base directory for test results
-            temp_dir:  Temporary directory for intermediate files
         """
         # If no base directory provided, use default in tests/test_results
         if base_dir is None:
@@ -35,14 +34,9 @@ class ImprovedFileManager:
         self.base_dir = base_dir
         logger.info(f"File manager initialized with base directory: {self.base_dir}")
 
-        # Create a global temp directory 
-        if temp_dir is None:
-            self.temp_dir = tempfile.mkdtemp(prefix="vmaf_app_")
-        else:
-            self.temp_dir = temp_dir
-            os.makedirs(self.temp_dir, exist_ok=True) #Ensure temp dir exists.
-
-        logger.info(f"Using temporary workspace: {self.temp_dir}")
+        # Create a global temp directory in system temp folder
+        self.temp_dir = tempfile.mkdtemp(prefix="vmaf_app_")
+        logger.info(f"Created temporary workspace: {self.temp_dir}")
 
         # Track all files
         self.temp_files = []
@@ -63,20 +57,14 @@ class ImprovedFileManager:
         safe_test_name = test_name.replace('/', '_').replace('\\', '_')
 
         # Create test directory path
-        test_dir = self.create_test_dir(safe_test_name)
+        test_dir = os.path.join(self.base_dir, safe_test_name)
 
+        # Ensure directory exists
+        os.makedirs(test_dir, exist_ok=True)
 
         # Return full path
         if filename:
             return os.path.join(test_dir, filename)
-        return test_dir
-
-    def create_test_dir(self, test_name):
-        """Create a directory for test results"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Format as timestamp_testname to ensure unique folders
-        test_dir = os.path.join(self.base_dir, f"{timestamp}_{test_name}")
-        os.makedirs(test_dir, exist_ok=True)
         return test_dir
 
     def get_temp_path(self, filename):
@@ -260,22 +248,22 @@ class ImprovedFileManager:
         script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         results_dir = os.path.join(script_dir, "tests", "test_results")
         os.makedirs(results_dir, exist_ok=True)
-
+        
         # Create temp directory for intermediary files if it doesn't exist
         temp_dir = os.path.join(script_dir, "temp_files")
         os.makedirs(temp_dir, exist_ok=True)
-
+        
         # Make safe test name
         from datetime import datetime
         safe_test_name = (test_name or "default_test").replace('/', '_').replace('\\', '_')
 
         # Format as "datestamp_user-entered test name"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
+        
         # If test name already has timestamp, remove it first
         if safe_test_name.startswith("20") and "_" in safe_test_name[:15]:
             safe_test_name = safe_test_name[16:]  # Remove timestamp part
-
+            
         # Create folder with format "datestamp_test_name"
         safe_test_name = f"{timestamp}_{safe_test_name}"
 
@@ -294,40 +282,39 @@ class ImprovedFileManager:
 
         # Return path with filename
         return os.path.join(test_dir, filename)
-
+        
     def get_temp_path(self, filename=None):
         """
         Get path to a temporary file or directory for intermediary processing
-
+        
         Args:
             filename: Optional filename
-
+            
         Returns:
             Path to temporary file or directory
         """
         script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         temp_dir = os.path.join(script_dir, "temp_files")
         os.makedirs(temp_dir, exist_ok=True)
-
+        
         if not filename:
             return temp_dir
-
+            
         return os.path.join(temp_dir, filename)
-
-
+        
     def cleanup_intermediary_files(self):
         """
         Clean up all intermediary files in the temp directory
-
+        
         Returns:
             Success status
         """
         script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         temp_dir = os.path.join(script_dir, "temp_files")
-
+        
         if not os.path.exists(temp_dir):
             return True
-
+            
         try:
             # Delete all files in temp directory
             for filename in os.listdir(temp_dir):
@@ -339,7 +326,7 @@ class ImprovedFileManager:
                         shutil.rmtree(file_path)
                 except Exception as e:
                     logger.warning(f"Failed to delete {file_path}: {e}")
-
+                    
             logger.info(f"Cleaned up intermediary files in {temp_dir}")
             return True
         except Exception as e:
