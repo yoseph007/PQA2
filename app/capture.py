@@ -218,6 +218,20 @@ class CaptureManager(QObject):
             self.capture_finished.emit(False, error_msg)
             return False
         
+        # Force device reset first to ensure we're not getting color bars
+        logger.info("Pre-resetting device before trigger detection to avoid color bars")
+        self.status_update.emit("Initializing device...")
+        reset_success, reset_msg = self._force_reset_device(device_name)
+        
+        if not reset_success:
+            error_msg = f"Cannot initialize capture device: {reset_msg}"
+            logger.error(error_msg)
+            self.status_update.emit(error_msg)
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.capture_finished.emit(False, error_msg)
+            return False
+            
         # Try to connect to the device with retries
         connected, message = self._try_connect_device(device_name, max_retries=3)
         if not connected:
@@ -285,8 +299,13 @@ class CaptureManager(QObject):
         # Get ready to start capturing
         self._prepare_output_path()
         
+<<<<<<< HEAD
         # Add a proper delay to allow DeckLink driver to release
         QTimer.singleShot(1500, self._start_capture_after_trigger)
+=======
+        # Delay slightly to make sure we're past the trigger frame
+        QTimer.singleShot(1500, self._start_capture_after_trigger)  # Increased from 500ms to 1500ms
+>>>>>>> 4dc75e8d4b35c81540ce5d3ee150488851a666ff
         
     def _on_trigger_error(self, error_msg):
         """Handle trigger detection errors"""
@@ -376,6 +395,12 @@ class CaptureManager(QObject):
         """Start the actual FFmpeg capture process after trigger"""
         # Reset state from WAITING_FOR_TRIGGER to IDLE before starting capture
         self.state = CaptureState.IDLE
+        
+        # Force a device reset before capture
+        self._force_reset_device("Intensity Shuttle")
+        
+        # Add additional delay for device stabilization
+        time.sleep(1)
         
         if not self.reference_info:
             error_msg = "No reference video selected"
@@ -628,6 +653,25 @@ class CaptureManager(QObject):
         self.state = CaptureState.ERROR
         self.state_changed.emit(self.state)
         
+        # Check for signal loss error specifically
+        if "Cannot Autodetect input stream or No signal" in error_msg:
+            self.status_update.emit("Signal lost during capture initialization. Attempting recovery...")
+            
+            # Kill any processes and wait
+            self._kill_ffmpeg_processes()
+            time.sleep(3)
+            
+            # Try again with a longer initialization delay
+            self.status_update.emit("Retrying capture with longer initialization delay...")
+            
+            # Reset output path (in case it was partially written)
+            QTimer.singleShot(2000, lambda: self.start_capture(
+                "Intensity Shuttle",
+                self.current_output_path,
+                duration=self.reference_info['duration'] - (1.0 / self.reference_info.get('frame_rate', 25))
+            ))
+            return
+        
         # Check if it's a device error that might be recoverable
         device_error = "Cannot access" in error_msg or "Error opening input" in error_msg or "No such device" in error_msg
         
@@ -799,7 +843,7 @@ class CaptureManager(QObject):
                 timeout=2
             )
             
-            # Now try to connect to specific device
+            # Now try to connect to specific device (without format code first)
             cmd = [
                 self._ffmpeg_path,
                 "-f", "decklink",

@@ -16,14 +16,20 @@ class ImprovedFileManager:
     - Cleans up automatically to prevent abandoned files
     """
     
-    def __init__(self, base_dir="./tests/test_results"):
+    def __init__(self, base_dir=None):
         """
         Initialize file manager
         
         Args:
             base_dir: Base directory for test results
         """
-        self.base_dir = base_dir
+        # If no base directory specified, use the default
+        if not base_dir:
+            self.base_dir = self.get_default_base_dir()
+        else:
+            self.base_dir = base_dir
+            
+        logger.info(f"File manager initialized with base directory: {self.base_dir}")
         
         # Create a global temp directory in system temp folder
         self.temp_dir = tempfile.mkdtemp(prefix="vmaf_app_")
@@ -216,26 +222,38 @@ class ImprovedFileManager:
         except:
             pass
 
-
     def get_output_path(self, base_dir=None, test_name=None, filename=None):
         """
         Compatibility method for CaptureManager
         
         Args:
-            base_dir: Base directory (ignored, using self.base_dir instead)
+            base_dir: Base directory for test output
             test_name: Test name
             filename: Optional filename
             
         Returns:
             Complete path to output file or directory
         """
-        # Update base directory if provided (though we prefer to use self.base_dir)
-        if base_dir:
-            self.base_dir = base_dir
+        # Temporarily use the provided base_dir for this specific output
+        # (without changing self.base_dir)
+        temp_base_dir = self.base_dir
+        
+        if base_dir and os.path.exists(base_dir):
+            # Use the provided base_dir for this call only
+            temp_base_dir = base_dir
             
+        # Make safe test name
+        safe_test_name = (test_name or "default_test").replace('/', '_').replace('\\', '_')
+        
+        # Create the test directory path
+        test_dir = os.path.join(temp_base_dir, safe_test_name)
+        
+        # Ensure directory exists
+        os.makedirs(test_dir, exist_ok=True)
+        
         # If no filename, just return the test directory path
         if not filename:
-            return self.get_test_path(test_name or "default_test")
+            return test_dir
         
-        # Return complete path with filename
-        return self.get_test_path(test_name or "default_test", filename)
+        # Return path with filename
+        return os.path.join(test_dir, filename)
