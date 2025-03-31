@@ -249,23 +249,19 @@ class ImprovedFileManager:
         results_dir = os.path.join(script_dir, "tests", "test_results")
         os.makedirs(results_dir, exist_ok=True)
         
-        # Create temp directory for intermediary files if it doesn't exist
-        temp_dir = os.path.join(script_dir, "temp_files")
-        os.makedirs(temp_dir, exist_ok=True)
-        
         # Make safe test name
         from datetime import datetime
         safe_test_name = (test_name or "default_test").replace('/', '_').replace('\\', '_')
 
-        # Format as "datestamp_user-entered test name"
+        # Format as "user-entered test name_datestamp"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # If test name already has timestamp, remove it first
         if safe_test_name.startswith("20") and "_" in safe_test_name[:15]:
             safe_test_name = safe_test_name[16:]  # Remove timestamp part
             
-        # Create folder with format "datestamp_test_name"
-        safe_test_name = f"{timestamp}_{safe_test_name}"
+        # Create folder with format "test_name_timestamp"
+        safe_test_name = f"{safe_test_name}_{timestamp}"
 
         # Create the test directory path
         test_dir = os.path.join(results_dir, safe_test_name)
@@ -282,53 +278,3 @@ class ImprovedFileManager:
 
         # Return path with filename
         return os.path.join(test_dir, filename)
-        
-    def get_temp_path(self, filename=None):
-        """
-        Get path to a temporary file or directory for intermediary processing
-        
-        Args:
-            filename: Optional filename
-            
-        Returns:
-            Path to temporary file or directory
-        """
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        temp_dir = os.path.join(script_dir, "temp_files")
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        if not filename:
-            return temp_dir
-            
-        return os.path.join(temp_dir, filename)
-        
-    def cleanup_intermediary_files(self):
-        """
-        Clean up all intermediary files in the temp directory
-        
-        Returns:
-            Success status
-        """
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        temp_dir = os.path.join(script_dir, "temp_files")
-        
-        if not os.path.exists(temp_dir):
-            return True
-            
-        try:
-            # Delete all files in temp directory
-            for filename in os.listdir(temp_dir):
-                file_path = os.path.join(temp_dir, filename)
-                try:
-                    if os.path.isfile(file_path):
-                        os.unlink(file_path)
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)
-                except Exception as e:
-                    logger.warning(f"Failed to delete {file_path}: {e}")
-                    
-            logger.info(f"Cleaned up intermediary files in {temp_dir}")
-            return True
-        except Exception as e:
-            logger.error(f"Error cleaning up intermediary files: {e}")
-            return False
