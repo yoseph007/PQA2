@@ -11,6 +11,13 @@ import psutil
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, pyqtSlot, QTimer
 from enum import Enum
 from .trigger_detector import TriggerDetectorThread
+import pytesseract
+from .alignment import VideoAligner
+from .video_normalizer import normalize_videos_for_comparison
+
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Adjust path as needed
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -86,26 +93,46 @@ class CaptureMonitor(QThread):
                     logger.warning(f"Error reading FFmpeg output: {e}")
                         
             time.sleep(0.1)
-            
+  
+  
+  
     def _terminate_process(self):
-        """Safely terminate the FFmpeg process"""
+        """Safely terminate the FFmpeg process with proper signal to finalize file"""
         if self.process and self.process.poll() is None:
             try:
-                logger.info("Terminating FFmpeg process")
-                self.process.terminate()
+                logger.info("Sending graceful termination signal to FFmpeg process")
                 
-                # Wait for process to terminate
-                for _ in range(50):  # 5 second timeout
+                # First try to send a SIGINT (Ctrl+C) which allows FFmpeg to finalize the file
+                if hasattr(signal, 'SIGINT'):  # Unix-like systems
+                    import signal
+                    self.process.send_signal(signal.SIGINT)
+                else:  # Windows
+                    # On Windows, try to send Ctrl+C event
+                    import ctypes
+                    kernel32 = ctypes.WinDLL('kernel32')
+                    kernel32.GenerateConsoleCtrlEvent(0, 0)  # 0 is CTRL_C_EVENT
+                
+                # Wait for process to terminate (longer timeout for finalization)
+                logger.info("Waiting for FFmpeg to finalize output file...")
+                for _ in range(100):  # 10 second timeout
                     if self.process.poll() is not None:
+                        logger.info("FFmpeg process finalized and terminated")
                         break
                     time.sleep(0.1)
                     
                 # Force kill if still running
                 if self.process.poll() is None:
-                    logger.warning("Process did not terminate, forcing kill")
+                    logger.warning("Process did not terminate gracefully, forcing kill")
                     self.process.kill()
+                    self.process.wait(timeout=5)  # Wait with timeout
             except Exception as e:
                 logger.error(f"Error terminating process: {e}")
+                # As a last resort, try to kill it
+                try:
+                    self.process.kill()
+                except:
+                    pass
+
 
     def stop(self):
         """Stop monitoring"""
@@ -204,9 +231,9 @@ class CaptureManager(QObject):
         logger.info(f"Reference video set: {os.path.basename(reference_info['path'])}, " +
                    f"duration: {reference_info['duration']:.2f}s, " +
                    f"resolution: {reference_info['width']}x{reference_info['height']}")
-                   
-    def start_trigger_detection(self, device_name, threshold=0.85, consecutive_frames=3):
-        """Start detecting the white frame trigger"""
+ 
+    def start_trigger_detection(self, device_name, threshold=0.85, consecutive_frames=2):
+        """Modified to be more tolerant of initial device issues"""
         if self.is_capturing:
             logger.warning("Capture already in progress")
             return False
@@ -218,48 +245,18 @@ class CaptureManager(QObject):
             self.capture_finished.emit(False, error_msg)
             return False
         
-        # Force device reset first to ensure we're not getting color bars
-        logger.info("Pre-resetting device before trigger detection to avoid color bars")
+        # Always force a device reset first
+        logger.info("Pre-resetting device before trigger detection")
         self.status_update.emit("Initializing device...")
         reset_success, reset_msg = self._force_reset_device(device_name)
         
-        if not reset_success:
-            error_msg = f"Cannot initialize capture device: {reset_msg}"
-            logger.error(error_msg)
-            self.status_update.emit(error_msg)
-            self.state = CaptureState.ERROR
-            self.state_changed.emit(self.state)
-            self.capture_finished.emit(False, error_msg)
-            return False
-            
         # Try to connect to the device with retries
-        connected, message = self._try_connect_device(device_name, max_retries=3)
-        if not connected:
-            # Try force-reset as last resort
-            logger.warning("Initial connection attempts failed, trying force reset...")
-            self.status_update.emit("Connection attempts failed, trying device reset...")
-            reset_success, reset_msg = self._force_reset_device(device_name)
-            
-            if not reset_success:
-                error_msg = f"Cannot access capture device after reset: {reset_msg}"
-                logger.error(error_msg)
-                self.status_update.emit(error_msg)
-                self.state = CaptureState.ERROR
-                self.state_changed.emit(self.state)
-                self.capture_finished.emit(False, error_msg)
-                return False
-                
-            # Try one more connection after reset
-            connected, message = self._try_connect_device(device_name, max_retries=1)
-            if not connected:
-                error_msg = f"Cannot access capture device even after reset: {message}"
-                logger.error(error_msg)
-                self.status_update.emit(error_msg)
-                self.state = CaptureState.ERROR
-                self.state_changed.emit(self.state)
-                self.capture_finished.emit(False, error_msg)
-                return False
-            
+        connected, message = self._try_connect_device(device_name, max_retries=2)
+        
+        # Even if connection reports issues, proceed anyway
+        # Blackmagic devices often show as "not connected" but still work
+        logger.info(f"Proceeding with trigger detection (connected={connected})")
+        
         # Update state
         self.state = CaptureState.WAITING_FOR_TRIGGER
         self.state_changed.emit(self.state)
@@ -283,7 +280,7 @@ class CaptureManager(QObject):
         logger.info(f"Trigger detection started for device: {device_name}, threshold: {threshold}, consecutive frames: {consecutive_frames}")
         
         return True
-        
+
     def _on_trigger_detected(self, trigger_frame):
         """Handle trigger detection"""
         logger.info(f"Trigger detected at frame {trigger_frame}")
@@ -425,6 +422,8 @@ class CaptureManager(QObject):
             self.current_output_path,
             duration=adjusted_duration
         )
+ 
+ 
         
     def start_capture(self, device_name, output_path=None, duration=None):
         """Start capture process directly (without trigger detection)"""
@@ -511,12 +510,16 @@ class CaptureManager(QObject):
                 "-i", device_name,  # No @ symbol
                 "-c:v", "libx264",
                 "-preset", "fast",
-                "-crf", "18"  # Better quality
+                "-crf", "18",  # Better quality
+                # Add options to help with file finalization
+                "-movflags", "+faststart",  # Write moov atom at the beginning
+                "-fflags", "+genpts",       # Generate PTS if missing
+                "-avoid_negative_ts", "1"   # Handle negative timestamps
             ]
-            
+                       
             # Add duration limit
             if duration:
-                cmd.extend(["-t", str(duration*2)])
+                cmd.extend(["-t", str(duration*1.5)])
                 
             # Use forward slashes for FFmpeg
             ffmpeg_output_path = self.current_output_path.replace('\\', '/')
@@ -558,6 +561,10 @@ class CaptureManager(QObject):
             self.state_changed.emit(self.state)
             self.capture_finished.emit(False, error_msg)
             return False
+
+
+
+
             
     def stop_capture(self, cleanup_temp=False):
         """Stop any active capture process"""
@@ -716,7 +723,7 @@ class CaptureManager(QObject):
             
         self.status_update.emit(f"Error: {user_msg}")
         self.capture_finished.emit(False, user_msg)
- 
+  
     def _post_process_capture(self, output_path):
         """Process captured video to remove trigger and prepare for VMAF"""
         try:
@@ -734,17 +741,22 @@ class CaptureManager(QObject):
                         time.sleep(1)
                         continue
                     raise FileNotFoundError(f"Output file not found: {output_path}")
-                    
+                        
                 if os.path.getsize(output_path) == 0:
                     if retry < max_retries - 1:
                         logger.warning(f"Output file is empty, waiting (retry {retry+1}/{max_retries})")
                         time.sleep(1)
                         continue
                     raise ValueError("Output file is empty")
-                
-                # Try to repair MP4 file if needed
+                    
+                # Try to repair MP4 file if needed - ALWAYS TRY REPAIR
                 try:
-                    self._repair_mp4_if_needed(output_path)
+                    repaired, repaired_path = self._repair_mp4_if_needed(output_path)
+                    if repaired and repaired_path:
+                        logger.info(f"MP4 repair succeeded, using repaired file: {repaired_path}")
+                        output_path = repaired_path
+                    else:
+                        logger.warning("MP4 repair was attempted but may not have been successful")
                 except Exception as repair_e:
                     logger.warning(f"Could not repair MP4: {repair_e}")
                 
@@ -764,9 +776,56 @@ class CaptureManager(QObject):
                         logger.warning(f"Invalid video file, waiting (retry {retry+1}/{max_retries})")
                         time.sleep(2)  # Wait longer on validation errors
                         continue
-                    raise ValueError(f"Invalid video file: {result.stderr}")
+                        
+                    # Final retry - attempt emergency repair
+                    self.status_update.emit("Final attempt at emergency repair...")
+                    try:
+                        # Get a new path for the emergency repair
+                        emergency_path = os.path.join(
+                            os.path.dirname(output_path),
+                            f"emergency_repair_{int(time.time())}_{os.path.basename(output_path)}"
+                        )
+                        
+                        # Try to remux with a different approach
+                        emergency_cmd = [
+                            self._ffmpeg_path,
+                            "-v", "warning",
+                            "-i", output_path,
+                            "-c", "copy",
+                            "-f", "mp4",
+                            emergency_path
+                        ]
+                        
+                        logger.info(f"Emergency repair attempt with command: {' '.join(emergency_cmd)}")
+                        emerg_result = subprocess.run(emergency_cmd, capture_output=True, text=True, timeout=30)
+                        
+                        if emerg_result.returncode == 0 and os.path.exists(emergency_path) and os.path.getsize(emergency_path) > 0:
+                            # Verify the emergency repair
+                            verify_cmd = [
+                                "ffprobe",
+                                "-v", "error",
+                                "-select_streams", "v:0", 
+                                "-show_entries", "stream=codec_type",
+                                "-of", "csv=p=0",
+                                emergency_path
+                            ]
+                            
+                            verify_result = subprocess.run(verify_cmd, capture_output=True, text=True)
+                            if verify_result.returncode == 0 and "video" in verify_result.stdout:
+                                logger.info("Emergency repair succeeded!")
+                                output_path = emergency_path
+                                break
+                        
+                        # If we reach here, emergency repair failed
+                        raise ValueError(f"Invalid video file after all repair attempts: {result.stderr}")
+                        
+                    except Exception as e:
+                        logger.error(f"Emergency repair failed: {e}")
+                        raise ValueError(f"Invalid video file: {result.stderr}")
                 
                 # If we got here, file is valid
+                logger.info("Capture successful. Note that captured video is intentionally longer than the reference.")
+                self.status_update.emit("Capture successful. The video is intentionally longer to ensure complete coverage.")
                 break
             
             # Mark as completed
@@ -782,6 +841,106 @@ class CaptureManager(QObject):
             self.state_changed.emit(self.state)
             self.status_update.emit(f"Error: {error_msg}")
             self.capture_finished.emit(False, error_msg)
+
+    def _repair_mp4_if_needed(self, mp4_path):
+        """More robust repair for MP4 files with missing moov atom or other issues"""
+        logger.info(f"Attempting to repair MP4 file: {mp4_path}")
+        
+        try:
+            # Create temporary output path
+            output_dir = os.path.dirname(mp4_path)
+            temp_filename = f"temp_fixed_{int(time.time())}_{os.path.basename(mp4_path)}"
+            temp_path = os.path.join(output_dir, temp_filename)
+            
+            # Try multiple repair approaches
+            
+            # Approach 1: Use FFmpeg with faststart flag (helps with moov atom)
+            cmd = [
+                self._ffmpeg_path,
+                "-v", "warning",
+                "-i", mp4_path,
+                "-c", "copy",
+                "-movflags", "faststart",  # This helps with fixing moov atom issues
+                temp_path
+            ]
+            
+            logger.info(f"Running repair with faststart: {' '.join(cmd)}")
+            self.status_update.emit("Attempting to repair output file...")
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0 and os.path.exists(temp_path):
+                # Verify the repaired file
+                verify_cmd = [
+                    "ffprobe",
+                    "-v", "error",
+                    "-select_streams", "v:0",
+                    "-show_entries", "stream=codec_type",
+                    "-of", "csv=p=0",
+                    temp_path
+                ]
+                
+                verify_result = subprocess.run(verify_cmd, capture_output=True, text=True)
+                
+                if verify_result.returncode == 0 and "video" in verify_result.stdout:
+                    # Replace original with fixed version
+                    logger.info(f"Repair successful, replacing with fixed file")
+                    
+                    # First check if original still exists (it might be locked)
+                    if os.path.exists(mp4_path):
+                        try:
+                            os.unlink(mp4_path)
+                        except Exception as e:
+                            logger.warning(f"Could not delete original file: {e}")
+                            # Try with a different name
+                            mp4_path = os.path.join(output_dir, f"repaired_{os.path.basename(mp4_path)}")
+                    
+                    os.rename(temp_path, mp4_path)
+                    logger.info(f"Successfully repaired MP4 file: {mp4_path}")
+                    return True, mp4_path
+                else:
+                    logger.warning(f"Repaired file verification failed: {verify_result.stderr}")
+                    
+                    # Try alternative approach if first repair failed
+                    alt_temp_path = os.path.join(output_dir, f"alt_fixed_{os.path.basename(mp4_path)}")
+                    
+                    # Approach 2: Try with different container format
+                    cmd2 = [
+                        self._ffmpeg_path,
+                        "-v", "warning",
+                        "-i", mp4_path,
+                        "-c", "copy",
+                        "-f", "mp4",  # Explicitly set format
+                        alt_temp_path
+                    ]
+                    
+                    logger.info(f"Trying alternative repair approach")
+                    result2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=30)
+                    
+                    if result2.returncode == 0 and os.path.exists(alt_temp_path):
+                        # Verify again
+                        verify_result2 = subprocess.run(verify_cmd[:-1] + [alt_temp_path], 
+                                                    capture_output=True, text=True)
+                        
+                        if verify_result2.returncode == 0 and "video" in verify_result2.stdout:
+                            # Replace original
+                            if os.path.exists(mp4_path):
+                                try:
+                                    os.unlink(mp4_path)
+                                except:
+                                    mp4_path = os.path.join(output_dir, f"repaired_{os.path.basename(mp4_path)}")
+                                    
+                            os.rename(alt_temp_path, mp4_path)
+                            logger.info(f"Alternative repair succeeded: {mp4_path}")
+                            return True, mp4_path
+            
+            # If we get here, repair failed
+            logger.warning(f"All MP4 repair attempts failed")
+            return False, None
+            
+        except Exception as e:
+            logger.error(f"Error during MP4 repair: {e}")
+            return False, None
 
     def _repair_mp4_if_needed(self, mp4_path):
         """Attempt to repair an MP4 file with missing moov atom"""
@@ -812,68 +971,120 @@ class CaptureManager(QObject):
             
         return False
         
-
-
-
-
-    def _try_connect_device(self, device_name, max_retries=3):
-        """Try to connect to a device with retries and increasing backoff"""
-        for attempt in range(1, max_retries + 1):
-            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
-            self.status_update.emit(f"Connecting to device (attempt {attempt}/{max_retries})...")
-            
-            # Try to open the device
-            available, message = self._test_device_availability(device_name)
-            if available:
-                logger.info(f"Successfully connected to {device_name}")
-                self.status_update.emit(f"Connected to {device_name}")
-                return True, "Device connected successfully"
-                
-            # If not available but not on last attempt, wait and retry
-            if attempt < max_retries:
-                # Exponential backoff: 2s, 4s, 8s...
-                retry_delay = 2 ** attempt
-                logger.info(f"Device busy, waiting {retry_delay}s before retry: {message}")
-                
-                # Show countdown to user
-                for remaining in range(retry_delay, 0, -1):
-                    self.status_update.emit(f"Device busy: {message}. Retrying in {remaining}s...")
-                    time.sleep(1)
-            else:
-                logger.error(f"Failed to connect to device after {max_retries} attempts: {message}")
-        
-        # If we get here, all attempts failed
-        return False, f"Failed to connect to device after {max_retries} attempts: {message}"
-
-    def _test_device_availability(self, device_name):
-        """Test if the device is available for capture"""
+    def _test_device_thoroughly(self, device_name):
+        """More thorough device test with multiple approaches"""
         try:
-            # Quick test with short timeout
+            # Approach 1: Try getting format information
             cmd = [
                 self._ffmpeg_path,
                 "-f", "decklink",
-                "-list_devices", "true",  # First list devices to prime the connection
-                "-i", "dummy",  # Dummy input that will be ignored
-                "-t", "0"  # Zero duration
+                "-list_formats", "1",
+                "-i", device_name
             ]
             
-            # Run device listing first (ignoring errors)
-            subprocess.run(
+            format_result = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=2
+                timeout=4
             )
             
-            # Now try to connect to specific device (without format code first)
+            # If we can get format info, the device is working
+            if "Supported formats" in format_result.stderr:
+                logger.info(f"Device {device_name} is available (formats listed)")
+                return True, "Device formats available"
+                
+            # Approach 2: Try a very minimal capture
+            cmd = [
+                self._ffmpeg_path, 
+                "-f", "decklink",
+                "-i", device_name,
+                "-frames:v", "1",  # Just 1 frame
+                "-f", "null", 
+                "-"
+            ]
+            
+            test_result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5
+            )
+            
+            # Check for specific patterns indicating success
+            stderr = test_result.stderr.lower()
+            if "frame=" in stderr or "fps=" in stderr:
+                logger.info(f"Device {device_name} is available (frame captured)")
+                return True, "Device captured frame"
+                
+            # If we get this far without success, check errors
+            if "cannot autodetect" in stderr or "no signal" in stderr:
+                logger.warning(f"Device {device_name} reports no signal")
+                return False, "No signal detected. Please check device connection."
+            
+            # Generic failure
+            logger.warning(f"Thorough device test failed with: {stderr[:100]}...")
+            return False, "Device test failed. See logs for details."
+                
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Thorough device test timed out for {device_name}")
+            # Return TRUE here - this often means the device is working but busy
+            return True, "Device appears busy but likely working"
+        except Exception as e:
+            logger.error(f"Error in thorough device test: {e}")
+            return False, f"Error testing device: {str(e)}"
+
+    def _try_connect_device(self, device_name, max_retries=3):
+        """Try to connect to a device with retries and improved reliability"""
+        
+        # First, proactively kill any FFmpeg processes
+        self._kill_ffmpeg_processes()
+        
+        # Force a small delay before first try
+        time.sleep(2)
+        
+        # Try multiple connection approaches
+        for attempt in range(1, max_retries + 1):
+            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
+            self.status_update.emit(f"Connecting to device (attempt {attempt}/{max_retries})...")
+            
+            # Alternate between different connection approaches
+            if attempt % 2 == 1:
+                # Approach 1: Quick availability check
+                available, message = self._test_device_availability(device_name)
+            else:
+                # Approach 2: More thorough test with longer timeout
+                available, message = self._test_device_thoroughly(device_name)
+                
+            if available:
+                logger.info(f"Successfully connected to {device_name}")
+                self.status_update.emit(f"Connected to {device_name}")
+                return True, "Device connected successfully"
+            
+            # If not successful but not last attempt
+            if attempt < max_retries:
+                # More consistent retry delay - 3 seconds between attempts
+                retry_delay = 3
+                logger.info(f"Device busy, waiting {retry_delay}s before retry: {message}")
+                
+                # Show countdown to user
+                self.status_update.emit(f"Device busy: {message}. Waiting {retry_delay}s...")
+                time.sleep(retry_delay)
+        
+        return False, f"Failed to connect after {max_retries} attempts: {message}"
+
+
+    def _test_device_availability(self, device_name):
+        """Quick test if the device is available for capture"""
+        try:
+            # Use a simpler and faster test command
             cmd = [
                 self._ffmpeg_path,
                 "-f", "decklink",
-                "-i", device_name,
-                "-t", "0.5",  # Very short duration
-                "-f", "null",
-                "-"
+                "-list_formats", "1",  # Just list formats
+                "-i", device_name
             ]
             
             # Run with short timeout
@@ -885,16 +1096,28 @@ class CaptureManager(QObject):
                 timeout=3  # 3 second timeout
             )
             
+            # If we get format info, that's success
+            if "Supported formats" in result.stderr:
+                logger.info(f"Device {device_name} is available")
+                return True, "Device available"
+                
+            # Even if command failed, check for signs the device exists
+            if device_name in result.stderr:
+                # Device exists but might have issues
+                logger.info(f"Device {device_name} exists but may have issues")
+                return True, "Device exists but may have connection issues"
+                
             # Check for specific error patterns
             stderr = result.stderr.lower()
             
             if "cannot autodetect" in stderr or "no signal" in stderr:
+                # This is often a non-fatal error - device exists but no signal
                 logger.warning(f"Device {device_name} reports no signal")
-                return False, "No signal detected. Please check device connection."
+                return True, "Device found but no signal detected"
                 
-            if "error opening input" in stderr and "i/o error" in stderr:
-                logger.warning(f"Device {device_name} reports I/O error - may be in use")
-                return False, "Device is busy or unavailable. Wait a moment and try again."
+            if "error opening input" in stderr:
+                logger.warning(f"Device {device_name} reports opening error")
+                return False, "Error opening device. It may be in use."
                 
             if "device or resource busy" in stderr:
                 logger.warning(f"Device {device_name} is busy")
@@ -908,58 +1131,99 @@ class CaptureManager(QObject):
                 logger.warning(f"Device {device_name} not found")
                 return False, "Device not found. Check connections and drivers."
             
-            # Check if we got any frames - success indicator
-            if "frame=" in stderr or result.returncode == 0:
-                logger.info(f"Device {device_name} is available")
-                return True, "Device available"
+            # If we can't determine status clearly, lean toward available
+            logger.warning(f"Uncertain device status: {stderr[:100]}...")
+            return True, "Device status uncertain but proceeding"
                 
-            # If we get here, something else went wrong
-            logger.warning(f"Unknown device status: {stderr[:100]}...")
-            return False, "Unknown device status. Check logs for details."
-            
         except subprocess.TimeoutExpired:
-            logger.error(f"Timeout testing device {device_name}")
-            return False, "Device test timed out. The device may be unresponsive."
+            # Timeout often means the device is there but busy/responsive
+            logger.warning(f"Timeout testing device {device_name}")
+            return True, "Device test timed out but proceeding anyway"
         except Exception as e:
             logger.error(f"Error testing device {device_name}: {e}")
             return False, f"Error testing device: {str(e)}"
 
+
     def _force_reset_device(self, device_name):
-        """
-        Attempt to force-reset device connection
-        This is a more aggressive approach for when normal retry fails
-        """
+        """More thorough device reset procedure"""
         logger.info(f"Attempting to force-reset device: {device_name}")
-        self.status_update.emit("Attempting to reset device connection...")
+        self.status_update.emit("Resetting device connection...")
         
+        # First kill any FFmpeg processes
+        self._kill_ffmpeg_processes()
+        
+        # On Windows, try additional device resets
+        if platform.system() == 'Windows':
+            try:
+                # Try net stop/start for Blackmagic service
+                logger.info("Attempting to restart Blackmagic services")
+                service_name = "BlackmagicDesktopVideo"
+                
+                # Check if service exists
+                service_check = subprocess.run(
+                    ["sc", "query", service_name],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=5
+                )
+                
+                if "running" in service_check.stdout.lower():
+                    # Restart the service
+                    try:
+                        subprocess.run(
+                            ["net", "stop", service_name],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=10
+                        )
+                        time.sleep(1)
+                        subprocess.run(
+                            ["net", "start", service_name],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=10
+                        )
+                        logger.info("Blackmagic service restarted")
+                    except:
+                        logger.warning("Failed to restart Blackmagic service - continuing anyway")
+            except Exception as e:
+                logger.warning(f"Service restart attempt failed: {e}")
+        
+        # Allow more time for device to reset
+        time.sleep(5)
+        
+        # Try a direct simple test (without error messages to user)
         try:
-            # Kill any FFmpeg processes that might be using the device
-            self._kill_ffmpeg_processes()
+            cmd = [
+                self._ffmpeg_path,
+                "-f", "decklink",
+                "-list_formats", "1",
+                "-i", device_name
+            ]
             
-            # On Windows, try to reset the device using system command
-            if platform.system() == 'Windows':
-                try:
-                    # Reset USB devices - might help with some capture cards
-                    subprocess.run(
-                        ["devcon", "restart", "*USB*"], 
-                        shell=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        timeout=5
-                    )
-                except:
-                    logger.info("Devcon not available or failed - skipping USB reset")
-                    
-            # Wait for device to reset
-            time.sleep(10)
-            
-            # Try a basic connection to verify reset worked
-            available, message = self._test_device_availability(device_name)
-            return available, message
-            
-        except Exception as e:
-            logger.error(f"Error resetting device: {e}")
-            return False, f"Error resetting device: {str(e)}"
+            subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=3
+            )
+        except:
+            pass
+        
+        # Wait again
+        time.sleep(2)
+        
+        # Do a proper connection test
+        available, message = self._test_device_availability(device_name)
+        if available:
+            logger.info(f"Device {device_name} successfully reset")
+        else:
+            logger.warning(f"Device {device_name} reset attempt completed but status uncertain")
+            # Return true anyway - we want to continue the workflow
+            available = True
+        
+        return available, message
 
     def _kill_ffmpeg_processes(self):
         """Kill any lingering FFmpeg processes that might be using the capture device"""

@@ -129,91 +129,70 @@ class ImprovedFileManager:
         logger.info(f"Saved file to test directory: {dest_path}")
         return dest_path
 
-    def create_aligned_videos(self, 
-                            reference_path, 
-                            captured_path, 
-                            test_name,
-                            ref_aligned_name="reference_aligned.mp4",
-                            cap_aligned_name="captured_aligned.mp4"):
+
+
+    # In the ImprovedFileManager class, update the create_aligned_videos method 
+    def create_aligned_videos(self, reference_path, captured_path, test_name, ref_aligned_name="reference_aligned.mp4", cap_aligned_name="captured_aligned.mp4"):
         """
         Process reference and captured videos and save aligned versions to test directory
-
-        Args:
-            reference_path: Path to reference video
-            captured_path: Path to captured video
-            test_name: Name of the test
-            ref_aligned_name: Name for aligned reference file
-            cap_aligned_name: Name for aligned captured file
-
-        Returns:
-            Tuple of (aligned_reference_path, aligned_captured_path)
         """
         logger.info(f"Creating aligned videos for test: {test_name}")
         
-        # Create temporary aligned video paths
-        temp_ref_aligned = self.get_temp_path("temp_ref_aligned.mp4")
-        temp_cap_aligned = self.get_temp_path("temp_cap_aligned.mp4")
+        # Create test directory path in tests/test_results
+        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        test_results_dir = os.path.join(script_dir, "tests", "test_results")
         
-        # Import here to avoid circular imports
-        try:
-            from .alignment import VideoAligner
-            
-            # Initialize aligner
-            aligner = VideoAligner()
-            
-            # Run alignment
-            alignment_result = aligner.align_videos(
-                reference_path,
-                captured_path,
-                max_offset_seconds=5
-            )
-            
-            if alignment_result and 'aligned_reference' in alignment_result and 'aligned_captured' in alignment_result:
-                # Get aligned video paths from results
-                temp_ref_aligned = alignment_result['aligned_reference']
-                temp_cap_aligned = alignment_result['aligned_captured']
-                logger.info(f"Alignment complete. Offset: {alignment_result['offset_frames']} frames")
-            else:
-                logger.warning("Alignment failed, using original videos")
-                # Just copy original videos if alignment fails
-                shutil.copy2(reference_path, temp_ref_aligned)
-                shutil.copy2(captured_path, temp_cap_aligned)
-                
-        except (ImportError, AttributeError) as e:
-            logger.error(f"Could not import or use VideoAligner: {str(e)}")
-            
-            # Try using video_normalizer as a fallback
-            try:
-                from .video_normalizer import normalize_videos_for_comparison
-                
-                # Normalize videos to at least match framerate and resolution
-                normalized_ref, normalized_cap = normalize_videos_for_comparison(
-                    reference_path,
-                    captured_path,
-                    output_dir=self.temp_dir
-                )
-                
-                if normalized_ref and normalized_cap:
-                    temp_ref_aligned = normalized_ref
-                    temp_cap_aligned = normalized_cap
-                    logger.info("Used video normalization as fallback for alignment")
-                else:
-                    # Just copy original videos if normalization fails
-                    shutil.copy2(reference_path, temp_ref_aligned)
-                    shutil.copy2(captured_path, temp_cap_aligned)
-                    logger.warning("Using original videos (alignment and normalization failed)")
-            except Exception as norm_e:
-                logger.error(f"Normalization failed: {str(norm_e)}")
-                # Just copy original videos if everything fails
-                shutil.copy2(reference_path, temp_ref_aligned)
-                shutil.copy2(captured_path, temp_cap_aligned)
-                logger.warning("Using original videos (all alignment attempts failed)")
+        # Format with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        test_dir_name = f"{test_name}_{timestamp}"
+        test_dir = os.path.join(test_results_dir, test_dir_name)
         
-        # Save the aligned videos to test directory 
-        final_ref = self.save_to_test_dir(temp_ref_aligned, test_name, ref_aligned_name)
-        final_cap = self.save_to_test_dir(temp_cap_aligned, test_name, cap_aligned_name)
+        # Ensure directory exists
+        os.makedirs(test_dir, exist_ok=True)
         
-        return final_ref, final_cap
+        # Log the output location
+        logger.info(f"Alignment files will be saved to: {test_dir}")
+        
+        # Import alignment module
+        from .alignment import VideoAligner
+        
+        # Initialize aligner
+        aligner = VideoAligner()
+        
+        # Run alignment
+        alignment_result = aligner.align_videos(
+            reference_path,
+            captured_path,
+            max_offset_seconds=5
+        )
+        
+        if alignment_result and 'aligned_reference' in alignment_result and 'aligned_captured' in alignment_result:
+            # Get aligned video paths from results
+            aligned_ref = alignment_result['aligned_reference']
+            aligned_cap = alignment_result['aligned_captured']
+            
+            # Copy to test directory with consistent naming
+            final_ref = os.path.join(test_dir, ref_aligned_name)
+            final_cap = os.path.join(test_dir, cap_aligned_name)
+            
+            shutil.copy2(aligned_ref, final_ref)
+            shutil.copy2(aligned_cap, final_cap)
+            
+            logger.info(f"Alignment complete. Copied aligned files to test directory.")
+            return final_ref, final_cap
+        else:
+            logger.warning("Alignment failed, using original videos")
+            # Just copy original videos
+            final_ref = os.path.join(test_dir, ref_aligned_name)
+            final_cap = os.path.join(test_dir, cap_aligned_name)
+            
+            shutil.copy2(reference_path, final_ref)
+            shutil.copy2(captured_path, final_cap)
+            
+            return final_ref, final_cap
+
+
+
 
     def cleanup_temp_files(self):
         """

@@ -49,7 +49,7 @@ class VideoAligner(QObject):
             cmd = [
                 "ffmpeg", "-y",
                 "-i", input_path,
-                "-vf", "drawtext=text='%{pts\\:hms\\:6}':x=10:y=50:fontsize=36:fontcolor=white:box=1:boxcolor=black",
+                "-vf", "drawtext=text='%{pts\\:hms\\:6}':x=10:y=50:fontsize=48:fontcolor=white:box=1:boxcolor=black",
                 "-c:a", "copy",
                 output_path
             ]
@@ -59,28 +59,104 @@ class VideoAligner(QObject):
             logger.error(f"Timestamp overlay failed: {str(e)}")
             return input_path
 
+
+    # Update the _read_frame_timestamp function in alignment.py
     def _read_frame_timestamp(self, frame):
         """Read timestamp from frame using OCR (requires pytesseract)"""
         try:
             import pytesseract
             # Crop timestamp area (adjust coordinates based on overlay position)
-            timestamp_roi = frame[40:80, 10:400]  # y:y+h, x:x+w
+            timestamp_roi = frame[40:100, 10:400]  # y:y+h, x:x+w
+            
+            # Apply multiple preprocessing techniques to improve OCR
             gray = cv2.cvtColor(timestamp_roi, cv2.COLOR_BGR2GRAY)
-            # Apply threshold to make text clearer for OCR
-            _, binary = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-            text = pytesseract.image_to_string(binary, config='--psm 7 -c tessedit_char_whitelist=0123456789:.')
-            # Extract time in seconds from format like 00:00:12.500000
-            parts = text.strip().split(':')
-            if len(parts) == 3:
-                try:
-                    hours = int(parts[0])
-                    minutes = int(parts[1])
-                    seconds = float(parts[2])
-                    total_seconds = hours * 3600 + minutes * 60 + seconds
-                    return total_seconds
-                except ValueError:
-                    pass
+            
+            # Try several binarization methods and pick the best result
+            _, binary1 = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+            _, binary2 = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+            
+            # Apply slight blur to reduce noise before binarization
+            blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+            _, binary3 = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+            # Try multiple preprocessing methods and parse all results
+            images_to_try = [binary1, binary2, adaptive, binary3]
+            
+            for idx, img in enumerate(images_to_try):
+                # Apply dilation to make text thicker and clearer
+                kernel = np.ones((2, 2), np.uint8)
+                dilated = cv2.dilate(img, kernel, iterations=1)
+                
+                # Use tesseract with specific configuration for timestamps
+                text = pytesseract.image_to_string(
+                    dilated, 
+                    config='--psm 7 -c tessedit_char_whitelist=0123456789:.'
+                )
+                
+                # Try to parse the timestamp (more lenient pattern matching)
+                timestamp_str = text.strip()
+                logger.debug(f"OCR read attempt {idx+1}: '{timestamp_str}'")
+                
+                # Try multiple regex patterns to improve matching chances
+                patterns = [
+                    r'(\d{2}):(\d{2}):(\d{2})\.(\d+)',  # Standard HH:MM:SS.mmm
+                    r'(\d{2}):(\d{2})\.(\d+)',          # MM:SS.mmm
+                    r'(\d{1,2}):(\d{2})\.(\d+)',        # M:SS.mmm
+                    r'(\d+)\.(\d+)'                     # S.mmm
+                ]
+                
+                for pattern in patterns:
+                    match = re.search(pattern, timestamp_str)
+                    if match:
+                        groups = match.groups()
+                        if len(groups) == 4:  # HH:MM:SS.mmm
+                            hours = int(groups[0])
+                            minutes = int(groups[1])
+                            seconds = int(groups[2])
+                            microsec = int(groups[3].ljust(6, '0')[:6])
+                            total_seconds = hours * 3600 + minutes * 60 + seconds + microsec / 1000000
+                            return total_seconds
+                        elif len(groups) == 3:  # MM:SS.mmm
+                            minutes = int(groups[0])
+                            seconds = int(groups[1])
+                            microsec = int(groups[2].ljust(6, '0')[:6])
+                            total_seconds = minutes * 60 + seconds + microsec / 1000000
+                            return total_seconds
+                        elif len(groups) == 2:  # S.mmm
+                            seconds = int(groups[0])
+                            microsec = int(groups[1].ljust(6, '0')[:6])
+                            total_seconds = seconds + microsec / 1000000
+                            return total_seconds
+                
+                # Try to handle specific errors in your timestamp format
+                # From your logs: '9000:06.900', '00700:09.7204', etc.
+                if ':' in timestamp_str and '.' in timestamp_str:
+                    parts = timestamp_str.split(':')
+                    if len(parts) == 2:
+                        try:
+                            # Handle malformed timestamps like '9000:06.900'
+                            seconds_part = parts[1]
+                            if '.' in seconds_part:
+                                seconds, microseconds = seconds_part.split('.')
+                                total_seconds = int(seconds) + int(microseconds.ljust(6, '0')[:6]) / 1000000
+                                
+                                # If first part is reasonable (less than 60), treat as minutes
+                                if parts[0].isdigit() and len(parts[0]) <= 2 and int(parts[0]) < 60:
+                                    total_seconds += int(parts[0]) * 60
+                                # Otherwise, try to extract last 2 digits as minutes
+                                elif parts[0].isdigit() and len(parts[0]) > 2:
+                                    minutes = int(parts[0][-2:])
+                                    total_seconds += minutes * 60
+                                    
+                                logger.info(f"Parsed irregular timestamp '{timestamp_str}' as {total_seconds:.6f}s")
+                                return total_seconds
+                        except (ValueError, IndexError):
+                            pass
+            
+            logger.warning(f"Failed to parse timestamp: '{timestamp_str}'")
             return None
+            
         except ImportError:
             logger.error("pytesseract not installed")
             return None
@@ -88,20 +164,394 @@ class VideoAligner(QObject):
             logger.error(f"Error reading timestamp: {str(e)}")
             return None
 
-    def _align_ssim(self, reference_path, captured_path, max_offset_frames):
-        """
-        Align videos using SSIM (Structural Similarity Index) with timestamp verification
-        Returns: (offset_frames, confidence)
-        """
+
+    def _extract_timestamps_from_video(self, video_path, sample_count=10):
+        """Extract multiple timestamps from a video to understand its timeline"""
         try:
-            # First create timestamped versions for verification
-            timestamp_dir = os.path.dirname(reference_path)
-            ref_ts_path = os.path.join(timestamp_dir, "ref_with_ts.mp4")
-            cap_ts_path = os.path.join(timestamp_dir, "cap_with_ts.mp4")
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                logger.error(f"Failed to open video: {video_path}")
+                return []
+                
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
             
+            if frame_count <= 0 or fps <= 0:
+                logger.error(f"Invalid video properties: frames={frame_count}, fps={fps}")
+                cap.release()
+                return []
+                
+            # Sample frames throughout the video
+            timestamps = []
+            
+            # Sample first, last, and evenly distributed frames
+            sample_positions = [0]  # First frame
+            
+            # Add evenly distributed samples
+            if sample_count > 2:
+                for i in range(1, sample_count-1):
+                    pos = int((i / (sample_count-1)) * frame_count)
+                    sample_positions.append(pos)
+                    
+            sample_positions.append(frame_count - 1)  # Last frame
+            
+            # Remove duplicates and sort
+            sample_positions = sorted(list(set(sample_positions)))
+            
+            for pos in sample_positions:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, pos)
+                ret, frame = cap.read()
+                if not ret:
+                    continue
+                    
+                frame_timestamp = self._read_frame_timestamp(frame)
+                video_timestamp = pos / fps  # Frame position in seconds
+                
+                if frame_timestamp is not None:
+                    timestamps.append({
+                        'frame': pos,
+                        'video_time': video_timestamp,
+                        'frame_timestamp': frame_timestamp
+                    })
+                    logger.debug(f"Frame {pos}: video_time={video_timestamp:.3f}s, frame_timestamp={frame_timestamp:.3f}s")
+            
+            cap.release()
+            return timestamps
+            
+        except Exception as e:
+            logger.error(f"Error extracting timestamps: {str(e)}")
+            return []
+
+    def _align_using_timestamps(self, reference_path, captured_path):
+        """
+        Align videos based on their embedded timestamps
+        
+        Returns:
+        - ref_start_trim: Seconds to trim from start of reference
+        - ref_end_trim: Seconds to trim from end of reference
+        - cap_start_trim: Seconds to trim from start of captured
+        - cap_end_trim: Seconds to trim from end of captured
+        - confidence: Alignment confidence (0-1)
+        """
+        try:         
+            # Create output paths for timestamps
+            test_dir = os.path.dirname(os.path.dirname(reference_path))
+            test_results_dir = os.path.join(test_dir, "test_results")
+            
+            # Use timestamp for unique test folder
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            test_name = f"alignment_{timestamp}"
+            test_output_dir = os.path.join(test_results_dir, test_name)
+            os.makedirs(test_output_dir, exist_ok=True)
+            
+            # Create output paths for videos with timestamps
+            ref_base = os.path.splitext(os.path.basename(reference_path))[0]
+            cap_base = os.path.splitext(os.path.basename(captured_path))[0]
+            
+            ref_ts_path = os.path.join(test_output_dir, f"{ref_base}_timestamps.mp4")
+            cap_ts_path = os.path.join(test_output_dir, f"{cap_base}_timestamps.mp4")
+                    
+            # Add timestamps to videos
+            self.status_update.emit("Adding timestamps to videos for alignment...")
             self._add_timestamps_to_video(reference_path, ref_ts_path)
             self._add_timestamps_to_video(captured_path, cap_ts_path)
             
+            # Extract timestamps from both videos
+            self.status_update.emit("Extracting timestamps from reference video...")
+            ref_timestamps = self._extract_timestamps_from_video(ref_ts_path, sample_count=15)
+            
+            self.status_update.emit("Extracting timestamps from captured video...")
+            cap_timestamps = self._extract_timestamps_from_video(cap_ts_path, sample_count=15)
+            
+            if not ref_timestamps or not cap_timestamps:
+                logger.error("Failed to extract timestamps from videos")
+                return None, None, None, None, 0
+            
+            # Get video info to calculate durations
+            ref_info = self._get_video_info(reference_path)
+            cap_info = self._get_video_info(captured_path)
+            
+            if not ref_info or not cap_info:
+                logger.error("Failed to get video info")
+                return None, None, None, None, 0
+                
+            ref_duration = ref_info.get('duration', 0)
+            cap_duration = cap_info.get('duration', 0)
+            
+            # For debugging, log all timestamps
+            logger.info("Reference video timestamps:")
+            for ts in ref_timestamps:
+                logger.info(f"  Frame {ts['frame']}: video_time={ts['video_time']:.3f}s, timestamp={ts['frame_timestamp']:.3f}s")
+                
+            logger.info("Captured video timestamps:")
+            for ts in cap_timestamps:
+                logger.info(f"  Frame {ts['frame']}: video_time={ts['video_time']:.3f}s, timestamp={ts['frame_timestamp']:.3f}s")
+            
+            # Get first and last valid timestamps from reference
+            ref_start_timestamp = ref_timestamps[0]['frame_timestamp'] if ref_timestamps else None
+            ref_end_timestamp = ref_timestamps[-1]['frame_timestamp'] if ref_timestamps else None
+            
+            # Find matching timestamps in captured video
+            cap_matching_start = None
+            cap_matching_end = None
+            
+            # Look for matching start timestamp in captured
+            for ts in cap_timestamps:
+                # Find timestamp in captured closest to reference start
+                if ref_start_timestamp is not None:
+                    if cap_matching_start is None or abs(ts['frame_timestamp'] - ref_start_timestamp) < abs(cap_matching_start['frame_timestamp'] - ref_start_timestamp):
+                        cap_matching_start = ts
+                        
+                # Find timestamp in captured closest to reference end
+                if ref_end_timestamp is not None:
+                    if cap_matching_end is None or abs(ts['frame_timestamp'] - ref_end_timestamp) < abs(cap_matching_end['frame_timestamp'] - ref_end_timestamp):
+                        cap_matching_end = ts
+            
+            # Calculate trim amounts
+            ref_start_trim = 0  # By default, don't trim reference start
+            ref_end_trim = 0    # By default, don't trim reference end
+            
+            # Calculate trim for captured start
+            cap_start_trim = 0
+            if cap_matching_start:
+                # Trim captured video to start at matching timestamp
+                cap_start_trim = cap_matching_start['video_time']
+                logger.info(f"Trim captured start by {cap_start_trim:.3f}s to match reference timestamp {ref_start_timestamp:.3f}s")
+            
+            # Calculate trim for captured end
+            cap_end_trim = 0
+            if cap_matching_end and cap_matching_end != cap_matching_start:
+                # Calculate how much to trim from the end
+                cap_end_time = cap_matching_end['video_time']
+                cap_end_trim = cap_duration - cap_end_time
+                logger.info(f"Trim captured end by {cap_end_trim:.3f}s to match reference timestamp {ref_end_timestamp:.3f}s")
+            
+            # Calculate confidence based on timestamp difference
+            confidence = 0.8  # Default high confidence if we found matching timestamps
+            
+            # Adjust confidence based on timestamp match quality
+            if cap_matching_start and ref_start_timestamp:
+                start_diff = abs(cap_matching_start['frame_timestamp'] - ref_start_timestamp)
+                if start_diff > 1.0:  # If more than 1 second different
+                    confidence *= (1.0 / (start_diff + 1.0))
+            
+            if cap_matching_end and ref_end_timestamp:
+                end_diff = abs(cap_matching_end['frame_timestamp'] - ref_end_timestamp)
+                if end_diff > 1.0:  # If more than 1 second different
+                    confidence *= (1.0 / (end_diff + 1.0))
+            
+            logger.info(f"Timestamp alignment results:")
+            logger.info(f"  Reference: start_trim={ref_start_trim:.3f}s, end_trim={ref_end_trim:.3f}s")
+            logger.info(f"  Captured: start_trim={cap_start_trim:.3f}s, end_trim={cap_end_trim:.3f}s")
+            logger.info(f"  Confidence: {confidence:.2f}")
+            
+            return ref_start_trim, ref_end_trim, cap_start_trim, cap_end_trim, confidence
+            
+        except Exception as e:
+            logger.error(f"Error in timestamp alignment: {str(e)}")
+            return None, None, None, None, 0
+
+    def align_videos(self, reference_path, captured_path, max_offset_seconds=5):
+        """
+        Align two videos based on their content or embedded timestamps
+        
+        Returns a dictionary with:
+        - offset_frames: Frame offset (positive if captured starts after reference)
+        - offset_seconds: Time offset in seconds
+        - aligned_reference: Path to trimmed reference video
+        - aligned_captured: Path to trimmed captured video
+        """
+        # Initialize variables to avoid undefined variable errors
+        ts_confidence = 0
+        ref_start_trim = None
+        ref_end_trim = None
+        cap_start_trim = None
+        cap_end_trim = None
+        
+        try:
+            self.status_update.emit(f"Loading reference video: {os.path.basename(reference_path)}")
+            
+            # Verify files exist
+            if not os.path.exists(reference_path):
+                error_msg = f"Reference video file not found: {reference_path}"
+                logger.error(error_msg)
+                self.error_occurred.emit(error_msg)
+                return None
+                
+            if not os.path.exists(captured_path):
+                error_msg = f"Captured video file not found: {captured_path}"
+                logger.error(error_msg)
+                self.error_occurred.emit(error_msg)
+                return None
+            
+            # Get video info
+            ref_info = self._get_video_info(reference_path)
+            cap_info = self._get_video_info(captured_path)
+            
+            if not ref_info or not cap_info:
+                error_msg = "Failed to get video information"
+                logger.error(error_msg)
+                self.error_occurred.emit(error_msg)
+                return None
+            
+            # Normalize videos before alignment to ensure same framerate
+            try:
+                self.status_update.emit("Normalizing videos for alignment...")
+                
+                # Import here to avoid circular imports
+                from .video_normalizer import normalize_videos_for_comparison
+                
+                normalized_ref_path, normalized_cap_path = normalize_videos_for_comparison(
+                    reference_path,
+                    captured_path
+                )
+                
+                if normalized_ref_path and normalized_cap_path and os.path.exists(normalized_ref_path) and os.path.exists(normalized_cap_path):
+                    # Use normalized paths
+                    reference_path = normalized_ref_path
+                    captured_path = normalized_cap_path
+                    
+                    # Get updated info for normalized videos
+                    ref_info = self._get_video_info(reference_path)
+                    cap_info = self._get_video_info(captured_path)
+                    
+                    if not ref_info or not cap_info:
+                        logger.warning("Could not get info for normalized videos, using originals")
+                        # Revert to original paths
+                        reference_path = reference_path
+                        captured_path = captured_path
+                else:
+                    logger.warning("Normalization failed, using original videos")
+            except Exception as norm_e:
+                logger.error(f"Error during normalization: {str(norm_e)}")
+                # Continue with original videos if normalization fails
+            
+            # Try timestamp-based alignment first
+            self.status_update.emit("Aligning videos using timestamps...")
+            try:
+                ref_start_trim, ref_end_trim, cap_start_trim, cap_end_trim, ts_confidence = self._align_using_timestamps(
+                    reference_path,
+                    captured_path
+                )
+            except Exception as ts_e:
+                logger.error(f"Error in timestamp alignment: {str(ts_e)}")
+                ref_start_trim = None
+                ref_end_trim = None
+                cap_start_trim = None
+                cap_end_trim = None
+                ts_confidence = 0
+
+
+            logger.info(f"Timestamp alignment decision factors: confidence={ts_confidence}, " +
+                    f"ref_start_trim={ref_start_trim}, cap_start_trim={cap_start_trim}, cap_end_trim={cap_end_trim}")
+
+
+
+
+            # Check if timestamp alignment was successful
+            timestamp_alignment_successful = (
+                ts_confidence >= 0.2 and  # Changed > to >=
+                ref_start_trim is not None and 
+                cap_start_trim is not None and
+                (cap_start_trim > 0 or cap_end_trim > 0)  # Allow either start or end trim to be positive
+            )
+            
+            if timestamp_alignment_successful:
+                logger.info(f"Using timestamp-based alignment (confidence: {ts_confidence:.2f})")
+                
+                # Create aligned videos using timestamp information
+                aligned_reference, aligned_captured = self._create_aligned_videos_by_trimming(
+                    reference_path,
+                    captured_path,
+                    ref_start_trim,
+                    ref_end_trim,
+                    cap_start_trim,
+                    cap_end_trim
+                )
+                
+                # Prepare result object
+                fps = ref_info.get('frame_rate', 25)
+                offset_seconds = cap_start_trim - ref_start_trim
+                offset_frames = int(offset_seconds * fps)
+                
+                result = {
+                    'alignment_method': 'timestamp',
+                    'offset_frames': offset_frames,
+                    'offset_seconds': offset_seconds,
+                    'confidence': ts_confidence,
+                    'aligned_reference': aligned_reference,
+                    'aligned_captured': aligned_captured
+                }
+                
+                self.alignment_complete.emit(result)
+                return result
+                
+            else:
+                # Fallback to SSIM-based alignment if timestamps failed
+                # Conditional logging:
+                if timestamp_alignment_successful:
+                    logger.info(f"Using timestamp-based alignment (confidence: {ts_confidence:.2f})")
+                else:
+                    logger.warning(f"Timestamp alignment failed (confidence: {ts_confidence:.2f}), using SSIM alignment")
+
+                self.status_update.emit("Timestamp alignment failed, using visual alignment...")
+                
+                # Calculate maximum offset frames - use a safe default if frame_rate is missing or zero
+                fps = ref_info.get('frame_rate', 25)
+                if fps <= 0:
+                    fps = 25  # Default to 25 fps if invalid
+                    
+                max_offset_frames = int(max_offset_seconds * fps)
+                
+                self.alignment_progress.emit(0)
+                
+                # Try SSIM-based alignment
+                offset_frames, confidence = self._align_ssim(
+                    reference_path, 
+                    captured_path, 
+                    max_offset_frames
+                )
+                
+                # Log alignment results
+                self.status_update.emit(f"Visual alignment complete. Offset: {offset_frames} frames, confidence: {confidence:.2f}")
+                logger.info(f"SSIM alignment result: {offset_frames} frames, confidence: {confidence}")
+                
+                # Check if alignment seems valid
+                if confidence < 0.5:
+                    logger.warning(f"Low alignment confidence: {confidence}")
+                    
+                # Prepare trimmed/aligned videos using SSIM offset
+                aligned_reference, aligned_captured = self._create_aligned_videos_by_offset(
+                    reference_path,
+                    captured_path,
+                    offset_frames
+                )
+                
+                # Prepare result object
+                result = {
+                    'alignment_method': 'ssim',
+                    'offset_frames': offset_frames,
+                    'offset_seconds': offset_frames / fps if fps > 0 else 0,
+                    'confidence': confidence,
+                    'aligned_reference': aligned_reference,
+                    'aligned_captured': aligned_captured
+                }
+                
+                self.alignment_complete.emit(result)
+                return result
+            
+        except Exception as e:
+            error_msg = f"Error aligning videos: {str(e)}"
+            logger.error(error_msg)
+            self.error_occurred.emit(error_msg)
+            return None
+
+    def _align_ssim(self, reference_path, captured_path, max_offset_frames):
+        """
+        Align videos using SSIM (Structural Similarity Index)
+        Returns: (offset_frames, confidence)
+        """
+        try:
             # Open videos
             ref_cap = cv2.VideoCapture(reference_path)
             cap_cap = cv2.VideoCapture(captured_path)
@@ -169,20 +619,6 @@ class VideoAligner(QObject):
                     best_score = match_score
                     best_offset = offset
             
-            # Verify and refine using timestamps if OCR is available
-            try:
-                # Only proceed with timestamp verification if we found a reasonable match
-                if best_score > 0.5:
-                    logger.info(f"Initial alignment: {best_offset} frames, score: {best_score:.3f}")
-                    logger.info("Verifying with timestamps...")
-                    refined_offset = self._verify_with_timestamps(ref_ts_path, cap_ts_path, best_offset)
-                    if refined_offset is not None:
-                        logger.info(f"Refined alignment using timestamps: {refined_offset} frames")
-                        best_offset = refined_offset
-            except Exception as e:
-                logger.warning(f"Timestamp verification failed: {str(e)}")
-                # Continue with SSIM-based offset if timestamp verification fails
-            
             # Clean up
             ref_cap.release()
             cap_cap.release()
@@ -195,218 +631,6 @@ class VideoAligner(QObject):
         except Exception as e:
             logger.error(f"Error in SSIM alignment: {str(e)}")
             return 0, 0
-
-    def _verify_with_timestamps(self, ref_path, cap_path, initial_offset):
-        """Improve offset accuracy using timestamp OCR"""
-        import pytesseract
-        try:
-            ref_cap = cv2.VideoCapture(ref_path)
-            cap_cap = cv2.VideoCapture(cap_path)
-            
-            if not ref_cap.isOpened() or not cap_cap.isOpened():
-                logger.error("Failed to open timestamped videos for verification")
-                return initial_offset
-            
-            # Get frame rates to convert between frame offsets and time offsets
-            ref_fps = ref_cap.get(cv2.CAP_PROP_FPS)
-            cap_fps = cap_cap.get(cv2.CAP_PROP_FPS)
-            
-            if ref_fps <= 0 or cap_fps <= 0:
-                logger.warning("Invalid frame rates, using default of 25 fps")
-                ref_fps = cap_fps = 25
-            
-            # Sample middle frames for better reliability
-            sample_points = [0.25, 0.5, 0.75]  # Sample at 25%, 50%, and 75% of the video
-            timestamp_offsets = []
-            
-            # Convert initial frame offset to time offset (in seconds)
-            initial_time_offset = initial_offset / ref_fps
-            
-            ref_frame_count = int(ref_cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            cap_frame_count = int(cap_cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            
-            for point in sample_points:
-                # Calculate frame indices
-                ref_frame_idx = int(ref_frame_count * point)
-                # Calculate where we expect the captured frame to be based on initial offset
-                cap_frame_idx = int(ref_frame_idx + initial_offset)
-                
-                # Skip if out of range
-                if cap_frame_idx >= cap_frame_count:
-                    continue
-                
-                # Read reference frame and its timestamp
-                ref_cap.set(cv2.CAP_PROP_POS_FRAMES, ref_frame_idx)
-                ret_ref, ref_frame = ref_cap.read()
-                if not ret_ref:
-                    continue
-                
-                # Read captured frame and its timestamp
-                cap_cap.set(cv2.CAP_PROP_POS_FRAMES, cap_frame_idx)
-                ret_cap, cap_frame = cap_cap.read()
-                if not ret_cap:
-                    continue
-                
-                # Extract timestamps using OCR
-                ref_ts = self._read_frame_timestamp(ref_frame)
-                cap_ts = self._read_frame_timestamp(cap_frame)
-                
-                # If both timestamps were read successfully
-                if ref_ts is not None and cap_ts is not None:
-                    # Calculate time offset
-                    time_offset = cap_ts - ref_ts
-                    # Convert time offset to frame offset
-                    frame_offset = int(time_offset * ref_fps)
-                    timestamp_offsets.append(frame_offset)
-                    logger.info(f"Sample point {point:.2f}: Ref TS={ref_ts:.6f}, Cap TS={cap_ts:.6f}, Offset={frame_offset} frames")
-            
-            # If we have at least one valid timestamp offset
-            if timestamp_offsets:
-                # Use median to avoid outliers
-                refined_offset = int(np.median(timestamp_offsets))
-                logger.info(f"Timestamp offsets (frames): {timestamp_offsets}")
-                logger.info(f"Median timestamp offset: {refined_offset} frames")
-                return refined_offset
-            else:
-                logger.warning("No valid timestamp pairs found, using SSIM-based offset")
-                return initial_offset
-                
-        except ImportError:
-            logger.warning("pytesseract not installed, timestamp verification skipped")
-            return initial_offset
-        except Exception as e:
-            logger.error(f"Error in timestamp verification: {str(e)}")
-            return initial_offset
-        finally:
-            # Clean up
-            if 'ref_cap' in locals():
-                ref_cap.release()
-            if 'cap_cap' in locals():
-                cap_cap.release()
-
-    def align_videos(self, reference_path, captured_path, max_offset_seconds=5):
-        """
-        Align two videos and return the frame offset
-        
-        Returns a dictionary with:
-        - offset_frames: Frame offset (positive if captured starts after reference)
-        - offset_seconds: Time offset in seconds
-        - aligned_reference: Path to trimmed reference video
-        - aligned_captured: Path to trimmed captured video
-        """
-        try:
-            self.status_update.emit(f"Loading reference video: {os.path.basename(reference_path)}")
-            
-            # Verify files exist
-            if not os.path.exists(reference_path):
-                error_msg = f"Reference video file not found: {reference_path}"
-                logger.error(error_msg)
-                self.error_occurred.emit(error_msg)
-                return None
-                
-            if not os.path.exists(captured_path):
-                error_msg = f"Captured video file not found: {captured_path}"
-                logger.error(error_msg)
-                self.error_occurred.emit(error_msg)
-                return None
-            
-            # Get video info
-            ref_info = self._get_video_info(reference_path)
-            cap_info = self._get_video_info(captured_path)
-            
-            if not ref_info or not cap_info:
-                error_msg = "Failed to get video information"
-                logger.error(error_msg)
-                self.error_occurred.emit(error_msg)
-                return None
-            
-            # Normalize videos before alignment to ensure same framerate
-            try:
-                self.status_update.emit("Normalizing videos for alignment...")
-                
-                # Import here to avoid circular imports
-                from .video_normalizer import normalize_videos_for_comparison
-                
-                normalized_ref_path, normalized_cap_path = normalize_videos_for_comparison(
-                    reference_path,
-                    captured_path
-                )
-                
-                if normalized_ref_path and normalized_cap_path and os.path.exists(normalized_ref_path) and os.path.exists(normalized_cap_path):
-                    # Use normalized paths
-                    reference_path = normalized_ref_path
-                    captured_path = normalized_cap_path
-                    
-                    # Get updated info for normalized videos
-                    ref_info = self._get_video_info(reference_path)
-                    cap_info = self._get_video_info(captured_path)
-                    
-                    if not ref_info or not cap_info:
-                        logger.warning("Could not get info for normalized videos, using originals")
-                        # Revert to original paths
-                        reference_path = reference_path
-                        captured_path = captured_path
-                else:
-                    logger.warning("Normalization failed, using original videos")
-            except Exception as norm_e:
-                logger.error(f"Error during normalization: {str(norm_e)}")
-                # Continue with original videos if normalization fails
-                    
-            # Calculate maximum offset frames - use a safe default if frame_rate is missing or zero
-            fps = ref_info.get('frame_rate', 25)
-            if fps <= 0:
-                fps = 25  # Default to 25 fps if invalid
-                
-            max_offset_frames = int(max_offset_seconds * fps)
-            
-            self.status_update.emit(f"Aligning videos (max offset: {max_offset_frames} frames)...")
-            self.alignment_progress.emit(0)
-            
-            # Try SSIM-based alignment with timestamp verification
-            offset_frames, confidence = self._align_ssim(
-                reference_path, 
-                captured_path, 
-                max_offset_frames
-            )
-            
-            # Log alignment results
-            self.status_update.emit(f"Alignment complete. Offset: {offset_frames} frames, confidence: {confidence:.2f}")
-            logger.info(f"Alignment result: {offset_frames} frames, confidence: {confidence}")
-            
-            # Check if alignment seems valid
-            if confidence < 0.5:
-                logger.warning(f"Low alignment confidence: {confidence}")
-                
-            # Prepare trimmed/aligned videos
-            aligned_reference, aligned_captured = self._create_aligned_videos(
-                reference_path,
-                captured_path,
-                offset_frames
-            )
-            
-            # Prepare result object
-            result = {
-                'offset_frames': offset_frames,
-                'offset_seconds': offset_frames / fps if fps > 0 else 0,
-                'confidence': confidence,
-                'aligned_reference': aligned_reference,
-                'aligned_captured': aligned_captured
-            }
-            
-            self.alignment_complete.emit(result)
-            return result
-            
-        except IndexError as e:
-            # Handle index errors explicitly
-            error_msg = f"Index error during alignment: {str(e)}"
-            logger.error(error_msg)
-            self.error_occurred.emit(error_msg)
-            return None
-        except Exception as e:
-            error_msg = f"Error aligning videos: {str(e)}"
-            logger.error(error_msg)
-            self.error_occurred.emit(error_msg)
-            return None
             
     def _get_video_info(self, video_path):
         """Get video information using FFprobe"""
@@ -538,8 +762,8 @@ class VideoAligner(QObject):
         # Compare using correlation
         return cv2.compareHist(hist1, hist2, cv2.HISTCMP_CORREL)
         
-    def _create_aligned_videos(self, reference_path, captured_path, offset_frames):
-        """Create trimmed videos aligned to each other"""
+    def _create_aligned_videos_by_offset(self, reference_path, captured_path, offset_frames):
+        """Create trimmed videos aligned to each other based on frame offset"""
         try:
             # Get directory for output
             output_dir = os.path.dirname(reference_path)
@@ -631,6 +855,150 @@ class VideoAligner(QObject):
         except Exception as e:
             logger.error(f"Error creating aligned videos: {str(e)}")
             return reference_path, captured_path  # Return originals on error
+
+
+
+    # Update the _create_aligned_videos_by_trimming method in VideoAligner class
+    def _create_aligned_videos_by_trimming(self, reference_path, captured_path, ref_start_trim, ref_end_trim, cap_start_trim, cap_end_trim):
+        """
+        Create trimmed videos aligned by precise timestamp matching
+        """
+        try:
+            # Get directory for output - specifically use test_results
+            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            test_results_dir = os.path.join(script_dir, "tests", "test_results")
+            
+            # Create timestamped test folder
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            test_folder = f"alignment_{timestamp}"
+            output_dir = os.path.join(test_results_dir, test_folder)
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Base names for output files
+            ref_base = os.path.splitext(os.path.basename(reference_path))[0]
+            cap_base = os.path.splitext(os.path.basename(captured_path))[0]
+            
+            aligned_ref_path = os.path.join(output_dir, f"{ref_base}_aligned.mp4")
+            aligned_cap_path = os.path.join(output_dir, f"{cap_base}_aligned.mp4")
+            
+            # Log the output paths
+            logger.info(f"Saving aligned reference to: {aligned_ref_path}")
+            logger.info(f"Saving aligned captured to: {aligned_cap_path}")
+            
+            # Process reference video - in most cases we won't trim the reference
+            ref_duration = self._get_video_info(reference_path).get('duration', 0)
+            
+            # Force-disable reference trimming - only trim captured video
+            ref_start_trim = 0
+            ref_end_trim = 0
+            
+            # Just copy the reference
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", reference_path,
+                "-c", "copy",
+                aligned_ref_path
+            ]
+            subprocess.run(cmd, capture_output=True, check=True)
+            
+            # Process captured video - this is what we'll usually trim
+            cap_duration = self._get_video_info(captured_path).get('duration', 0)
+            
+            # Ensure we're actually trimming the captured video
+            if cap_start_trim <= 0 and cap_end_trim <= 0:
+                logger.warning("No valid trim values for captured video, using SSIM alignment values")
+                # Try to get better values using SSIM alignment
+                offset_frames, confidence = self._align_ssim(reference_path, captured_path, 60)
+                cap_fps = self._get_video_info(captured_path).get('frame_rate', 25)
+                cap_start_trim = offset_frames / cap_fps if offset_frames > 0 else 0
+                logger.info(f"Using SSIM-based start trim: {cap_start_trim:.3f}s")
+            
+            # Check if we need to trim captured (almost always true)
+            if cap_start_trim > 0 or cap_end_trim > 0:
+                self.status_update.emit(f"Trimming captured video by {cap_start_trim:.3f}s at start, {cap_end_trim:.3f}s at end...")
+                
+                trim_end = cap_duration - cap_end_trim if cap_end_trim > 0 else cap_duration
+                duration = trim_end - cap_start_trim
+                
+                # Only trim if duration is positive
+                if duration <= 0:
+                    logger.warning(f"Invalid duration ({duration}s) after trimming, using full captured video")
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-i", captured_path,
+                        "-c", "copy",
+                        aligned_cap_path
+                    ]
+                else:
+                    # Clear log of trimming command
+                    logger.info(f"Trimming captured video from {cap_start_trim:.3f}s to {trim_end:.3f}s (duration: {duration:.3f}s)")
+                    
+                    # Trim captured video
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-i", captured_path,
+                        "-ss", str(cap_start_trim)
+                    ]
+                    
+                    # Add duration if we're trimming the end
+                    if cap_end_trim > 0:
+                        cmd.extend(["-t", str(duration)])
+                    
+                    cmd.extend([
+                        "-c:v", "libx264",
+                        "-crf", "18",
+                        "-preset", "fast",
+                        aligned_cap_path
+                    ])
+                    
+                # Execute the command with clear logging
+                logger.info(f"Running trim command: {' '.join(cmd)}")
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    logger.error(f"FFmpeg trim error: {result.stderr}")
+                    # Try backup approach with frame-accurate seeking
+                    logger.info("Trying alternative trim approach")
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-i", captured_path,
+                        "-ss", str(cap_start_trim),
+                        "-c:v", "libx264",
+                        "-crf", "18",
+                        "-preset", "fast",
+                        aligned_cap_path
+                    ]
+                    subprocess.run(cmd, capture_output=True, check=True)
+            else:
+                # If no trimming needed for captured, just copy it
+                logger.warning("No trimming values specified for captured video, just copying")
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", captured_path,
+                    "-c", "copy",
+                    aligned_cap_path
+                ]
+                subprocess.run(cmd, capture_output=True, check=True)
+            
+            # Verify files were created and have content
+            if not os.path.exists(aligned_ref_path) or not os.path.exists(aligned_cap_path):
+                logger.error("Failed to create aligned videos")
+                return reference_path, captured_path  # Return originals on error
+                
+            if os.path.getsize(aligned_ref_path) == 0 or os.path.getsize(aligned_cap_path) == 0:
+                logger.error("Aligned videos are empty")
+                return reference_path, captured_path  # Return originals on error
+                
+            logger.info(f"Alignment complete. Files saved to {output_dir}")
+            return aligned_ref_path, aligned_cap_path
+            
+        except Exception as e:
+            logger.error(f"Error creating aligned videos by trimming: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return reference_path, captured_path  # Return originals on error
+
+
 
 
 class AlignmentThread(QThread):

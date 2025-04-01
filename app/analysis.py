@@ -7,6 +7,7 @@ import tempfile
 from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
 import shutil
+from .alignment import VideoAligner
 
 logger = logging.getLogger(__name__)
 
@@ -21,220 +22,257 @@ class VMAFAnalyzer(QObject):
         super().__init__()
 
     def analyze_videos(self, reference_path, distorted_path, model_path="vmaf_v0.6.1", duration=None):
+        
+        self.alignment_performed = False
         stderr_output = ""  # Initialize early to prevent UnboundLocalError
         original_dir = os.getcwd()  # Save original directory
         temp_dir = None
 
-        try:
-            self.status_update.emit("Starting VMAF analysis...")
 
-            # Validate input files
-            if not os.path.exists(reference_path):
-                raise FileNotFoundError(f"Reference video not found: {reference_path}")
-            if not os.path.exists(distorted_path):
-                raise FileNotFoundError(f"Distorted video not found: {distorted_path}")
 
-            # Get video metadata
-            ref_info = self._get_video_info(reference_path)
-            dist_info = self._get_video_info(distorted_path)
-            if not ref_info or not dist_info:
-                error_msg = "Could not get video information"
+        # Inside the method, wrap the alignment code in a condition
+        if not self.alignment_performed and not (
+            "_aligned" in reference_path and "_aligned" in distorted_path):
+            # This prevents re-alignment if files are already aligned
+            self.status_update.emit("Aligning videos for accurate comparison...")
+
+            try:
+                self.status_update.emit("Starting VMAF analysis...")
+
+                # Validate input files
+                if not os.path.exists(reference_path):
+                    raise FileNotFoundError(f"Reference video not found: {reference_path}")
+                if not os.path.exists(distorted_path):
+                    raise FileNotFoundError(f"Distorted video not found: {distorted_path}")
+                
+                self.status_update.emit("Aligning videos for accurate comparison...")
+                
+                
+                # Align videos using timestamp method
+                try:
+                    # Create aligner
+                    aligner = VideoAligner()
+                    
+                    # Run alignment using timestamp-based method
+                    alignment_result = aligner.align_videos(reference_path, distorted_path)
+                    
+                    if alignment_result and 'aligned_reference' in alignment_result and 'aligned_captured' in alignment_result:
+                        # Use aligned videos for VMAF
+                        logger.info(f"Using aligned videos for VMAF analysis (method: {alignment_result.get('alignment_method', 'unknown')})")
+                        reference_path = alignment_result['aligned_reference']
+                        distorted_path = alignment_result['aligned_captured']
+                    else:
+                        logger.warning("Video alignment failed, using original videos")
+                except Exception as e:
+                    logger.warning(f"Error during video alignment: {str(e)}")
+        
+                # Get video metadata
+                ref_info = self._get_video_info(reference_path)
+                dist_info = self._get_video_info(distorted_path)
+                if not ref_info or not dist_info:
+                    error_msg = "Could not get video information"
+                    logger.error(error_msg)
+                    self.error_occurred.emit(error_msg)
+                    return None
+
+                # Create temporary directory for output files
+                temp_dir = tempfile.mkdtemp()
+
+                # File names for output - SIMPLE NAMES, NO PATHS
+                json_file = "vmaf_log.json"
+                csv_file = "vmaf_log.csv"
+                psnr_file = "psnr_log.txt"
+                ssim_file = "ssim_log.txt"
+
+                # Change to temp directory before running ffmpeg
+                os.chdir(temp_dir)
+
+                # Create the filter complex string - USING ONLY FILE NAMES, NO PATHS
+                filter_complex = (
+                    "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
+                    "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
+                    f"[ref1][dist1]libvmaf=log_path={json_file}:log_fmt=json;"
+                    f"[ref2][dist2]libvmaf=log_path={csv_file}:log_fmt=csv;"
+                    f"[0:v][1:v]psnr=stats_file={psnr_file};"
+                    f"[0:v][1:v]ssim=stats_file={ssim_file}"
+                )
+
+                # Construct the full command
+                cmd = [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-i", reference_path,  # Reference video
+                    "-i", distorted_path,  # Distorted video
+                    "-filter_complex", filter_complex,
+                    "-f", "null", "-"
+                ]
+
+                # Add duration if specified
+                if duration:
+                    cmd.extend(["-t", str(duration)])
+
+                # Log and execute the command
+                logger.info(f"Running VMAF command: {' '.join(cmd)}")
+                self.status_update.emit("Running VMAF analysis...")
+
+                # Execute the command
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                )
+
+                # Progress tracking
+                total_frames = ref_info.get('frame_count', 0)
+                if total_frames == 0 and duration:
+                    total_frames = int(duration * ref_info.get('frame_rate', 25))
+
+                while process.poll() is None:
+                    line = process.stderr.readline()
+                    stderr_output += line
+                    if "frame=" in line:
+                        try:
+                            match = re.search(r'frame=\s*(\d+)', line)
+                            if match and total_frames > 0:
+                                current_frame = int(match.group(1))
+                                progress = min(99, int((current_frame / total_frames) * 100))
+                                self.analysis_progress.emit(progress)
+                        except Exception as e:
+                            logger.warning(f"Progress parsing error: {str(e)}")
+
+                # Capture remaining output
+                stdout, stderr = process.communicate()
+                stderr_output += stderr
+                self.analysis_progress.emit(100)
+
+                # Check if the files were created
+                # Since we're in the temp directory, just use the filenames
+                if not os.path.exists(json_file):
+                    logger.error(f"VMAF JSON output file missing: {os.path.join(temp_dir, json_file)}")
+                    logger.error(f"FFmpeg STDERR: {stderr_output}")
+                    raise FileNotFoundError(f"VMAF output file not created")
+
+                # Prepare output paths for final destination in test_results
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                
+                # Get test_results directory path
+                script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                base_results_dir = os.path.join(script_dir, "tests", "test_results")
+                
+                # Extract test name from reference path if possible
+                ref_dir = os.path.dirname(reference_path)
+                test_name = os.path.basename(ref_dir)
+                
+                # If test_name doesn't look like a timestamped test folder, use a default
+                if not (test_name.startswith("20") and "_" in test_name[:15]):
+                    test_name = f"{timestamp}_vmaf_analysis"
+                    
+                # Create final output directory
+                output_dir = os.path.join(base_results_dir, test_name)
+                os.makedirs(output_dir, exist_ok=True)
+                
+                # Set output file paths
+                output_json = os.path.join(output_dir, f"vmaf_results_{timestamp}.json")
+                output_csv = os.path.join(output_dir, f"vmaf_results_{timestamp}.csv")
+                psnr_log = os.path.join(output_dir, f"psnr_log_{timestamp}.txt")
+                ssim_log = os.path.join(output_dir, f"ssim_log_{timestamp}.txt")
+                
+                logger.info(f"Saving VMAF results to: {output_dir}")
+
+                # Read results from JSON file
+                try:
+                    with open(json_file, 'r') as f:
+                        data = json.load(f)
+                        vmaf_score = data.get('pooled_metrics', {}).get('vmaf', {}).get('mean')
+                        if vmaf_score is None:
+                            raise ValueError("No valid VMAF score found in results")
+
+                    # Copy results files to final destination
+                    # We're still in the temp directory, so use the simple filenames for source
+                    shutil.copy2(json_file, output_json)
+                    if os.path.exists(csv_file):
+                        shutil.copy2(csv_file, output_csv)
+                    if os.path.exists(psnr_file):
+                        shutil.copy2(psnr_file, psnr_log)
+                    if os.path.exists(ssim_file):
+                        shutil.copy2(ssim_file, ssim_log)
+
+                except Exception as e:
+                    logger.error(f"Error processing results: {str(e)}")
+                    raise
+
+                # Extract PSNR and SSIM values from logs
+                psnr_value = None
+                ssim_value = None
+                
+                if os.path.exists(psnr_log):
+                    try:
+                        with open(psnr_log, 'r') as f:
+                            psnr_content = f.read()
+                            # Look for average PSNR value
+                            psnr_matches = re.findall(r'average:(\d+\.\d+)', psnr_content)
+                            if psnr_matches:
+                                psnr_value = float(psnr_matches[-1])  # Use the last one (summary)
+                    except Exception as e:
+                        logger.warning(f"Error extracting PSNR value: {e}")
+                
+                if os.path.exists(ssim_log):
+                    try:
+                        with open(ssim_log, 'r') as f:
+                            ssim_content = f.read()
+                            # Look for average SSIM value
+                            ssim_matches = re.findall(r'All:(\d+\.\d+)', ssim_content)
+                            if ssim_matches:
+                                ssim_value = float(ssim_matches[-1])  # Use the last one (summary)
+                    except Exception as e:
+                        logger.warning(f"Error extracting SSIM value: {e}")
+                
+                # Format the results object
+                formatted_results = {
+                    'vmaf_score': vmaf_score,
+                    'psnr': psnr_value,
+                    'ssim': ssim_value,
+                    'psnr_log': psnr_log if os.path.exists(psnr_log) else None,
+                    'ssim_log': ssim_log if os.path.exists(ssim_log) else None,
+                    'json_path': output_json,
+                    'csv_path': output_csv if os.path.exists(output_csv) else None,
+                    'reference_path': reference_path,
+                    'distorted_path': distorted_path,
+                    'model_path': model_path,
+                    'raw_results': data
+                }
+
+                logger.info(f"VMAF analysis complete. Score: {vmaf_score:.2f}")
+                self.status_update.emit(f"VMAF Score: {vmaf_score:.2f}")
+                self.analysis_complete.emit(formatted_results)
+                return formatted_results
+
+            except Exception as e:
+                error_msg = f"Analysis failed: {str(e)}"
                 logger.error(error_msg)
+                if stderr_output:
+                    logger.error(f"FFmpeg STDERR: {stderr_output[:1000]}")
                 self.error_occurred.emit(error_msg)
                 return None
 
-            # Create temporary directory for output files
-            temp_dir = tempfile.mkdtemp()
+            finally:
+                # Change back to original directory
+                os.chdir(original_dir)
 
-            # File names for output - SIMPLE NAMES, NO PATHS
-            json_file = "vmaf_log.json"
-            csv_file = "vmaf_log.csv"
-            psnr_file = "psnr_log.txt"
-            ssim_file = "ssim_log.txt"
-
-            # Change to temp directory before running ffmpeg
-            os.chdir(temp_dir)
-
-            # Create the filter complex string - USING ONLY FILE NAMES, NO PATHS
-            filter_complex = (
-                "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
-                "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
-                f"[ref1][dist1]libvmaf=log_path={json_file}:log_fmt=json;"
-                f"[ref2][dist2]libvmaf=log_path={csv_file}:log_fmt=csv;"
-                f"[0:v][1:v]psnr=stats_file={psnr_file};"
-                f"[0:v][1:v]ssim=stats_file={ssim_file}"
-            )
-
-            # Construct the full command
-            cmd = [
-                "ffmpeg",
-                "-hide_banner",
-                "-i", reference_path,  # Reference video
-                "-i", distorted_path,  # Distorted video
-                "-filter_complex", filter_complex,
-                "-f", "null", "-"
-            ]
-
-            # Add duration if specified
-            if duration:
-                cmd.extend(["-t", str(duration)])
-
-            # Log and execute the command
-            logger.info(f"Running VMAF command: {' '.join(cmd)}")
-            self.status_update.emit("Running VMAF analysis...")
-
-            # Execute the command
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-            )
-
-            # Progress tracking
-            total_frames = ref_info.get('frame_count', 0)
-            if total_frames == 0 and duration:
-                total_frames = int(duration * ref_info.get('frame_rate', 25))
-
-            while process.poll() is None:
-                line = process.stderr.readline()
-                stderr_output += line
-                if "frame=" in line:
+                # Clean up temp directory
+                if temp_dir and os.path.exists(temp_dir):
                     try:
-                        match = re.search(r'frame=\s*(\d+)', line)
-                        if match and total_frames > 0:
-                            current_frame = int(match.group(1))
-                            progress = min(99, int((current_frame / total_frames) * 100))
-                            self.analysis_progress.emit(progress)
+                        shutil.rmtree(temp_dir)
                     except Exception as e:
-                        logger.warning(f"Progress parsing error: {str(e)}")
+                        logger.warning(f"Failed to clean up temp directory: {str(e)}")
 
-            # Capture remaining output
-            stdout, stderr = process.communicate()
-            stderr_output += stderr
-            self.analysis_progress.emit(100)
+            self.alignment_performed = True
+        else:
+            logger.info("Skipping alignment as videos appear to be already aligned")
 
-            # Check if the files were created
-            # Since we're in the temp directory, just use the filenames
-            if not os.path.exists(json_file):
-                logger.error(f"VMAF JSON output file missing: {os.path.join(temp_dir, json_file)}")
-                logger.error(f"FFmpeg STDERR: {stderr_output}")
-                raise FileNotFoundError(f"VMAF output file not created")
 
-            # Prepare output paths for final destination in test_results
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Get test_results directory path
-            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            base_results_dir = os.path.join(script_dir, "tests", "test_results")
-            
-            # Extract test name from reference path if possible
-            ref_dir = os.path.dirname(reference_path)
-            test_name = os.path.basename(ref_dir)
-            
-            # If test_name doesn't look like a timestamped test folder, use a default
-            if not (test_name.startswith("20") and "_" in test_name[:15]):
-                test_name = f"{timestamp}_vmaf_analysis"
-                
-            # Create final output directory
-            output_dir = os.path.join(base_results_dir, test_name)
-            os.makedirs(output_dir, exist_ok=True)
-            
-            # Set output file paths
-            output_json = os.path.join(output_dir, f"vmaf_results_{timestamp}.json")
-            output_csv = os.path.join(output_dir, f"vmaf_results_{timestamp}.csv")
-            psnr_log = os.path.join(output_dir, f"psnr_log_{timestamp}.txt")
-            ssim_log = os.path.join(output_dir, f"ssim_log_{timestamp}.txt")
-            
-            logger.info(f"Saving VMAF results to: {output_dir}")
-
-            # Read results from JSON file
-            try:
-                with open(json_file, 'r') as f:
-                    data = json.load(f)
-                    vmaf_score = data.get('pooled_metrics', {}).get('vmaf', {}).get('mean')
-                    if vmaf_score is None:
-                        raise ValueError("No valid VMAF score found in results")
-
-                # Copy results files to final destination
-                # We're still in the temp directory, so use the simple filenames for source
-                shutil.copy2(json_file, output_json)
-                if os.path.exists(csv_file):
-                    shutil.copy2(csv_file, output_csv)
-                if os.path.exists(psnr_file):
-                    shutil.copy2(psnr_file, psnr_log)
-                if os.path.exists(ssim_file):
-                    shutil.copy2(ssim_file, ssim_log)
-
-            except Exception as e:
-                logger.error(f"Error processing results: {str(e)}")
-                raise
-
-            # Extract PSNR and SSIM values from logs
-            psnr_value = None
-            ssim_value = None
-            
-            if os.path.exists(psnr_log):
-                try:
-                    with open(psnr_log, 'r') as f:
-                        psnr_content = f.read()
-                        # Look for average PSNR value
-                        psnr_matches = re.findall(r'average:(\d+\.\d+)', psnr_content)
-                        if psnr_matches:
-                            psnr_value = float(psnr_matches[-1])  # Use the last one (summary)
-                except Exception as e:
-                    logger.warning(f"Error extracting PSNR value: {e}")
-            
-            if os.path.exists(ssim_log):
-                try:
-                    with open(ssim_log, 'r') as f:
-                        ssim_content = f.read()
-                        # Look for average SSIM value
-                        ssim_matches = re.findall(r'All:(\d+\.\d+)', ssim_content)
-                        if ssim_matches:
-                            ssim_value = float(ssim_matches[-1])  # Use the last one (summary)
-                except Exception as e:
-                    logger.warning(f"Error extracting SSIM value: {e}")
-            
-            # Format the results object
-            formatted_results = {
-                'vmaf_score': vmaf_score,
-                'psnr': psnr_value,
-                'ssim': ssim_value,
-                'psnr_log': psnr_log if os.path.exists(psnr_log) else None,
-                'ssim_log': ssim_log if os.path.exists(ssim_log) else None,
-                'json_path': output_json,
-                'csv_path': output_csv if os.path.exists(output_csv) else None,
-                'reference_path': reference_path,
-                'distorted_path': distorted_path,
-                'model_path': model_path,
-                'raw_results': data
-            }
-
-            logger.info(f"VMAF analysis complete. Score: {vmaf_score:.2f}")
-            self.status_update.emit(f"VMAF Score: {vmaf_score:.2f}")
-            self.analysis_complete.emit(formatted_results)
-            return formatted_results
-
-        except Exception as e:
-            error_msg = f"Analysis failed: {str(e)}"
-            logger.error(error_msg)
-            if stderr_output:
-                logger.error(f"FFmpeg STDERR: {stderr_output[:1000]}")
-            self.error_occurred.emit(error_msg)
-            return None
-
-        finally:
-            # Change back to original directory
-            os.chdir(original_dir)
-
-            # Clean up temp directory
-            if temp_dir and os.path.exists(temp_dir):
-                try:
-                    shutil.rmtree(temp_dir)
-                except Exception as e:
-                    logger.warning(f"Failed to clean up temp directory: {str(e)}")
 
     def _get_video_info(self, video_path):
         try:
