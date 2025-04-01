@@ -1,4 +1,3 @@
-
 import os
 import logging
 import subprocess
@@ -9,6 +8,13 @@ from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
 
 logger = logging.getLogger(__name__)
+
+# Set up default logger if not configured elsewhere
+if not logger.handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 
 class BookendAligner(QObject):
     """
@@ -347,6 +353,32 @@ class BookendAligner(QObject):
             else:
                 frame_rate = float(frame_rate_str or 0)
 
+            # Get dimensions and frame count
+            width = int(video_stream.get('width', 0))
+            height = int(video_stream.get('height', 0))
+            frame_count = int(video_stream.get('nb_frames', 0))
+
+            # If nb_frames is missing or zero, estimate from duration
+            if frame_count == 0 and frame_rate > 0:
+                frame_count = int(round(duration * frame_rate))
+
+            # Get pixel format
+            pix_fmt = video_stream.get('pix_fmt', 'unknown')
+
+            return {
+                'path': video_path,
+                'duration': duration,
+                'frame_rate': frame_rate,
+                'width': width,
+                'height': height,
+                'frame_count': frame_count,
+                'pix_fmt': pix_fmt,
+                'total_frames': frame_count
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting video info for {video_path}: {str(e)}")
+            return None
 
 
 class BookendAlignmentThread(QThread):
@@ -398,7 +430,6 @@ class BookendAlignmentThread(QThread):
                 self.status_update.emit("Bookend alignment complete!")
             else:
                 self.error_occurred.emit("Bookend alignment failed")
-
         except Exception as e:
             error_msg = f"Error in bookend alignment thread: {str(e)}"
             self.error_occurred.emit(error_msg)
@@ -406,29 +437,10 @@ class BookendAlignmentThread(QThread):
             import traceback
             logger.error(traceback.format_exc())
 
-            # Get dimensions and frame count
-            width = int(video_stream.get('width', 0))
-            height = int(video_stream.get('height', 0))
-            frame_count = int(video_stream.get('nb_frames', 0))
-
-            # If nb_frames is missing or zero, estimate from duration
-            if frame_count == 0 and frame_rate > 0:
-                frame_count = int(round(duration * frame_rate))
-
-            # Get pixel format
-            pix_fmt = video_stream.get('pix_fmt', 'unknown')
-
-            return {
-                'path': video_path,
-                'duration': duration,
-                'frame_rate': frame_rate,
-                'width': width,
-                'height': height,
-                'frame_count': frame_count,
-                'pix_fmt': pix_fmt,
-                'total_frames': frame_count
-            }
-
         except Exception as e:
-            logger.error(f"Error getting video info for {video_path}: {str(e)}")
-            return None
+            error_msg = f"Error in bookend alignment thread: {str(e)}"
+            self.error_occurred.emit(error_msg)
+            logger.error(error_msg)
+            import traceback
+            logger.error(traceback.format_exc())
+            return
