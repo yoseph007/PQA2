@@ -88,21 +88,29 @@ class VMAFAnalyzer(QObject):
                 "-f", "null", "-"
             ])
 
-            # Log VMAF command
-            logger.info(f"VMAF command: {' '.join(vmaf_cmd)}")
+            # Log the exact command for debugging
+            cmd_str = ' '.join(vmaf_cmd)
+            logger.info(f"VMAF command: {cmd_str}")
 
-            # Run VMAF analysis
-            self.status_update.emit("Running VMAF analysis...")
+            # Save the command to a file for reference/debugging
+            with open(os.path.join(os.path.dirname(vmaf_dir), "last_vmaf_command.txt"), "w") as f:
+                f.write(cmd_str)
 
-            # Start process
-            process = subprocess.Popen(
-                vmaf_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
+            # Execute VMAF command with extra error handling
+            try:
+                process = subprocess.Popen(
+                    vmaf_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1
+                )
+                logger.info("VMAF subprocess started successfully")
+            except Exception as subprocess_error:
+                error_msg = f"Failed to start VMAF subprocess: {str(subprocess_error)}"
+                logger.error(error_msg)
+                self.error_occurred.emit(error_msg)
+                return None
 
             # Monitor progress
             frame_total = 0

@@ -1206,25 +1206,88 @@ class AlignmentThread(QThread):
             # Create output paths
             aligned_reference = os.path.splitext(reference_path)[0] + "_aligned.mp4"
             aligned_captured = os.path.splitext(captured_path)[0] + "_aligned.mp4"
-
-            # Trim reference video
+            
+            # Get video info
+            ref_info = self._get_video_info(reference_path)
+            cap_info = self._get_video_info(captured_path)
+            
+            if not ref_info or not cap_info:
+                logger.error("Failed to get video info for alignment")
+                return None, None
+                
+            # Calculate end times
+            ref_end_time = ref_info.get('duration', 0) - ref_end_trim
+            cap_end_time = cap_info.get('duration', 0) - cap_end_trim
+            
+            # Log trim operations in detail
+            logger.info(f"Trimming reference video from {ref_start_trim:.3f}s to {ref_end_time:.3f}s")
+            logger.info(f"Reference video duration: {ref_info.get('duration', 0):.3f}s")
+            
+            # Trim reference video using more reliable method
             ref_cmd = [
-                self._ffmpeg_path, "-y", "-i", reference_path,
+                "ffmpeg", "-y", "-i", reference_path,
                 "-ss", str(ref_start_trim),
-                "-to", str(ref_info['duration'] - ref_end_trim),
-                "-c", "copy", aligned_reference
+                "-to", str(ref_end_time),
+                "-c:v", "libx264", "-crf", "18", "-preset", "fast", 
+                "-c:a", "copy", 
+                aligned_reference
             ]
-            subprocess.run(ref_cmd, check=True)
+            
+            try:
+                # Capture and log the output
+                ref_result = subprocess.run(
+                    ref_cmd, 
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                logger.debug(f"Reference trim output: {ref_result.stdout}")
+                if ref_result.stderr:
+                    logger.debug(f"Reference trim stderr: {ref_result.stderr}")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Reference trim error: {e.stderr}")
+                return None, None
 
+            # Log captured video trimming details
+            logger.info(f"Trimming captured video from {cap_start_trim:.3f}s to {cap_end_time:.3f}s")
+            logger.info(f"Captured video duration: {cap_info.get('duration', 0):.3f}s")
+            
             # Trim captured video
             cap_cmd = [
-                self._ffmpeg_path, "-y", "-i", captured_path,
+                "ffmpeg", "-y", "-i", captured_path,
                 "-ss", str(cap_start_trim),
-                "-to", str(cap_info['duration'] - cap_end_trim),
-                "-c", "copy", aligned_captured
+                "-to", str(cap_end_time),
+                "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                "-c:a", "copy", 
+                aligned_captured
             ]
-            subprocess.run(cap_cmd, check=True)
-
+            
+            try:
+                # Capture and log the output
+                cap_result = subprocess.run(
+                    cap_cmd, 
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                logger.debug(f"Captured trim output: {cap_result.stdout}")
+                if cap_result.stderr:
+                    logger.debug(f"Captured trim stderr: {cap_result.stderr}")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Captured trim error: {e.stderr}")
+                return None, None
+            
+            # Verify the aligned videos
+            ref_aligned_info = self._get_video_info(aligned_reference)
+            cap_aligned_info = self._get_video_info(aligned_captured)
+            
+            if ref_aligned_info and cap_aligned_info:
+                ref_duration = ref_aligned_info.get('duration', 0)
+                cap_duration = cap_aligned_info.get('duration', 0)
+                logger.info(f"Created aligned videos: {ref_duration:.2f}s / {cap_duration:.2f}s")
+            else:
+                logger.warning("Could not verify aligned video information")
+                
             return aligned_reference, aligned_captured
         except Exception as e:
             logger.error(f"Error creating trimmed videos: {str(e)}")
