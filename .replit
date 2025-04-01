@@ -6,3 +6,15 @@ channel = "stable-24_05"
 
 [deployment]
 run = ["sh", "-c", "dev"]
+
+[workflows]
+runButton = "Run VMAF App"
+
+[[workflows.workflow]]
+name = "Run VMAF App"
+author = 40724597
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
