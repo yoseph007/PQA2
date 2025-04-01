@@ -1,0 +1,36 @@
+Below is a reformulated, structured version of your instructions for Replit AI:
+
+---
+
+**Instruction for Replit AI:**
+
+1. **Bookend Capture Length:**  
+   - Ensure that the bookend capture length is at least twice the length of the reference video (this is different from the trigger capture).  
+   - This prevents creating a full white-to-white clip that matches the reference video length.  
+   - If there is a better method to manage the capture, please apply that improved methodology.
+
+2. **UI Fix – Capture Consol Section:**  
+   - The capture console section should have a fixed width to avoid stretching the GUI window when displaying long error messages.  
+   - All other UI elements should also maintain a fixed width and height.
+
+3. **UI Update – Capture Device Section:**  
+   - Remove the device label from the capture device section.  
+   - Place a round indicator between the dropdown menu and the refresh button.  
+   - This indicator should show the capture card’s status (use grey to indicate that the capture card is not live/connected).
+
+4. **UI Update – Reference Video Folder Path:**  
+   - The reference video section in the setup tab should not dictate the storage location for test files.  
+   - Disassociate the reference video folder path from any variables or forms that are used for writing files.  
+   - The designated reference folder (`/tests/test_data`) must be read-only, ensuring that no test video files overwrite the reference video.
+
+5. **Capture Trigger Flow Review:**  
+   - Analyze the current capture trigger flow. There is an issue where the system attempts to terminate the ffmpeg recording session before the recording completes, resulting in partial or corrupted video files.  
+   - Ensure that the capture card is not reset immediately after detecting white frames, as this reset delays the start of recording and introduces additional issues.  
+   - Optimize and robustify the entire capture process.
+
+6. **Error Bug Investigation:**  
+   - Investigate and fix the new error bug that has occurred at the capture stage.
+
+---
+
+This structured set of instructions should help Replit AI clearly understand and implement the required changes.
