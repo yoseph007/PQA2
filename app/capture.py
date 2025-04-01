@@ -516,7 +516,7 @@ class CaptureManager(QObject):
             
             # Add duration limit
             if duration:
-                cmd.extend(["-t", str(duration)])
+                cmd.extend(["-t", str(duration*2)])
                 
             # Use forward slashes for FFmpeg
             ffmpeg_output_path = self.current_output_path.replace('\\', '/')
@@ -951,7 +951,7 @@ class CaptureManager(QObject):
                     logger.info("Devcon not available or failed - skipping USB reset")
                     
             # Wait for device to reset
-            time.sleep(3)
+            time.sleep(10)
             
             # Try a basic connection to verify reset worked
             available, message = self._test_device_availability(device_name)
@@ -1044,7 +1044,7 @@ class CaptureManager(QObject):
         self._kill_ffmpeg_processes()
         
         # Wait a moment for resources to be freed
-        time.sleep(3)
+        time.sleep(10)
         
         # Try to connect to verify recovery
         return self._try_connect_device(device_name, max_retries=1)
