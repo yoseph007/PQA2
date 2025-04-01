@@ -20,6 +20,82 @@ class VideoAligner(QObject):
 
     def __init__(self):
         super().__init__()
+        self._ffmpeg_path = "ffmpeg"  # Assume ffmpeg is in PATH
+
+    def _get_video_info(self, video_path):
+        """Get detailed information about a video file using FFprobe"""
+        try:
+            cmd = [
+                "ffprobe",
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_format", 
+                "-show_streams",
+                video_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                logger.error(f"FFprobe failed: {result.stderr}")
+                return None
+                
+            # Parse JSON output
+            import json
+            info = json.loads(result.stdout)
+            
+            # Get video stream info
+            video_stream = None
+            for stream in info.get('streams', []):
+                if stream.get('codec_type') == 'video':
+                    video_stream = stream
+                    break
+            
+            if not video_stream:
+                logger.error(f"No video stream found in {video_path}")
+                return None
+                
+            # Extract key information
+            format_info = info.get('format', {})
+            duration = float(format_info.get('duration', 0))
+            
+            # Parse frame rate
+            frame_rate_str = video_stream.get('avg_frame_rate', '0/0')
+            if '/' in frame_rate_str:
+                num, den = map(int, frame_rate_str.split('/'))
+                if den == 0:
+                    frame_rate = 0
+                else:
+                    frame_rate = num / den
+            else:
+                frame_rate = float(frame_rate_str or 0)
+                
+            # Get dimensions and frame count
+            width = int(video_stream.get('width', 0))
+            height = int(video_stream.get('height', 0))
+            frame_count = int(video_stream.get('nb_frames', 0))
+            
+            # If nb_frames is missing or zero, estimate from duration
+            if frame_count == 0 and frame_rate > 0:
+                frame_count = int(round(duration * frame_rate))
+                
+            # Get pixel format
+            pix_fmt = video_stream.get('pix_fmt', 'unknown')
+            
+            return {
+                'path': video_path,
+                'duration': duration,
+                'frame_rate': frame_rate,
+                'width': width,
+                'height': height,
+                'frame_count': frame_count,
+                'pix_fmt': pix_fmt,
+                'total_frames': frame_count
+            }
+                
+        except Exception as e:
+            logger.error(f"Error getting video info for {video_path}: {str(e)}")
+            return None
 
     def _stabilize_video(self, input_path):
         """Apply vid.stab stabilization"""
