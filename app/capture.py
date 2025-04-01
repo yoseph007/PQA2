@@ -102,15 +102,22 @@ class CaptureMonitor(QThread):
             try:
                 logger.info("Sending graceful termination signal to FFmpeg process")
 
+                # Import modules inside the function to avoid scoping issues
+                import signal
+                import ctypes
+                
                 # First try to send a SIGINT (Ctrl+C) which allows FFmpeg to finalize the file
-                if hasattr(signal, 'SIGINT'):  # Unix-like systems
-                    import signal
+                try:
+                    # Unix-like systems
                     self.process.send_signal(signal.SIGINT)
-                else:  # Windows
-                    # On Windows, try to send Ctrl+C event
-                    import ctypes
-                    kernel32 = ctypes.WinDLL('kernel32')
-                    kernel32.GenerateConsoleCtrlEvent(0, 0)  # 0 is CTRL_C_EVENT
+                except (AttributeError, NameError):
+                    try:
+                        # On Windows, try to send Ctrl+C event
+                        kernel32 = ctypes.WinDLL('kernel32')
+                        kernel32.GenerateConsoleCtrlEvent(0, 0)  # 0 is CTRL_C_EVENT
+                    except Exception:
+                        # If all else fails, terminate directly
+                        self.process.terminate()
 
                 # Wait for process to terminate (longer timeout for finalization)
                 logger.info("Waiting for FFmpeg to finalize output file...")
@@ -124,7 +131,10 @@ class CaptureMonitor(QThread):
                 if self.process.poll() is None:
                     logger.warning("Process did not terminate gracefully, forcing kill")
                     self.process.kill()
-                    self.process.wait(timeout=5)  # Wait with timeout
+                    try:
+                        self.process.wait(timeout=5)  # Wait with timeout
+                    except:
+                        pass
             except Exception as e:
                 logger.error(f"Error terminating process: {e}")
                 # As a last resort, try to kill it
@@ -651,6 +661,9 @@ class CaptureManager(QObject):
 
         # Ensure progress shows 100% when complete to fix stuck progress issue
         self.progress_update.emit(100)
+        
+        # Wait a moment for file system to finalize writes
+        time.sleep(2)
 
         # Verify the output file
         if not os.path.exists(output_path):
@@ -674,8 +687,8 @@ class CaptureManager(QObject):
         self.state_changed.emit(self.state)
         self.status_update.emit("Capture complete, processing video...")
 
-        # Start post-processing
-        QTimer.singleShot(500, lambda: self._post_process_capture(output_path))
+        # Start post-processing with longer delay to ensure complete file writing
+        QTimer.singleShot(3000, lambda: self._post_process_capture(output_path))
 
     def _on_capture_failed(self, error_msg):
         """Handle capture failure"""
@@ -783,8 +796,8 @@ class CaptureManager(QObject):
                         time.sleep(2)  # Wait longer on validation errors
                         continue
 
-                    # Final retry - attempt emergency repair
-                    self.status_update.emit("Final attempt at emergency repair...")
+                    # Final retry - attempt emergency repair with multiple approaches
+                    self.status_update.emit("Performing emergency repair...")
                     try:
                         # Get a new path for the emergency repair
                         emergency_path = os.path.join(
@@ -792,38 +805,73 @@ class CaptureManager(QObject):
                             f"emergency_repair_{int(time.time())}_{os.path.basename(output_path)}"
                         )
 
-                        # Try to remux with a different approach
-                        emergency_cmd = [
-                            self._ffmpeg_path,
-                            "-v", "warning",
-                            "-i", output_path,
-                            "-c", "copy",
-                            "-f", "mp4",
-                            emergency_path
-                        ]
-
-                        logger.info(f"Emergency repair attempt with command: {' '.join(emergency_cmd)}")
-                        emerg_result = subprocess.run(emergency_cmd, capture_output=True, text=True, timeout=30)
-
-                        if emerg_result.returncode == 0 and os.path.exists(emergency_path) and os.path.getsize(emergency_path) > 0:
-                            # Verify the emergency repair
-                            verify_cmd = [
-                                "ffprobe",
-                                "-v", "error",
-                                "-select_streams", "v:0", 
-                                "-show_entries", "stream=codec_type",
-                                "-of", "csv=p=0",
+                        # Try different approaches for repair
+                        repair_attempts = [
+                            # Approach 1: Standard remux
+                            [
+                                self._ffmpeg_path,
+                                "-v", "warning",
+                                "-i", output_path,
+                                "-c", "copy",
+                                "-f", "mp4",
                                 emergency_path
+                            ],
+                            # Approach 2: Ignore errors
+                            [
+                                self._ffmpeg_path,
+                                "-v", "warning",
+                                "-err_detect", "ignore_err",
+                                "-i", output_path, 
+                                "-c", "copy",
+                                emergency_path + ".2.mp4"
+                            ],
+                            # Approach 3: Force format recognition
+                            [
+                                self._ffmpeg_path,
+                                "-v", "warning",
+                                "-f", "h264",
+                                "-i", output_path,
+                                "-c", "copy",
+                                emergency_path + ".3.mp4"
                             ]
+                        ]
+                        
+                        # Try each repair approach
+                        for i, cmd in enumerate(repair_attempts):
+                            logger.info(f"Emergency repair attempt #{i+1}: {' '.join(cmd)}")
+                            self.status_update.emit(f"Trying repair method {i+1}/3...")
+                            
+                            try:
+                                repair_result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                                repair_path = cmd[-1]
+                                
+                                if repair_result.returncode == 0 and os.path.exists(repair_path) and os.path.getsize(repair_path) > 0:
+                                    # Verify the repaired file
+                                    verify_cmd = [
+                                        "ffprobe",
+                                        "-v", "error",
+                                        "-select_streams", "v:0", 
+                                        "-show_entries", "stream=codec_type",
+                                        "-of", "csv=p=0",
+                                        repair_path
+                                    ]
 
-                            verify_result = subprocess.run(verify_cmd, capture_output=True, text=True)
-                            if verify_result.returncode == 0 and "video" in verify_result.stdout:
-                                logger.info("Emergency repair succeeded!")
-                                output_path = emergency_path
-                                break
-
-                        # If we reach here, emergency repair failed
-                        raise ValueError(f"Invalid video fileafter all repair attempts: {result.stderr}")
+                                    verify_result = subprocess.run(verify_cmd, capture_output=True, text=True)
+                                    if verify_result.returncode == 0 and "video" in verify_result.stdout:
+                                        logger.info(f"Emergency repair #{i+1} succeeded!")
+                                        output_path = repair_path
+                                        # Success - exit retry loop
+                                        break
+                            except Exception as inner_e:
+                                logger.warning(f"Repair method {i+1} failed: {inner_e}")
+                        
+                        # If we reach here, check if any repair succeeded
+                        if output_path != self.current_output_path:
+                            logger.info("At least one repair method succeeded")
+                            break
+                        
+                        # All repair attempts failed
+                        raise ValueError(f"All emergency repair attempts failed: {result.stderr}")
 
                     except Exception as e:
                         logger.error(f"Emergency repair failed: {e}")
@@ -1337,8 +1385,9 @@ class CaptureManager(QObject):
         bookend_duration = 0.5  # White frame duration in seconds
         loop_duration = ref_duration + bookend_duration
 
-        # Capture a bit more than 2 full loops to ensure we get complete bookends
-        capture_duration = (loop_duration * 2.5)
+        # Capture at least 2 complete loops, with a minimum duration of twice the reference duration
+        min_duration = ref_duration * 3  # Ensure minimum of 3x reference duration
+        capture_duration = max((loop_duration * 2.5), min_duration)
 
         logger.info(f"Estimated single loop duration: {loop_duration:.2f}s")
         logger.info(f"Setting capture duration for at least 2 loops: {capture_duration:.2f}s")
@@ -1530,8 +1579,8 @@ class CaptureManager(QObject):
                 # Replace original with fixed version
                 os.replace(temp_path, mp4_path)
                 logger.info(f"Successfully repaired MP4 file: {mp4_path}")
-                return True
+                return True, mp4_path
         except Exception as e:
             logger.warning(f"Error repairing MP4: {e}")
 
-        return False
+        return False, None
