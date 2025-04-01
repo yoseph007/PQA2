@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 
 def normalize_videos_for_comparison(reference_path, captured_path, output_dir=None):
     """
-    Normalize two videos to have the same framerate, color format, and resolution
-    for accurate VMAF comparison. Never downgrade quality if capture is higher quality.
+    Normalize only captured video to match reference video's framerate, color format, and resolution
+    for accurate VMAF comparison. Never process the reference video.
     
     Improvements:
     - Added "-y" to all ffmpeg commands to prevent prompts
-    - Added parallel processing for faster normalization
+    - Skip reference video normalization completely
     - Added smarter detection of when normalization can be skipped
     - Improved error handling and logging
     """
@@ -39,7 +39,8 @@ def normalize_videos_for_comparison(reference_path, captured_path, output_dir=No
     ref_name = os.path.splitext(os.path.basename(reference_path))[0]
     cap_name = os.path.splitext(os.path.basename(captured_path))[0]
     
-    normalized_ref_path = os.path.join(output_dir, f"{ref_name}_normalized.mp4")
+    # For reference, just use the original path
+    normalized_ref_path = reference_path
     normalized_cap_path = os.path.join(output_dir, f"{cap_name}_normalized.mp4")
     
     # Get target parameters from reference video
@@ -49,16 +50,9 @@ def normalize_videos_for_comparison(reference_path, captured_path, output_dir=No
     target_res = f"{target_width}x{target_height}"
     target_format = "yuv420p"  # Standard format for VMAF
     
-    logger.info(f"Normalizing videos to match reference: {target_fps} fps, {target_res}, {target_format}")
+    logger.info(f"Normalizing captured video to match reference: {target_fps} fps, {target_res}, {target_format}")
     
-    # Check if videos need normalization
-    ref_needs_conversion = (
-        abs(ref_info.get('frame_rate', 0) - target_fps) > 0.01 or
-        ref_info.get('width', 0) != target_width or
-        ref_info.get('height', 0) != target_height or
-        ref_info.get('pix_fmt') != target_format
-    )
-    
+    # Check if captured video needs normalization
     cap_needs_conversion = (
         abs(cap_info.get('frame_rate', 0) - target_fps) > 0.01 or
         cap_info.get('width', 0) != target_width or
@@ -66,38 +60,24 @@ def normalize_videos_for_comparison(reference_path, captured_path, output_dir=No
         cap_info.get('pix_fmt') != target_format
     )
     
-    # Run normalizations in parallel for better performance
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        # Submit normalization tasks
-        ref_future = executor.submit(
-            process_video, 
-            reference_path, 
-            normalized_ref_path,
-            ref_needs_conversion,
-            target_fps,
-            target_res,
-            target_format
-        )
-        
-        cap_future = executor.submit(
-            process_video,
-            captured_path,
-            normalized_cap_path,
-            cap_needs_conversion,
-            target_fps,
-            target_res,
-            target_format
-        )
-        
-        # Get results
-        normalized_ref_path = ref_future.result()
-        normalized_cap_path = cap_future.result()
+    # Process captured video
+    normalized_cap_path = process_video(
+        captured_path,
+        normalized_cap_path,
+        cap_needs_conversion,
+        target_fps,
+        target_res,
+        target_format
+    )
     
-    # Verify both files exist
-    if not os.path.exists(normalized_ref_path) or not os.path.exists(normalized_cap_path):
-        logger.error("Failed to create normalized videos")
+    # Verify captured file exists
+    if not os.path.exists(normalized_cap_path):
+        logger.error("Failed to create normalized captured video")
         return None, None
         
+    logger.info(f"Using original reference video: {normalized_ref_path}")
+    logger.info(f"Normalized captured video: {normalized_cap_path}")
+    
     return normalized_ref_path, normalized_cap_path
 
 
