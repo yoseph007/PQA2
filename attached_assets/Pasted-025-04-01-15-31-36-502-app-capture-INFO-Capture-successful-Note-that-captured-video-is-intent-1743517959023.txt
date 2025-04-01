@@ -1,0 +1,50 @@
+025-04-01 15:31:36,502 - app.capture - INFO - Capture successful. Note that captured video is intentionally longer than the reference.
+2025-04-01 15:31:40,470 - app.video_normalizer - INFO - Normalizing videos to match reference: 25.0 fps, 1920x1080, yuv420p
+2025-04-01 15:31:40,472 - app.video_normalizer - INFO - Video already meets target parameters, copying: BOXING_5s_25fps_tf.mp4
+2025-04-01 15:31:40,472 - app.video_normalizer - INFO - Copying video: ffmpeg -y -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/tests_data/references/BOXING_5s_25fps_tf.mp4 -c copy C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/tests_data/references\BOXING_5s_25fps_tf_normalized.mp4
+2025-04-01 15:31:40,472 - app.video_normalizer - INFO - Converting BOXING_5s_25fps_tf_capture.mp4 to match target parameters
+2025-04-01 15:31:40,474 - app.video_normalizer - INFO - Running normalization: ffmpeg -y -i c:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250401_153113\BOXING_5s_25fps_tf_capture.mp4 -vf fps=25.0,scale=1920x1080:flags=lanczos -pix_fmt yuv420p -c:v libx264 -crf 18 -preset slow -c:a aac -b:a 192k C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/tests_data/references\BOXING_5s_25fps_tf_capture_normalized.mp4
+2025-04-01 15:31:40,587 - app.video_normalizer - INFO - Video copied to C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/tests_data/references\BOXING_5s_25fps_tf_normalized.mp4
+2025-04-01 15:31:49,053 - app.video_normalizer - INFO - Normalized video saved to C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/tests_data/references\BOXING_5s_25fps_tf_capture_normalized.mp4
+2025-04-01 15:31:51,539 - app.alignment - WARNING - Failed to parse timestamp: '00:06'
+2025-04-01 15:31:52,331 - app.alignment - WARNING - Failed to parse timestamp: ''
+2025-04-01 15:31:53,141 - app.alignment - WARNING - Failed to parse timestamp: ''
+2025-04-01 15:31:53,971 - app.alignment - WARNING - Failed to parse timestamp: '00:06'
+2025-04-01 15:31:54,802 - app.alignment - WARNING - Failed to parse timestamp: ''
+2025-04-01 15:31:55,684 - app.alignment - WARNING - Failed to parse timestamp: '600 . .'
+2025-04-01 15:31:56,530 - app.alignment - WARNING - Failed to parse timestamp: ''
+2025-04-01 15:31:57,426 - app.alignment - WARNING - Failed to parse timestamp: '000092'
+2025-04-01 15:31:58,319 - app.alignment - WARNING - Failed to parse timestamp: ''
+2025-04-01 15:31:59,218 - app.alignment - WARNING - Failed to parse timestamp: '00:00:100'
+2025-04-01 15:32:00,185 - app.alignment - WARNING - Failed to parse timestamp: '00:00:1074'
+2025-04-01 15:32:01,136 - app.alignment - WARNING - Failed to parse timestamp: '0000710781'
+2025-04-01 15:32:03,017 - app.alignment - WARNING - Failed to parse timestamp: '.'
+2025-04-01 15:32:03,885 - app.alignment - WARNING - Failed to parse timestamp: '00:00:11'
+2025-04-01 15:32:04,708 - app.alignment - WARNING - Failed to parse timestamp: '00:00:12'
+2025-04-01 15:32:05,568 - app.alignment - WARNING - Failed to parse timestamp: '00:00:13'
+2025-04-01 15:32:06,451 - app.alignment - WARNING - Failed to parse timestamp: '00:00:06'
+2025-04-01 15:32:07,338 - app.alignment - WARNING - Failed to parse timestamp: '1 00:00:06'
+2025-04-01 15:32:08,227 - app.alignment - WARNING - Failed to parse timestamp: '100:00: 07'
+2025-04-01 15:32:09,124 - app.alignment - WARNING - Failed to parse timestamp: '00:00:08'
+2025-04-01 15:32:10,026 - app.alignment - WARNING - Failed to parse timestamp: '00:00:08'
+2025-04-01 15:32:10,985 - app.alignment - WARNING - Failed to parse timestamp: ':00:09'
+2025-04-01 15:32:11,974 - app.alignment - WARNING - Failed to parse timestamp: '00:00:09'
+2025-04-01 15:32:12,951 - app.alignment - WARNING - Failed to parse timestamp: '00:00:10'
+2025-04-01 15:32:13,797 - app.alignment - WARNING - Failed to parse timestamp: '00:00:11'
+2025-04-01 15:32:14,669 - app.alignment - WARNING - Failed to parse timestamp: '00:00:11'
+2025-04-01 15:32:15,558 - app.alignment - WARNING - Failed to parse timestamp: '00:00:12'
+2025-04-01 15:32:16,451 - app.alignment - WARNING - Failed to parse timestamp: '00:00:12'
+2025-04-01 15:32:16,465 - app.alignment - ERROR - Failed to extract timestamps from videos
+2025-04-01 15:32:16,467 - app.alignment - INFO - Timestamp alignment decision factors: confidence=0, ref_start_trim=None, cap_start_trim=None, cap_end_trim=None
+2025-04-01 15:32:16,467 - app.alignment - WARNING - Using SSIM-based alignment (timestamp alignment failed or skipped)
+2025-04-01 15:32:16,501 - app.alignment - INFO - Using improved resolution 1280x720 for alignment
+2025-04-01 15:32:19,517 - app.alignment - ERROR - Error in SSIM alignment: 'VideoAligner' object has no attribute '_calculate_quick_match_score'
+2025-04-01 15:32:19,518 - app.alignment - ERROR - Traceback (most recent call last):
+  File "c:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\alignment.py", line 760, in _align_ssim
+    match_score = self._calculate_quick_match_score(ref_frames[:len(cap_frames)], cap_frames)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'VideoAligner' object has no attribute '_calculate_quick_match_score'
+
+2025-04-01 15:32:19,542 - app.alignment - INFO - SSIM alignment result: 0 frames, confidence: 0
+2025-04-01 15:32:19,542 - app.alignment - WARNING - Low alignment confidence: 0
+2025-04-01 15:32:19,542 - app.alignment - ERROR - Error aligning videos: 'VideoAligner' object has no attribute '_create_aligned_videos_by_offset'
