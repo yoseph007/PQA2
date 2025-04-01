@@ -4,6 +4,7 @@ import os
 import json
 import re
 import time
+import concurrent.futures
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,12 @@ def normalize_videos_for_comparison(reference_path, captured_path, output_dir=No
     """
     Normalize two videos to have the same framerate, color format, and resolution
     for accurate VMAF comparison. Never downgrade quality if capture is higher quality.
+    
+    Improvements:
+    - Added "-y" to all ffmpeg commands to prevent prompts
+    - Added parallel processing for faster normalization
+    - Added smarter detection of when normalization can be skipped
+    - Improved error handling and logging
     """
     if output_dir is None:
         output_dir = os.path.dirname(reference_path)
@@ -35,8 +42,7 @@ def normalize_videos_for_comparison(reference_path, captured_path, output_dir=No
     normalized_ref_path = os.path.join(output_dir, f"{ref_name}_normalized.mp4")
     normalized_cap_path = os.path.join(output_dir, f"{cap_name}_normalized.mp4")
     
-    # KEY CHANGE: Always use reference video parameters as the target
-    # This ensures we're evaluating the capture against the reference standard
+    # Get target parameters from reference video
     target_fps = ref_info.get('frame_rate', 25)
     target_width = ref_info.get('width', 1920)
     target_height = ref_info.get('height', 1080)
@@ -45,32 +51,49 @@ def normalize_videos_for_comparison(reference_path, captured_path, output_dir=No
     
     logger.info(f"Normalizing videos to match reference: {target_fps} fps, {target_res}, {target_format}")
     
-    # Copy reference video if it's already in the right format
-    if ref_info.get('pix_fmt') == target_format:
-        copy_video(reference_path, normalized_ref_path)
-        logger.info("Reference video already in correct format, copying")
-    else:
-        # Just convert pixel format if needed
-        normalize_video(
-            reference_path, 
-            normalized_ref_path, 
-            target_fps, 
-            target_res, 
-            target_format,
-            high_quality=True
-        )
-    
-    # For captured video, use high quality settings to avoid degradation
-    normalize_video(
-        captured_path, 
-        normalized_cap_path, 
-        target_fps, 
-        target_res, 
-        target_format,
-        high_quality=True
+    # Check if videos need normalization
+    ref_needs_conversion = (
+        abs(ref_info.get('frame_rate', 0) - target_fps) > 0.01 or
+        ref_info.get('width', 0) != target_width or
+        ref_info.get('height', 0) != target_height or
+        ref_info.get('pix_fmt') != target_format
     )
     
-    # Verify both files were created
+    cap_needs_conversion = (
+        abs(cap_info.get('frame_rate', 0) - target_fps) > 0.01 or
+        cap_info.get('width', 0) != target_width or
+        cap_info.get('height', 0) != target_height or
+        cap_info.get('pix_fmt') != target_format
+    )
+    
+    # Run normalizations in parallel for better performance
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        # Submit normalization tasks
+        ref_future = executor.submit(
+            process_video, 
+            reference_path, 
+            normalized_ref_path,
+            ref_needs_conversion,
+            target_fps,
+            target_res,
+            target_format
+        )
+        
+        cap_future = executor.submit(
+            process_video,
+            captured_path,
+            normalized_cap_path,
+            cap_needs_conversion,
+            target_fps,
+            target_res,
+            target_format
+        )
+        
+        # Get results
+        normalized_ref_path = ref_future.result()
+        normalized_cap_path = cap_future.result()
+    
+    # Verify both files exist
     if not os.path.exists(normalized_ref_path) or not os.path.exists(normalized_cap_path):
         logger.error("Failed to create normalized videos")
         return None, None
@@ -78,16 +101,56 @@ def normalize_videos_for_comparison(reference_path, captured_path, output_dir=No
     return normalized_ref_path, normalized_cap_path
 
 
+def process_video(input_path, output_path, needs_conversion, target_fps, target_res, target_format):
+    """Process a single video based on whether it needs conversion or just copying"""
+    try:
+        if needs_conversion:
+            logger.info(f"Converting {os.path.basename(input_path)} to match target parameters")
+            success = normalize_video(
+                input_path, 
+                output_path, 
+                target_fps, 
+                target_res, 
+                target_format,
+                high_quality=True
+            )
+            if not success:
+                logger.warning(f"Normalization failed, copying original: {input_path}")
+                copy_video(input_path, output_path)
+        else:
+            logger.info(f"Video already meets target parameters, copying: {os.path.basename(input_path)}")
+            copy_video(input_path, output_path)
+            
+        return output_path
+    except Exception as e:
+        logger.error(f"Error processing video {input_path}: {str(e)}")
+        # Copy the original as fallback
+        copy_video(input_path, output_path)
+        return output_path
+
+
 def normalize_video(input_path, output_path, target_fps, target_res, target_format, high_quality=False):
     """Normalize a video to the specified parameters with quality preservation"""
     try:
+        # Determine if hardware acceleration is available and should be used
+        hw_accel = check_hw_acceleration()
+        
         # Build FFmpeg command with quality settings
         cmd = [
             "ffmpeg",
-            "-y",  # Overwrite output
+            "-y",  # Always overwrite output
             "-i", input_path
         ]
         
+        # Add hardware acceleration if available
+        if hw_accel:
+            if hw_accel == "nvidia":
+                # NVIDIA GPU acceleration
+                cmd.extend([
+                    "-hwaccel", "cuda",
+                    "-hwaccel_output_format", "cuda"
+                ])
+                
         # Add high quality scaling filters
         if high_quality:
             # Use high quality scaler
@@ -95,16 +158,34 @@ def normalize_video(input_path, output_path, target_fps, target_res, target_form
         else:
             filter_complex = f"fps={target_fps},scale={target_res}:flags=bicubic"
         
+        # Choose encoder based on hardware acceleration
+        video_encoder = "libx264"
+        preset = "medium"  # Default preset
+        
+        if hw_accel == "nvidia":
+            video_encoder = "h264_nvenc"
+            preset = "p4"  # Good quality preset for NVENC
+        
+        # For high quality, adjust preset
+        if high_quality:
+            if video_encoder == "libx264":
+                preset = "slow"  # Better quality at cost of encoding time
+            elif video_encoder == "h264_nvenc":
+                preset = "p6"  # Higher quality NVENC preset
+        
         cmd.extend([
             "-vf", filter_complex,
             "-pix_fmt", target_format,
-            "-c:v", "libx264",
-            "-crf", "18",  # High quality (lower is better, 18 is very high quality)
-            "-preset", "slow" if high_quality else "medium",  # Better quality at cost of encoding time
+            "-c:v", video_encoder,
+            "-crf", "18" if video_encoder == "libx264" else None,  # High quality (lower is better)
+            "-preset", preset,
             "-c:a", "aac",  # AAC audio
             "-b:a", "192k",  # High quality audio
             output_path
         ])
+        
+        # Remove None values
+        cmd = [x for x in cmd if x is not None]
         
         logger.info(f"Running normalization: {' '.join(cmd)}")
         
@@ -126,12 +207,48 @@ def normalize_video(input_path, output_path, target_fps, target_res, target_form
         logger.error(f"Error normalizing video: {str(e)}")
         return False
 
+
+def check_hw_acceleration():
+    """Check for available hardware acceleration"""
+    try:
+        # Check for NVIDIA GPU
+        nvidia_result = subprocess.run(
+            ["nvidia-smi"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        if nvidia_result.returncode == 0:
+            # NVIDIA GPU found
+            return "nvidia"
+            
+        # Check for Intel QuickSync
+        intel_result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        if intel_result.returncode == 0 and "h264_qsv" in intel_result.stdout:
+            # Intel QuickSync found
+            return "intel"
+            
+        # No hardware acceleration available
+        return None
+        
+    except Exception:
+        # Error checking for hardware acceleration
+        return None
+
+
 def copy_video(input_path, output_path):
     """Copy a video without re-encoding"""
     try:
         cmd = [
             "ffmpeg",
-            "-y",  # Overwrite output
+            "-y",  # Always overwrite output
             "-i", input_path,
             "-c", "copy",  # Stream copy (no re-encode)
             output_path
@@ -156,6 +273,7 @@ def copy_video(input_path, output_path):
     except Exception as e:
         logger.error(f"Error copying video: {str(e)}")
         return False
+
 
 def get_video_info(video_path):
     """Get video information using FFprobe"""
@@ -216,6 +334,7 @@ def get_video_info(video_path):
         logger.error(f"Error getting video info: {str(e)}")
         return None
 
+
 def parse_frame_rate(frame_rate_str):
     """Parse frame rate string (e.g., '30000/1001') to float"""
     try:
@@ -228,6 +347,7 @@ def parse_frame_rate(frame_rate_str):
             return float(frame_rate_str)
     except (ValueError, ZeroDivisionError):
         return 0
+
 
 def run_vmaf_analysis(reference_path, distorted_path, model_path="vmaf_v0.6.1.json", output_json=None):
     """Run VMAF analysis on normalized videos"""
@@ -245,6 +365,7 @@ def run_vmaf_analysis(reference_path, distorted_path, model_path="vmaf_v0.6.1.js
         # Build FFmpeg command
         cmd = [
             "ffmpeg",
+            "-y",  # Ensure we don't get prompts
             "-i", distorted_path,
             "-i", reference_path,
             "-lavfi", f"libvmaf=model_path={model_path}:log_path={output_json}:log_fmt=json:psnr=1:ssim=1",

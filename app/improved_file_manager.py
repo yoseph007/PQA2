@@ -148,21 +148,71 @@ class ImprovedFileManager:
         Returns:
             Tuple of (aligned_reference_path, aligned_captured_path)
         """
-        # This is just a placeholder for the actual implementation
-        # The real implementation would use frame_alignment.py functions
-
-        # Process videos in temporary directory
+        logger.info(f"Creating aligned videos for test: {test_name}")
+        
+        # Create temporary aligned video paths
         temp_ref_aligned = self.get_temp_path("temp_ref_aligned.mp4")
         temp_cap_aligned = self.get_temp_path("temp_cap_aligned.mp4")
-
-        # Copy source files for demonstration (real code would transform them)
-        shutil.copy2(reference_path, temp_ref_aligned)
-        shutil.copy2(captured_path, temp_cap_aligned)
-
-        # Save to test directory
+        
+        # Import here to avoid circular imports
+        try:
+            from .alignment import VideoAligner
+            
+            # Initialize aligner
+            aligner = VideoAligner()
+            
+            # Run alignment
+            alignment_result = aligner.align_videos(
+                reference_path,
+                captured_path,
+                max_offset_seconds=5
+            )
+            
+            if alignment_result and 'aligned_reference' in alignment_result and 'aligned_captured' in alignment_result:
+                # Get aligned video paths from results
+                temp_ref_aligned = alignment_result['aligned_reference']
+                temp_cap_aligned = alignment_result['aligned_captured']
+                logger.info(f"Alignment complete. Offset: {alignment_result['offset_frames']} frames")
+            else:
+                logger.warning("Alignment failed, using original videos")
+                # Just copy original videos if alignment fails
+                shutil.copy2(reference_path, temp_ref_aligned)
+                shutil.copy2(captured_path, temp_cap_aligned)
+                
+        except (ImportError, AttributeError) as e:
+            logger.error(f"Could not import or use VideoAligner: {str(e)}")
+            
+            # Try using video_normalizer as a fallback
+            try:
+                from .video_normalizer import normalize_videos_for_comparison
+                
+                # Normalize videos to at least match framerate and resolution
+                normalized_ref, normalized_cap = normalize_videos_for_comparison(
+                    reference_path,
+                    captured_path,
+                    output_dir=self.temp_dir
+                )
+                
+                if normalized_ref and normalized_cap:
+                    temp_ref_aligned = normalized_ref
+                    temp_cap_aligned = normalized_cap
+                    logger.info("Used video normalization as fallback for alignment")
+                else:
+                    # Just copy original videos if normalization fails
+                    shutil.copy2(reference_path, temp_ref_aligned)
+                    shutil.copy2(captured_path, temp_cap_aligned)
+                    logger.warning("Using original videos (alignment and normalization failed)")
+            except Exception as norm_e:
+                logger.error(f"Normalization failed: {str(norm_e)}")
+                # Just copy original videos if everything fails
+                shutil.copy2(reference_path, temp_ref_aligned)
+                shutil.copy2(captured_path, temp_cap_aligned)
+                logger.warning("Using original videos (all alignment attempts failed)")
+        
+        # Save the aligned videos to test directory 
         final_ref = self.save_to_test_dir(temp_ref_aligned, test_name, ref_aligned_name)
         final_cap = self.save_to_test_dir(temp_cap_aligned, test_name, cap_aligned_name)
-
+        
         return final_ref, final_cap
 
     def cleanup_temp_files(self):
