@@ -1386,7 +1386,7 @@ class CaptureManager(QObject):
         loop_duration = ref_duration + bookend_duration
 
         # Capture at least 2 complete loops, with a minimum duration of twice the reference duration
-        min_duration = ref_duration * 3  # Ensure minimum of 3x reference duration
+        min_duration = ref_duration * 2  # Ensure minimum of 2x reference duration
         capture_duration = max((loop_duration * 2.5), min_duration)
 
         logger.info(f"Estimated single loop duration: {loop_duration:.2f}s")

@@ -193,10 +193,17 @@ class VMafTestApp(QMainWindow):
         device_layout = QVBoxLayout()
 
         device_select_layout = QHBoxLayout()
-        device_select_layout.addWidget(QLabel("Device:"))
         self.device_combo = QComboBox()
         self.device_combo.addItem("Intensity Shuttle", "Intensity Shuttle")
         device_select_layout.addWidget(self.device_combo)
+        
+        # Round status indicator between dropdown and refresh button
+        self.device_status_indicator = QLabel()
+        self.device_status_indicator.setFixedSize(16, 16)
+        self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")  # Grey for inactive
+        self.device_status_indicator.setToolTip("Capture card status: not connected")
+        device_select_layout.addWidget(self.device_status_indicator)
+        
         self.btn_refresh_devices = QPushButton("Refresh")
         self.btn_refresh_devices.clicked.connect(self.refresh_devices)
         device_select_layout.addWidget(self.btn_refresh_devices)
@@ -319,7 +326,7 @@ class VMafTestApp(QMainWindow):
         preview_group.setLayout(preview_layout)
         right_layout.addWidget(preview_group)
 
-        # Capture log at the bottom with fixed height
+        # Capture log at the bottom with fixed width and height
         log_group = QGroupBox("Capture Log")
         log_layout = QVBoxLayout()
         self.txt_capture_log = QTextEdit()
@@ -327,6 +334,7 @@ class VMafTestApp(QMainWindow):
         self.txt_capture_log.setLineWrapMode(QTextEdit.WidgetWidth)  # Enable line wrapping
         self.txt_capture_log.setMinimumHeight(150)
         self.txt_capture_log.setMaximumHeight(200)  # Fix height to prevent stretching
+        self.txt_capture_log.setFixedWidth(600)  # Fixed width to avoid UI stretching with long messages
         log_layout.addWidget(self.txt_capture_log)
         log_group.setLayout(log_layout)
         right_layout.addWidget(log_group)
@@ -816,9 +824,15 @@ class VMafTestApp(QMainWindow):
         self.capture_manager.trigger_frame_available.connect(self.update_preview)
 
     def browse_reference(self):
-        """Browse for reference video file"""
+        """Browse for reference video file from the read-only reference folder"""
+        # Use the designated read-only reference folder
+        reference_folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests", "test_data")
+        
+        # Make sure the folder exists
+        os.makedirs(reference_folder, exist_ok=True)
+        
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Reference Video", "", "Video Files (*.mp4 *.mov *.avi *.mkv)"
+            self, "Select Reference Video", reference_folder, "Video Files (*.mp4 *.mov *.avi *.mkv)"
         )
 
         if file_path:
@@ -921,18 +935,42 @@ class VMafTestApp(QMainWindow):
         logger.info(f"Output directory set/confirmed: {default_dir}")
 
     def refresh_devices(self):
-        """Refresh list of capture devices"""
+        """Refresh list of capture devices and update status indicator"""
         self.device_combo.clear()
         self.device_combo.addItem("Detecting devices...")
+        self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")  # Grey while checking
+        self.device_status_indicator.setToolTip("Checking device status...")
 
         # For now, just hardcode the Intensity Shuttle
         # In a full implementation, this would scan for connected devices
-        QTimer.singleShot(500, self._populate_dummy_devices)
+        QTimer.singleShot(500, self._populate_devices_and_check_status)
 
-    def _populate_dummy_devices(self):
-        """Populate device dropdown with dummy devices"""
+    def _populate_devices_and_check_status(self):
+        """Populate device dropdown with devices and check their status"""
         self.device_combo.clear()
         self.device_combo.addItem("Intensity Shuttle", "Intensity Shuttle")
+        
+        # Check if the device is actually available
+        if hasattr(self, 'capture_manager'):
+            # Use the capture manager's test method
+            try:
+                available, _ = self.capture_manager._test_device_availability("Intensity Shuttle")
+                if available:
+                    # Green for connected device
+                    self.device_status_indicator.setStyleSheet("background-color: #00AA00; border-radius: 8px;")
+                    self.device_status_indicator.setToolTip("Capture card status: connected")
+                else:
+                    # Red for unavailable device
+                    self.device_status_indicator.setStyleSheet("background-color: #AA0000; border-radius: 8px;")
+                    self.device_status_indicator.setToolTip("Capture card status: not connected")
+            except:
+                # Grey for unknown status
+                self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
+                self.device_status_indicator.setToolTip("Capture card status: unknown")
+        else:
+            # Grey for initialization not complete
+            self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
+            self.device_status_indicator.setToolTip("Capture card status: not initialized")
 
 
     def start_capture(self):
@@ -1563,7 +1601,7 @@ class VMafTestApp(QMainWindow):
         """Add message to analysis log"""
         self.txt_analysis_log.append(message)
         self.txt_analysis_log.verticalScrollBar().setValue(
-            self.txtanalysis_log.verticalScrollBar().maximum()
+            self.txt_analysis_log.verticalScrollBar().maximum()
         )
         self.statusBar().showMessage(message)
 
