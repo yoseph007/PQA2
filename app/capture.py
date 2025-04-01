@@ -151,6 +151,9 @@ class CaptureState(Enum):
     PROCESSING = 3
     COMPLETED = 4
     ERROR = 5
+    WAITING_FOR_BOOKEND = 6       # Waiting for first white bookend
+    CAPTURING_BOOKEND = 7         # Capturing between bookends
+    WAITING_FOR_END_BOOKEND = 8   # Waiting for second bookend
 
 class CaptureManager(QObject):
     """Main manager for video capture process with trigger detection"""
@@ -173,6 +176,7 @@ class CaptureManager(QObject):
         self.ffmpeg_process = None
         self.capture_monitor = None
         self.trigger_detector = None
+        self.bookend_detector = None
         
         # Video info
         self.reference_info = None
@@ -181,6 +185,7 @@ class CaptureManager(QObject):
         # Output settings
         self.output_directory = None
         self.test_name = None
+        self.capture_method = "trigger"  # Default to trigger method, alternative is "bookend"
         
         # Path manager (will be set by main app)
         self.path_manager = None
@@ -339,6 +344,224 @@ class CaptureManager(QObject):
             # Use path manager for consistent path handling
             if self.output_directory and os.path.exists(self.output_directory):
                 test_name = self.test_name or "default_test"
+
+    def set_capture_method(self, method):
+        """Set the capture method to use (trigger or bookend)"""
+        if method in ["trigger", "bookend"]:
+            self.capture_method = method
+            logger.info(f"Set capture method to: {method}")
+        else:
+            logger.warning(f"Unknown capture method: {method}, using 'trigger'")
+            self.capture_method = "trigger"
+            
+    def start_bookend_capture(self, device_name):
+        """
+        Start capture of a looped video with white frame bookends
+        Captures until detecting at least two white frame bookend sequences
+        """
+        if self.is_capturing:
+            logger.warning("Capture already in progress")
+            return False
+            
+        if not self.reference_info:
+            error_msg = "No reference video set. Please select a reference video first."
+            logger.error(error_msg)
+            self.status_update.emit(error_msg)
+            self.capture_finished.emit(False, error_msg)
+            return False
+            
+        logger.info("Starting bookend capture mode")
+        self.status_update.emit("Initializing bookend capture mode...")
+        
+        # Reset device to ensure clean start
+        reset_success, reset_msg = self._force_reset_device(device_name)
+        
+        # Try to connect to the device
+        connected, message = self._try_connect_device(device_name, max_retries=2)
+        
+        # Even if connection reports issues, proceed anyway since Blackmagic devices
+        # often show as "not connected" but still work
+        logger.info(f"Proceeding with bookend capture (connected={connected})")
+        
+        # Prepare output path
+        self._prepare_output_path()
+        
+        # Calculate a longer duration based on reference
+        # We need to capture at least two complete loops of the video with bookends
+        ref_duration = self.reference_info['duration']
+        bookend_duration = 0.5  # White frame duration in seconds
+        loop_duration = ref_duration + bookend_duration
+        
+        # Capture a bit more than 2 full loops to ensure we get complete bookends
+        capture_duration = (loop_duration * 2.5)
+        
+        logger.info(f"Estimated single loop duration: {loop_duration:.2f}s")
+        logger.info(f"Setting capture duration for at least 2 loops: {capture_duration:.2f}s")
+        
+        # Create a longer timeout for the capture monitor
+        timeout_duration = capture_duration * 1.5  # 50% extra time as buffer
+        
+        # Start long-running capture
+        try:
+            logger.info(f"Starting bookend capture from {device_name} for ~{capture_duration:.1f} seconds")
+            self.status_update.emit(f"Starting bookend capture for ~{capture_duration:.1f} seconds...")
+            
+            # Kill any lingering FFmpeg processes
+            self._kill_ffmpeg_processes()
+            
+            # Build FFmpeg command
+            cmd = [
+                self._ffmpeg_path,
+                "-y",  # Overwrite output
+                "-f", "decklink",
+                "-i", device_name,
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "18",  # Better quality
+                # Add options to help with file finalization
+                "-movflags", "+faststart",  # Write moov atom at the beginning
+                "-fflags", "+genpts",       # Generate PTS if missing
+                "-avoid_negative_ts", "1"   # Handle negative timestamps
+            ]
+            
+            # Add duration limit with buffer
+            cmd.extend(["-t", str(timeout_duration)])
+                
+            # Use forward slashes for FFmpeg
+            ffmpeg_output_path = self.current_output_path.replace('\\', '/')
+            
+            # Add output path
+            cmd.append(ffmpeg_output_path)
+            
+            # Log command
+            logger.info(f"FFmpeg bookend capture command: {' '.join(cmd)}")
+            
+            # Start FFmpeg process
+            self.ffmpeg_process = subprocess.Popen(
+                cmd,
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                universal_newlines=True
+            )
+            
+            # Start monitoring with the extended timeout
+            self.capture_monitor = CaptureMonitor(self.ffmpeg_process, timeout_duration)
+            self.capture_monitor.progress_updated.connect(self.progress_update)
+            self.capture_monitor.capture_complete.connect(self._on_bookend_capture_complete)
+            self.capture_monitor.capture_failed.connect(self._on_capture_failed)
+            self.capture_monitor.start()
+            
+            # Update state
+            self.state = CaptureState.CAPTURING_BOOKEND
+            self.state_changed.emit(self.state)
+            self.capture_started.emit()
+            
+            # User-friendly message
+            self.status_update.emit("Capturing looped video with white frame bookends. This will take at least two full loops to complete...")
+            
+            return True
+            
+        except Exception as e:
+            error_msg = f"Failed to start bookend capture: {str(e)}"
+            logger.error(error_msg)
+            self.status_update.emit(error_msg)
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.capture_finished.emit(False, error_msg)
+            return False
+
+    def _on_bookend_capture_complete(self):
+        """Handle completion of bookend capture"""
+        output_path = self.current_output_path
+        logger.info(f"Bookend capture completed: {output_path}")
+        
+        # Ensure progress shows 100% when complete to fix stuck progress issue
+        self.progress_update.emit(100)
+        
+        # Verify the output file
+        if not os.path.exists(output_path):
+            logger.error(f"Output file doesn't exist: {output_path}")
+            error_msg = f"Capture failed: Output file is missing"
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.capture_finished.emit(False, error_msg)
+            return
+            
+        if os.path.getsize(output_path) == 0:
+            logger.error(f"Output file is empty: {output_path}")
+            error_msg = f"Capture failed: Output file is empty"
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.capture_finished.emit(False, error_msg)
+            return
+            
+        # Move to processing state
+        self.state = CaptureState.PROCESSING
+        self.state_changed.emit(self.state)
+        self.status_update.emit("Bookend capture complete, processing video...")
+        
+        # Start post-processing
+        QTimer.singleShot(500, lambda: self._post_process_bookend_capture(output_path))
+        
+    def _post_process_bookend_capture(self, output_path):
+        """Process captured video with bookends"""
+        try:
+            # Verify file integrity
+            logger.info(f"Processing captured bookend video: {output_path}")
+            self.status_update.emit("Processing captured bookend video...")
+            
+            # First check if file exists and is valid
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                raise FileNotFoundError(f"Output file missing or empty: {output_path}")
+                
+            # Try to repair MP4 if needed
+            repaired, repaired_path = self._repair_mp4_if_needed(output_path)
+            if repaired and repaired_path:
+                logger.info(f"MP4 repair succeeded, using repaired file: {repaired_path}")
+                output_path = repaired_path
+                
+            # Verify file using FFprobe
+            cmd = [
+                "ffprobe",
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=codec_type,duration",
+                "-of", "json",
+                output_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise ValueError(f"Invalid video file: {result.stderr}")
+                
+            # Parse duration from output
+            import json
+            try:
+                info = json.loads(result.stdout)
+                duration = float(info.get('streams', [{}])[0].get('duration', 0))
+                
+                if duration < 1.0:
+                    raise ValueError(f"Video too short: {duration:.2f}s")
+                    
+                logger.info(f"Captured bookend video duration: {duration:.2f}s")
+            except (json.JSONDecodeError, IndexError) as e:
+                logger.warning(f"Could not parse duration: {e}, continuing anyway")
+                
+            # Mark as completed
+            self.state = CaptureState.COMPLETED
+            self.state_changed.emit(self.state)
+            self.status_update.emit("Bookend capture and processing complete")
+            self.capture_finished.emit(True, output_path)
+            
+        except Exception as e:
+            error_msg = f"Error processing bookend capture: {str(e)}"
+            logger.error(error_msg)
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.status_update.emit(f"Error: {error_msg}")
+            self.capture_finished.emit(False, error_msg)
+
                 output_filename = f"{ref_name}_capture.mp4"
                 
                 self.current_output_path = self.path_manager.get_output_path(

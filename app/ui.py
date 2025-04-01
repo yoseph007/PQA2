@@ -206,9 +206,25 @@ class VMafTestApp(QMainWindow):
         device_group.setLayout(device_layout)
         left_layout.addWidget(device_group)
         
-        # Trigger options
-        trigger_group = QGroupBox("Trigger Detection")
-        trigger_layout = QVBoxLayout()
+        # Capture method selection
+        method_group = QGroupBox("Capture Method")
+        method_layout = QVBoxLayout()
+        
+        method_select_layout = QHBoxLayout()
+        method_select_layout.addWidget(QLabel("Method:"))
+        self.capture_method_combo = QComboBox()
+        self.capture_method_combo.addItem("Trigger Detection", "trigger")
+        self.capture_method_combo.addItem("White Bookend Frames", "bookend")
+        self.capture_method_combo.currentIndexChanged.connect(self.on_capture_method_changed)
+        method_select_layout.addWidget(self.capture_method_combo)
+        method_layout.addLayout(method_select_layout)
+        
+        # Stacked widget to show different settings based on capture method
+        self.capture_settings_stack = QStackedWidget()
+        
+        # 1. Trigger detection settings
+        trigger_widget = QWidget()
+        trigger_layout = QVBoxLayout(trigger_widget)
         
         self.cb_use_trigger = QCheckBox("Wait for 'STARTING' trigger frame")
         self.cb_use_trigger.setChecked(True)
@@ -229,8 +245,37 @@ class VMafTestApp(QMainWindow):
         trigger_settings.addWidget(self.sb_trigger_frames)
         
         trigger_layout.addLayout(trigger_settings)
-        trigger_group.setLayout(trigger_layout)
-        left_layout.addWidget(trigger_group)
+        self.capture_settings_stack.addWidget(trigger_widget)
+        
+        # 2. Bookend method settings
+        bookend_widget = QWidget()
+        bookend_layout = QVBoxLayout(bookend_widget)
+        
+        bookend_info = QLabel(
+            "This method captures a looped video with white bookend frames.\n"
+            "The player should loop the video with 0.5s white frames at the end.\n"
+            "Capture will continue until at least two white frame sections are detected."
+        )
+        bookend_info.setWordWrap(True)
+        bookend_layout.addWidget(bookend_info)
+        
+        bookend_settings = QHBoxLayout()
+        bookend_settings.addWidget(QLabel("White threshold:"))
+        self.sb_bookend_threshold = QSpinBox()
+        self.sb_bookend_threshold.setRange(200, 250)
+        self.sb_bookend_threshold.setValue(230)
+        bookend_settings.addWidget(self.sb_bookend_threshold)
+        
+        bookend_settings.addStretch()
+        bookend_layout.addLayout(bookend_settings)
+        
+        self.capture_settings_stack.addWidget(bookend_widget)
+        
+        # Add the stacked widget to the method layout
+        method_layout.addWidget(self.capture_settings_stack)
+        
+        method_group.setLayout(method_layout)
+        left_layout.addWidget(method_group)
         
         # Capture buttons
         capture_group = QGroupBox("Capture Controls")
@@ -352,25 +397,38 @@ class VMafTestApp(QMainWindow):
         # Set reference info
         self.capture_manager.set_reference_video(self.reference_info)
         
-        # Check if we should use trigger detection
-        if self.cb_use_trigger.isChecked():
-            self.log_to_capture("Waiting for trigger frame...")
-            
-            # Get trigger settings from UI
-            threshold = self.sb_trigger_threshold.value() / 100.0  # Convert percentage to decimal
-            consecutive_frames = self.sb_trigger_frames.value()
-            
-            # Start trigger detection with settings
-            self.capture_manager.start_trigger_detection(
-                device_name,
-                threshold=threshold,
-                consecutive_frames=consecutive_frames
-            )
+        # Get the selected capture method
+        method = self.capture_method_combo.currentData()
+        
+        if method == "trigger":
+            # Use trigger-based capture
+            if self.cb_use_trigger.isChecked():
+                self.log_to_capture("Waiting for trigger frame...")
+                
+                # Get trigger settings from UI
+                threshold = self.sb_trigger_threshold.value() / 100.0  # Convert percentage to decimal
+                consecutive_frames = self.sb_trigger_frames.value()
+                
+                # Start trigger detection with settings
+                self.capture_manager.start_trigger_detection(
+                    device_name,
+                    threshold=threshold,
+                    consecutive_frames=consecutive_frames
+                )
+            else:
+                self.log_to_capture("Starting direct capture...")
+                
+                # Start capture directly
+                self.capture_manager.start_capture(device_name)
         else:
-            self.log_to_capture("Starting direct capture...")
+            # Use bookend-based capture
+            self.log_to_capture("Starting bookend frame capture mode...")
             
-            # Start capture directly
-            self.capture_manager.start_capture(device_name)
+            # Get settings from UI if needed
+            # bookend_threshold = self.sb_bookend_threshold.value()
+            
+            # Start bookend capture
+            self.capture_manager.start_bookend_capture(device_name)
 
     def _setup_analysis_tab(self):
         """Set up the Analysis tab with improved layout and combined workflow"""
@@ -387,6 +445,17 @@ class VMafTestApp(QMainWindow):
         # Model selection and duration
         settings_row = QHBoxLayout()
         
+        # Alignment method selection
+        alignment_layout = QHBoxLayout()
+        alignment_layout.addWidget(QLabel("Alignment Method:"))
+        self.combo_alignment_method = QComboBox()
+        self.combo_alignment_method.addItem("Content-based", "content")
+        self.combo_alignment_method.addItem("White Bookend", "bookend")
+        alignment_layout.addWidget(self.combo_alignment_method)
+        settings_row.addLayout(alignment_layout)
+        
+        settings_row.addSpacing(10)
+        
         # VMAF model selection
         model_layout = QHBoxLayout()
         model_layout.addWidget(QLabel("VMAF Model:"))
@@ -396,7 +465,7 @@ class VMafTestApp(QMainWindow):
         model_layout.addWidget(self.combo_vmaf_model)
         settings_row.addLayout(model_layout)
         
-        settings_row.addSpacing(20)
+        settings_row.addSpacing(10)
         
         # Duration selection
         duration_layout = QHBoxLayout()
@@ -544,14 +613,33 @@ class VMafTestApp(QMainWindow):
         self.align_videos_for_combined_workflow()
 
     def align_videos_for_combined_workflow(self):
-        """Start video alignment as part of the combined workflow"""
-        self.log_to_analysis("Starting video alignment...")
+        """Start video alignment as part of the combined workflow using selected method"""
+        # Get selected alignment method
+        alignment_method = self.combo_alignment_method.currentData()
         
-        # Create alignment thread
-        self.alignment_thread = AlignmentThread(
-            self.reference_info['path'],
-            self.capture_path
-        )
+        self.log_to_analysis(f"Starting video alignment using {alignment_method} method...")
+        
+        if alignment_method == "bookend":
+            # Import BookendAlignmentThread
+            from .bookend_alignment import BookendAlignmentThread
+            
+            # Create bookend alignment thread
+            self.alignment_thread = BookendAlignmentThread(
+                self.reference_info['path'],
+                self.capture_path
+            )
+            
+            # Log bookend method usage
+            self.log_to_analysis("Using white bookend frame alignment method")
+        else:
+            # Default to content-based alignment
+            self.alignment_thread = AlignmentThread(
+                self.reference_info['path'],
+                self.capture_path
+            )
+            
+            # Log content method usage
+            self.log_to_analysis("Using content-based alignment method")
         
         # Connect signals
         self.alignment_thread.alignment_progress.connect(self.pb_alignment_progress.setValue)
@@ -956,6 +1044,17 @@ class VMafTestApp(QMainWindow):
                             f"Captured: {capture_name}\n" +
                             f"Ready for alignment and VMAF analysis")
                             
+
+    def on_capture_method_changed(self, index):
+        """Handle change in capture method selection"""
+        method = self.capture_method_combo.currentData()
+        self.capture_settings_stack.setCurrentIndex(index)
+        
+        if hasattr(self, 'capture_manager'):
+            self.capture_manager.set_capture_method(method)
+            
+        self.log_to_capture(f"Capture method changed to: {method}")
+
             self.lbl_analysis_summary.setText(analysis_summary)
             
             # Enable analysis tab and buttons
@@ -998,20 +1097,39 @@ class VMafTestApp(QMainWindow):
         self.lbl_preview.setPixmap(scaled_pixmap)
         
     def align_videos(self):
-        """Start video alignment process"""
+        """Start video alignment process using selected method"""
         if not self.reference_info or not self.capture_path:
             self.log_to_analysis("Missing reference or captured video")
             return
             
-        self.log_to_analysis("Starting video alignment...")
+        # Get selected alignment method
+        alignment_method = self.combo_alignment_method.currentData()
+        
+        self.log_to_analysis(f"Starting video alignment using {alignment_method} method...")
         self.pb_alignment_progress.setValue(0)
         self.lbl_alignment_status.setText("Aligning videos...")
         
-        # Create alignment thread
-        self.alignment_thread = AlignmentThread(
-            self.reference_info['path'],
-            self.capture_path
-        )
+        if alignment_method == "bookend":
+            # Import BookendAlignmentThread
+            from .bookend_alignment import BookendAlignmentThread
+            
+            # Create bookend alignment thread
+            self.alignment_thread = BookendAlignmentThread(
+                self.reference_info['path'],
+                self.capture_path
+            )
+            
+            # Log bookend method usage
+            self.log_to_analysis("Using white bookend frame alignment method")
+        else:
+            # Default to content-based alignment
+            self.alignment_thread = AlignmentThread(
+                self.reference_info['path'],
+                self.capture_path
+            )
+            
+            # Log content method usage
+            self.log_to_analysis("Using content-based alignment method")
         
         # Connect signals
         self.alignment_thread.alignment_progress.connect(self.pb_alignment_progress.setValue)
