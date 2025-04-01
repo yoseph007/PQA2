@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                            QPushButton, QLabel, QComboBox, QProgressBar, QFileDialog,
                            QGroupBox, QMessageBox, QTabWidget, QSpinBox, QCheckBox,
                            QStatusBar, QSplitter, QTextEdit, QListWidget, QListWidgetItem,
-                           QStyle)  # Added QStyle import
+                           QStyle, QStackedWidget, QFormLayout)  # Added QStackedWidget and QFormLayout
 from PyQt5.QtCore import Qt, pyqtSlot, QSize, QTimer
 from PyQt5.QtGui import QPixmap, QImage
 import cv2
