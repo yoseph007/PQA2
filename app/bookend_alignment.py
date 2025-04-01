@@ -150,45 +150,96 @@ class BookendAligner(QObject):
             logger.error(traceback.format_exc())
             self.error_occurred.emit(error_msg)
             return None
+  
+  
+  
+def _detect_white_bookends(self, video_path):
+    """
+    Detect white frame bookend sections in video
+    IMPROVED: More reliable detection with adaptive thresholds
+    
+    Returns list of bookend dictionaries with start/end times
+    """
+    try:
+        bookends = []
+        cap = cv2.VideoCapture(video_path)
+        
+        if not cap.isOpened():
+            logger.error(f"Could not open video: {video_path}")
+            return None
             
-    def _detect_white_bookends(self, video_path):
-        """
-        Detect white frame bookend sections in video
-        Returns list of bookend dictionaries with start/end times
-        """
-        try:
+        # Get video properties
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count / fps if fps > 0 else 0
+        
+        # IMPROVED: Adaptive sampling rate based on video length
+        # Sample more frequently for better detection in shorter videos
+        if frame_count < 1000:
+            sample_rate = 2  # Check every 2 frames for short videos
+        elif frame_count < 3000:
+            sample_rate = 3  # Check every 3 frames for medium videos
+        else:
+            sample_rate = 5  # Check every 5 frames for long videos
+        
+        # IMPROVED: Dynamic min_white_frames based on frame rate
+        # At least 0.2 seconds but minimum of 3 frames
+        min_white_frames = max(3, int(0.2 * fps / sample_rate))
+        
+        # IMPROVED: Try multiple whiteness thresholds if needed
+        # Start with a high threshold, then try lower ones if detection fails
+        whiteness_thresholds = [225, 210, 195]  # Try progressively lower thresholds
+        
+        logger.info(f"Scanning for white bookends in {video_path}")
+        logger.info(f"Frame count: {frame_count}, Duration: {duration:.2f}s, FPS: {fps:.2f}")
+        logger.info(f"Using sample rate: {sample_rate}, min white frames: {min_white_frames}")
+        
+        # Try each threshold until we find at least 2 bookends
+        for threshold_idx, whiteness_threshold in enumerate(whiteness_thresholds):
+            logger.info(f"Trying whiteness threshold: {whiteness_threshold}")
             bookends = []
-            cap = cv2.VideoCapture(video_path)
-            
-            if not cap.isOpened():
-                logger.error(f"Could not open video: {video_path}")
-                return None
-                
-            # Get video properties
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            duration = frame_count / fps if fps > 0 else 0
-            
-            # Set sampling rate - check every 5 frames for speed
-            sample_rate = 5
             
             # Counters for white frame detection
             consecutive_white_frames = 0
-            min_white_frames = int(0.25 * fps / sample_rate)  # At least 0.25 seconds
             
             # Current bookend being built
             current_bookend = None
             
-            # Whiteness threshold - use high value to avoid false positives
-            whiteness_threshold = 230  # Out of 255
+            # First quick scan to find brightness statistics
+            brightness_samples = []
+            for quick_idx in range(0, min(frame_count, 500), 20):  # Sample up to 25 frames
+                cap.set(cv2.CAP_PROP_POS_FRAMES, quick_idx)
+                ret, frame = cap.read()
+                if ret:
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    brightness_samples.append(np.mean(gray))
             
-            logger.info(f"Scanning for white bookends in {video_path} (min frames: {min_white_frames})")
+            # IMPROVED: Adaptive threshold based on video brightness
+            if brightness_samples:
+                median_brightness = np.median(brightness_samples)
+                # If video is generally very bright, increase threshold
+                if median_brightness > 200:
+                    adaptive_threshold = whiteness_threshold + 10
+                # If video is generally dark, decrease threshold slightly
+                elif median_brightness < 100:
+                    adaptive_threshold = whiteness_threshold - 10
+                else:
+                    adaptive_threshold = whiteness_threshold
+                
+                logger.info(f"Median brightness: {median_brightness:.1f}, Adaptive threshold: {adaptive_threshold}")
+            else:
+                adaptive_threshold = whiteness_threshold
             
+            # Reset to beginning for full scan
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            
+            # Main scan for white frames
             for frame_idx in range(0, frame_count, sample_rate):
-                # Report progress for long videos
+                # Report progress periodically
                 if frame_count > 1000 and frame_idx % 500 == 0:
                     progress = int(30 + (frame_idx / frame_count) * 40)  # Scale to 30-70%
                     self.alignment_progress.emit(progress)
+                    logger.debug(f"Scanning frame {frame_idx}/{frame_count} ({progress}%)")
                     
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
                 ret, frame = cap.read()
@@ -200,8 +251,133 @@ class BookendAligner(QObject):
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 avg_brightness = np.mean(gray)
                 
-                # Check if it's a white frame
-                is_white_frame = avg_brightness > whiteness_threshold
+                # IMPROVED: Also check standard deviation - white frames have low std dev
+                std_dev = np.std(gray)
+                
+                # IMPROVED: More sophisticated white frame detection
+                # Consider both brightness and uniformity (low std dev)
+                is_white_frame = (avg_brightness > adaptive_threshold and std_dev < 25)
+                
+                if is_white_frame:
+                    consecutive_white_frames += 1
+                    
+                    # Start a new bookend if needed
+                    if current_bookend is None:
+                        frame_time = frame_idx / fps
+                        current_bookend = {
+                            'start_frame': frame_idx,
+                            'start_time': frame_time,
+                            'frame_count': 1,
+                            'avg_brightness': avg_brightness,
+                            'std_dev': std_dev
+                        }
+                else:
+                    # Check if we just finished a bookend
+                    if current_bookend is not None:
+                        # Update end time
+                        current_bookend['end_frame'] = frame_idx - sample_rate
+                        current_bookend['end_time'] = current_bookend['end_frame'] / fps
+                        current_bookend['frame_count'] = consecutive_white_frames
+                        
+                        # Add to bookends if long enough
+                        if consecutive_white_frames >= min_white_frames:
+                            bookends.append(current_bookend)
+                            logger.info(f"Detected white bookend: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s " +
+                                      f"(brightness: {current_bookend.get('avg_brightness', 0):.1f}, stddev: {current_bookend.get('std_dev', 0):.1f})")
+                            
+                        # Reset for next bookend
+                        current_bookend = None
+                        consecutive_white_frames = 0
+            
+            # Check if we have an unfinished bookend at the end
+            if current_bookend is not None:
+                current_bookend['end_frame'] = frame_count - 1
+                current_bookend['end_time'] = duration
+                current_bookend['frame_count'] = consecutive_white_frames
+                
+                if consecutive_white_frames >= min_white_frames:
+                    bookends.append(current_bookend)
+                    logger.info(f"Detected white bookend at end: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s " +
+                              f"(brightness: {current_bookend.get('avg_brightness', 0):.1f}, stddev: {current_bookend.get('std_dev', 0):.1f})")
+            
+            # If we found at least 2 bookends, we're done
+            if len(bookends) >= 2:
+                logger.info(f"Found {len(bookends)} white bookend sections with threshold {adaptive_threshold}")
+                break
+                
+            logger.warning(f"Found only {len(bookends)} white bookend sections with threshold {adaptive_threshold} (need at least 2)")
+            # Continue to next threshold if we didn't find enough bookends
+        
+        cap.release()
+        
+        # IMPROVED: If we still don't have enough bookends, try a more aggressive approach
+        if len(bookends) < 2:
+            logger.warning("Insufficient bookends found with standard detection. Trying frame-by-frame scan...")
+            bookends = self._detect_white_bookends_aggressive(video_path)
+            
+        if len(bookends) < 2:
+            logger.warning(f"Still only found {len(bookends)} white bookend sections after aggressive scan (need at least 2)")
+        
+        return bookends
+        
+    except Exception as e:
+        logger.error(f"Error detecting white bookends: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
+
+    def _detect_white_bookends_aggressive(self, video_path):
+        """
+        More aggressive scan for white bookends when standard detection fails
+        Scans the entire video with minimal sampling
+        """
+        try:
+            logger.info("Starting aggressive white bookend detection")
+            self.status_update.emit("Performing detailed scan for white frames...")
+            
+            bookends = []
+            cap = cv2.VideoCapture(video_path)
+            
+            if not cap.isOpened():
+                return None
+                
+            # Get video properties
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            
+            # Use a more frequent sampling rate
+            sample_rate = 1  # Check every frame
+            
+            # Use a lower whiteness threshold
+            whiteness_threshold = 180  # Lower threshold
+            
+            # Shorter minimum for white bookends - just 2 frames
+            min_white_frames = 2
+            
+            # Counters for white frame detection
+            consecutive_white_frames = 0
+            current_bookend = None
+            
+            # Scan entire video
+            for frame_idx in range(0, frame_count, sample_rate):
+                # Report progress
+                if frame_idx % 100 == 0:
+                    progress = int(70 + (frame_idx / frame_count) * 20)  # Scale to 70-90%
+                    self.alignment_progress.emit(progress)
+                    
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = cap.read()
+                
+                if not ret:
+                    break
+                    
+                # Calculate brightness and uniformity
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                avg_brightness = np.mean(gray)
+                std_dev = np.std(gray)
+                
+                # More lenient white frame detection
+                is_white_frame = (avg_brightness > whiteness_threshold and std_dev < 40)
                 
                 if is_white_frame:
                     consecutive_white_frames += 1
@@ -225,32 +401,31 @@ class BookendAligner(QObject):
                         # Add to bookends if long enough
                         if consecutive_white_frames >= min_white_frames:
                             bookends.append(current_bookend)
-                            logger.info(f"Detected white bookend: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s")
+                            logger.info(f"Aggressive scan: Detected white bookend at {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s")
                             
                         # Reset for next bookend
                         current_bookend = None
                         consecutive_white_frames = 0
             
             # Check if we have an unfinished bookend at the end
-            if current_bookend is not None:
+            if current_bookend is not None and consecutive_white_frames >= min_white_frames:
                 current_bookend['end_frame'] = frame_count - 1
-                current_bookend['end_time'] = duration
+                current_bookend['end_time'] = frame_count / fps
                 current_bookend['frame_count'] = consecutive_white_frames
-                
-                if consecutive_white_frames >= min_white_frames:
-                    bookends.append(current_bookend)
-                    logger.info(f"Detected white bookend at end: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s")
+                bookends.append(current_bookend)
+                logger.info(f"Aggressive scan: Detected white bookend at end: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s")
             
             cap.release()
             
-            if len(bookends) < 2:
-                logger.warning(f"Only found {len(bookends)} white bookend sections (need at least 2)")
-            
+            logger.info(f"Aggressive scan completed, found {len(bookends)} white bookend sections")
             return bookends
             
         except Exception as e:
-            logger.error(f"Error detecting white bookends: {str(e)}")
-            return None
+            logger.error(f"Error in aggressive white bookend detection: {str(e)}")
+            return []
+    
+  
+  
             
     def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration):
         """Create aligned videos based on bookend content timing"""
