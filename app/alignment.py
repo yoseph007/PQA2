@@ -991,6 +991,7 @@ class AlignmentThread(QThread):
             return None, None
 
     def _create_aligned_videos_by_offset(self, reference_path, captured_path, offset_frames):
+        """Create aligned videos by trimming based on frame offset"""
         try:
             # Create output paths
             aligned_reference = os.path.splitext(reference_path)[0] + "_aligned.mp4"
@@ -1000,33 +1001,85 @@ class AlignmentThread(QThread):
             ref_info = self._get_video_info(reference_path)
             cap_info = self._get_video_info(captured_path)
 
+            if not ref_info or not cap_info:
+                logger.error("Failed to get video info for alignment")
+                return None, None
+
             # Calculate trim times based on frames and fps
             fps = ref_info.get('frame_rate', 25)
+            if fps <= 0:
+                fps = 25  # Default to 25 fps if invalid
+
+            # Convert frame offset to time offset
             offset_seconds = offset_frames / fps
-            ref_start_trim = 0
-            cap_start_trim = offset_seconds
+
+            # Determine which video starts first
+            if offset_frames > 0:
+                # Reference starts first, need to trim reference start
+                ref_start_trim = offset_seconds
+                cap_start_trim = 0
+                logger.info(f"Reference starts {offset_seconds:.3f}s before captured")
+            else:
+                # Captured starts first, need to trim captured start
+                ref_start_trim = 0
+                cap_start_trim = abs(offset_seconds)
+                logger.info(f"Captured starts {abs(offset_seconds):.3f}s before reference")
+
+            # Calculate video durations after trimming
+            ref_duration = ref_info.get('duration', 0) - ref_start_trim
+            cap_duration = cap_info.get('duration', 0) - cap_start_trim
+
+            # Use the shorter duration for both videos
+            output_duration = min(ref_duration, cap_duration)
 
             # Trim reference video
+            ref_end_time = ref_start_trim + output_duration
             ref_cmd = [
-                self._ffmpeg_path, "-y", "-i", reference_path,
+                "ffmpeg", "-y", "-i", reference_path,
                 "-ss", str(ref_start_trim),
-                "-to", str(ref_info['duration']),
-                "-c", "copy", aligned_reference
+                "-t", str(output_duration),
+                "-c:v", "libx264", "-crf", "18", 
+                "-preset", "fast", "-c:a", "copy",
+                aligned_reference
             ]
-            subprocess.run(ref_cmd, check=True)
+
+            logger.info(f"Trimming reference video from {ref_start_trim:.3f}s to {ref_end_time:.3f}s")
+            subprocess.run(ref_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
             # Trim captured video
+            cap_end_time = cap_start_trim + output_duration
             cap_cmd = [
-                self._ffmpeg_path, "-y", "-i", captured_path,
+                "ffmpeg", "-y", "-i", captured_path,
                 "-ss", str(cap_start_trim),
-                "-to", str(cap_info['duration']),
-                "-c", "copy", aligned_captured
+                "-t", str(output_duration),
+                "-c:v", "libx264", "-crf", "18",
+                "-preset", "fast", "-c:a", "copy",
+                aligned_captured
             ]
-            subprocess.run(cap_cmd, check=True)
+
+            logger.info(f"Trimming captured video from {cap_start_trim:.3f}s to {cap_end_time:.3f}s")
+            subprocess.run(cap_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # Verify the files were created
+            if not os.path.exists(aligned_reference) or not os.path.exists(aligned_captured):
+                logger.error("Failed to create aligned videos")
+                return None, None
+
+            # Get info for aligned videos to verify
+            ref_aligned_info = self._get_video_info(aligned_reference)
+            cap_aligned_info = self._get_video_info(aligned_captured)
+
+            if ref_aligned_info and cap_aligned_info:
+                logger.info(f"Created aligned videos: {ref_aligned_info.get('duration'):.2f}s / {cap_aligned_info.get('duration'):.2f}s")
+            else:
+                logger.warning("Could not verify aligned video info")
 
             return aligned_reference, aligned_captured
+
         except Exception as e:
             logger.error(f"Error creating aligned videos by offset: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None, None
 
     def _calculate_match_score(self, ref_frames, cap_frames):
@@ -1043,6 +1096,7 @@ class AlignmentThread(QThread):
         return total_score
 
     def _create_aligned_videos_by_offset(self, reference_path, captured_path, offset_frames):
+        """Create aligned videos by trimming based on frame offset"""
         try:
             # Create output paths
             aligned_reference = os.path.splitext(reference_path)[0] + "_aligned.mp4"
@@ -1052,31 +1106,83 @@ class AlignmentThread(QThread):
             ref_info = self._get_video_info(reference_path)
             cap_info = self._get_video_info(captured_path)
 
+            if not ref_info or not cap_info:
+                logger.error("Failed to get video info for alignment")
+                return None, None
+
             # Calculate trim times based on frames and fps
             fps = ref_info.get('frame_rate', 25)
+            if fps <= 0:
+                fps = 25  # Default to 25 fps if invalid
+
+            # Convert frame offset to time offset
             offset_seconds = offset_frames / fps
-            ref_start_trim = 0
-            cap_start_trim = offset_seconds
+
+            # Determine which video starts first
+            if offset_frames > 0:
+                # Reference starts first, need to trim reference start
+                ref_start_trim = offset_seconds
+                cap_start_trim = 0
+                logger.info(f"Reference starts {offset_seconds:.3f}s before captured")
+            else:
+                # Captured starts first, need to trim captured start
+                ref_start_trim = 0
+                cap_start_trim = abs(offset_seconds)
+                logger.info(f"Captured starts {abs(offset_seconds):.3f}s before reference")
+
+            # Calculate video durations after trimming
+            ref_duration = ref_info.get('duration', 0) - ref_start_trim
+            cap_duration = cap_info.get('duration', 0) - cap_start_trim
+
+            # Use the shorter duration for both videos
+            output_duration = min(ref_duration, cap_duration)
 
             # Trim reference video
+            ref_end_time = ref_start_trim + output_duration
             ref_cmd = [
-                self._ffmpeg_path, "-y", "-i", reference_path,
+                "ffmpeg", "-y", "-i", reference_path,
                 "-ss", str(ref_start_trim),
-                "-to", str(ref_info['duration']),
-                "-c", "copy", aligned_reference
+                "-t", str(output_duration),
+                "-c:v", "libx264", "-crf", "18", 
+                "-preset", "fast", "-c:a", "copy",
+                aligned_reference
             ]
-            subprocess.run(ref_cmd, check=True)
+
+            logger.info(f"Trimming reference video from {ref_start_trim:.3f}s to {ref_end_time:.3f}s")
+            subprocess.run(ref_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
             # Trim captured video
+            cap_end_time = cap_start_trim + output_duration
             cap_cmd = [
-                self._ffmpeg_path, "-y", "-i", captured_path,
+                "ffmpeg", "-y", "-i", captured_path,
                 "-ss", str(cap_start_trim),
-                "-to", str(cap_info['duration']),
-                "-c", "copy", aligned_captured
+                "-t", str(output_duration),
+                "-c:v", "libx264", "-crf", "18",
+                "-preset", "fast", "-c:a", "copy",
+                aligned_captured
             ]
-            subprocess.run(cap_cmd, check=True)
+
+            logger.info(f"Trimming captured video from {cap_start_trim:.3f}s to {cap_end_time:.3f}s")
+            subprocess.run(cap_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # Verify the files were created
+            if not os.path.exists(aligned_reference) or not os.path.exists(aligned_captured):
+                logger.error("Failed to create aligned videos")
+                return None, None
+
+            # Get info for aligned videos to verify
+            ref_aligned_info = self._get_video_info(aligned_reference)
+            cap_aligned_info = self._get_video_info(aligned_captured)
+
+            if ref_aligned_info and cap_aligned_info:
+                logger.info(f"Created aligned videos: {ref_aligned_info.get('duration'):.2f}s / {cap_aligned_info.get('duration'):.2f}s")
+            else:
+                logger.warning("Could not verify aligned video info")
 
             return aligned_reference, aligned_captured
+
         except Exception as e:
             logger.error(f"Error creating aligned videos by offset: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None, None
