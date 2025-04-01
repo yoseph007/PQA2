@@ -33,32 +33,32 @@ class VideoAligner(QObject):
                 "-show_streams",
                 video_path
             ]
-            
+
             result = subprocess.run(cmd, capture_output=True, text=True)
-            
+
             if result.returncode != 0:
                 logger.error(f"FFprobe failed: {result.stderr}")
                 return None
-                
+
             # Parse JSON output
             import json
             info = json.loads(result.stdout)
-            
+
             # Get video stream info
             video_stream = None
             for stream in info.get('streams', []):
                 if stream.get('codec_type') == 'video':
                     video_stream = stream
                     break
-            
+
             if not video_stream:
                 logger.error(f"No video stream found in {video_path}")
                 return None
-                
+
             # Extract key information
             format_info = info.get('format', {})
             duration = float(format_info.get('duration', 0))
-            
+
             # Parse frame rate
             frame_rate_str = video_stream.get('avg_frame_rate', '0/0')
             if '/' in frame_rate_str:
@@ -69,19 +69,19 @@ class VideoAligner(QObject):
                     frame_rate = num / den
             else:
                 frame_rate = float(frame_rate_str or 0)
-                
+
             # Get dimensions and frame count
             width = int(video_stream.get('width', 0))
             height = int(video_stream.get('height', 0))
             frame_count = int(video_stream.get('nb_frames', 0))
-            
+
             # If nb_frames is missing or zero, estimate from duration
             if frame_count == 0 and frame_rate > 0:
                 frame_count = int(round(duration * frame_rate))
-                
+
             # Get pixel format
             pix_fmt = video_stream.get('pix_fmt', 'unknown')
-            
+
             return {
                 'path': video_path,
                 'duration': duration,
@@ -92,7 +92,7 @@ class VideoAligner(QObject):
                 'pix_fmt': pix_fmt,
                 'total_frames': frame_count
             }
-                
+
         except Exception as e:
             logger.error(f"Error getting video info for {video_path}: {str(e)}")
             return None
@@ -664,8 +664,8 @@ class VideoAligner(QObject):
                 ref_height = int(ref_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
                 # Calculate downscale factor for faster processing
-                # Use higher resolution for better accuracy (240p height instead of 160p)
-                target_height = 240
+                # Use higher resolution for better accuracy (720p height instead of 240p)
+                target_height = 720
                 scale_factor = target_height / ref_height
                 scaled_width = int(ref_width * scale_factor)
                 scaled_height = target_height
@@ -741,7 +741,7 @@ class VideoAligner(QObject):
 
                     # Get frames from captured video at same positions + offset
                     cap_frames = []
-                    for frame_pos in frame_positions:
+                    for framepos in frame_positions:
                         adjusted_pos = frame_pos + offset
                         if adjusted_pos >= cap_frame_count:
                             continue
@@ -1041,3 +1041,42 @@ class AlignmentThread(QThread):
         for i in range(len(ref_frames)):
             total_score += cv2.compareSSIM(ref_frames[i], cap_frames[i], cv2.COLOR_BGR2GRAY)
         return total_score
+
+    def _create_aligned_videos_by_offset(self, reference_path, captured_path, offset_frames):
+        try:
+            # Create output paths
+            aligned_reference = os.path.splitext(reference_path)[0] + "_aligned.mp4"
+            aligned_captured = os.path.splitext(captured_path)[0] + "_aligned.mp4"
+
+            # Get video info
+            ref_info = self._get_video_info(reference_path)
+            cap_info = self._get_video_info(captured_path)
+
+            # Calculate trim times based on frames and fps
+            fps = ref_info.get('frame_rate', 25)
+            offset_seconds = offset_frames / fps
+            ref_start_trim = 0
+            cap_start_trim = offset_seconds
+
+            # Trim reference video
+            ref_cmd = [
+                self._ffmpeg_path, "-y", "-i", reference_path,
+                "-ss", str(ref_start_trim),
+                "-to", str(ref_info['duration']),
+                "-c", "copy", aligned_reference
+            ]
+            subprocess.run(ref_cmd, check=True)
+
+            # Trim captured video
+            cap_cmd = [
+                self._ffmpeg_path, "-y", "-i", captured_path,
+                "-ss", str(cap_start_trim),
+                "-to", str(cap_info['duration']),
+                "-c", "copy", aligned_captured
+            ]
+            subprocess.run(cap_cmd, check=True)
+
+            return aligned_reference, aligned_captured
+        except Exception as e:
+            logger.error(f"Error creating aligned videos by offset: {str(e)}")
+            return None, None
