@@ -1054,7 +1054,30 @@ class VMafTestApp(QMainWindow):
             self.capture_manager.set_capture_method(method)
             
         self.log_to_capture(f"Capture method changed to: {method}")
-
+        
+    def handle_capture_finished(self, success, result):
+        """Handle capture completion with better button management"""
+        self.btn_start_capture.setEnabled(True)
+        self.btn_stop_capture.setEnabled(False)
+        
+        # Reset progress bar to avoid stuck state
+        self.pb_capture_progress.setValue(0)
+        
+        if success:
+            # Normalize the path for consistent display
+            display_path = os.path.normpath(result)
+            
+            self.log_to_capture(f"Capture completed: {display_path}")
+            self.capture_path = result
+            
+            # Update analysis tab
+            capture_name = os.path.basename(self.capture_path)
+            ref_name = os.path.basename(self.reference_info['path'])
+            
+            analysis_summary = (f"Reference: {ref_name}\n" +
+                            f"Captured: {capture_name}\n" +
+                            f"Ready for alignment and VMAF analysis")
+                            
             self.lbl_analysis_summary.setText(analysis_summary)
             
             # Enable analysis tab and buttons
