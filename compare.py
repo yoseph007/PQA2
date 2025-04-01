@@ -596,7 +596,7 @@ class VideoSyncApp(QWidget):
                 # Make sure to set progress to 100% when complete
                 self.update_progress.emit(100)
                 self.finished_signal.emit()
-
+    
         self.thread = AlignmentThread(self)
         self.thread.update_progress.connect(self.progress_bar.setValue)
         self.thread.update_text.connect(self.output_text.append)

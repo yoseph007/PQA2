@@ -5,7 +5,7 @@ import subprocess
 import re
 import tempfile
 from datetime import datetime
-from PyQt5.QtCore import QObject, pyqtSignal, QThread
+from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
 import shutil
 from .alignment import VideoAligner
 
@@ -21,258 +21,288 @@ class VMAFAnalyzer(QObject):
     def __init__(self):
         super().__init__()
 
-    def analyze_videos(self, reference_path, distorted_path, model_path="vmaf_v0.6.1", duration=None):
-        
-        self.alignment_performed = False
-        stderr_output = ""  # Initialize early to prevent UnboundLocalError
-        original_dir = os.getcwd()  # Save original directory
-        temp_dir = None
 
-
-
-        # Inside the method, wrap the alignment code in a condition
-        if not self.alignment_performed and not (
-            "_aligned" in reference_path and "_aligned" in distorted_path):
-            # This prevents re-alignment if files are already aligned
-            self.status_update.emit("Aligning videos for accurate comparison...")
-
-            try:
-                self.status_update.emit("Starting VMAF analysis...")
-
-                # Validate input files
-                if not os.path.exists(reference_path):
-                    raise FileNotFoundError(f"Reference video not found: {reference_path}")
-                if not os.path.exists(distorted_path):
-                    raise FileNotFoundError(f"Distorted video not found: {distorted_path}")
-                
-                self.status_update.emit("Aligning videos for accurate comparison...")
-                
-                
-                # Align videos using timestamp method
-                try:
-                    # Create aligner
-                    aligner = VideoAligner()
-                    
-                    # Run alignment using timestamp-based method
-                    alignment_result = aligner.align_videos(reference_path, distorted_path)
-                    
-                    if alignment_result and 'aligned_reference' in alignment_result and 'aligned_captured' in alignment_result:
-                        # Use aligned videos for VMAF
-                        logger.info(f"Using aligned videos for VMAF analysis (method: {alignment_result.get('alignment_method', 'unknown')})")
-                        reference_path = alignment_result['aligned_reference']
-                        distorted_path = alignment_result['aligned_captured']
-                    else:
-                        logger.warning("Video alignment failed, using original videos")
-                except Exception as e:
-                    logger.warning(f"Error during video alignment: {str(e)}")
-        
-                # Get video metadata
-                ref_info = self._get_video_info(reference_path)
-                dist_info = self._get_video_info(distorted_path)
-                if not ref_info or not dist_info:
-                    error_msg = "Could not get video information"
-                    logger.error(error_msg)
-                    self.error_occurred.emit(error_msg)
-                    return None
-
-                # Create temporary directory for output files
-                temp_dir = tempfile.mkdtemp()
-
-                # File names for output - SIMPLE NAMES, NO PATHS
-                json_file = "vmaf_log.json"
-                csv_file = "vmaf_log.csv"
-                psnr_file = "psnr_log.txt"
-                ssim_file = "ssim_log.txt"
-
-                # Change to temp directory before running ffmpeg
-                os.chdir(temp_dir)
-
-                # Create the filter complex string - USING ONLY FILE NAMES, NO PATHS
-                filter_complex = (
-                    "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
-                    "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
-                    f"[ref1][dist1]libvmaf=log_path={json_file}:log_fmt=json;"
-                    f"[ref2][dist2]libvmaf=log_path={csv_file}:log_fmt=csv;"
-                    f"[0:v][1:v]psnr=stats_file={psnr_file};"
-                    f"[0:v][1:v]ssim=stats_file={ssim_file}"
-                )
-
-                # Construct the full command
-                cmd = [
-                    "ffmpeg",
-                    "-hide_banner",
-                    "-i", reference_path,  # Reference video
-                    "-i", distorted_path,  # Distorted video
-                    "-filter_complex", filter_complex,
-                    "-f", "null", "-"
-                ]
-
-                # Add duration if specified
-                if duration:
-                    cmd.extend(["-t", str(duration)])
-
-                # Log and execute the command
-                logger.info(f"Running VMAF command: {' '.join(cmd)}")
-                self.status_update.emit("Running VMAF analysis...")
-
-                # Execute the command
-                process = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-                )
-
-                # Progress tracking
-                total_frames = ref_info.get('frame_count', 0)
-                if total_frames == 0 and duration:
-                    total_frames = int(duration * ref_info.get('frame_rate', 25))
-
-                while process.poll() is None:
-                    line = process.stderr.readline()
-                    stderr_output += line
-                    if "frame=" in line:
-                        try:
-                            match = re.search(r'frame=\s*(\d+)', line)
-                            if match and total_frames > 0:
-                                current_frame = int(match.group(1))
-                                progress = min(99, int((current_frame / total_frames) * 100))
-                                self.analysis_progress.emit(progress)
-                        except Exception as e:
-                            logger.warning(f"Progress parsing error: {str(e)}")
-
-                # Capture remaining output
-                stdout, stderr = process.communicate()
-                stderr_output += stderr
-                self.analysis_progress.emit(100)
-
-                # Check if the files were created
-                # Since we're in the temp directory, just use the filenames
-                if not os.path.exists(json_file):
-                    logger.error(f"VMAF JSON output file missing: {os.path.join(temp_dir, json_file)}")
-                    logger.error(f"FFmpeg STDERR: {stderr_output}")
-                    raise FileNotFoundError(f"VMAF output file not created")
-
-                # Prepare output paths for final destination in test_results
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                
-                # Get test_results directory path
-                script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                base_results_dir = os.path.join(script_dir, "tests", "test_results")
-                
-                # Extract test name from reference path if possible
-                ref_dir = os.path.dirname(reference_path)
-                test_name = os.path.basename(ref_dir)
-                
-                # If test_name doesn't look like a timestamped test folder, use a default
-                if not (test_name.startswith("20") and "_" in test_name[:15]):
-                    test_name = f"{timestamp}_vmaf_analysis"
-                    
-                # Create final output directory
-                output_dir = os.path.join(base_results_dir, test_name)
-                os.makedirs(output_dir, exist_ok=True)
-                
-                # Set output file paths
-                output_json = os.path.join(output_dir, f"vmaf_results_{timestamp}.json")
-                output_csv = os.path.join(output_dir, f"vmaf_results_{timestamp}.csv")
-                psnr_log = os.path.join(output_dir, f"psnr_log_{timestamp}.txt")
-                ssim_log = os.path.join(output_dir, f"ssim_log_{timestamp}.txt")
-                
-                logger.info(f"Saving VMAF results to: {output_dir}")
-
-                # Read results from JSON file
-                try:
-                    with open(json_file, 'r') as f:
-                        data = json.load(f)
-                        vmaf_score = data.get('pooled_metrics', {}).get('vmaf', {}).get('mean')
-                        if vmaf_score is None:
-                            raise ValueError("No valid VMAF score found in results")
-
-                    # Copy results files to final destination
-                    # We're still in the temp directory, so use the simple filenames for source
-                    shutil.copy2(json_file, output_json)
-                    if os.path.exists(csv_file):
-                        shutil.copy2(csv_file, output_csv)
-                    if os.path.exists(psnr_file):
-                        shutil.copy2(psnr_file, psnr_log)
-                    if os.path.exists(ssim_file):
-                        shutil.copy2(ssim_file, ssim_log)
-
-                except Exception as e:
-                    logger.error(f"Error processing results: {str(e)}")
-                    raise
-
-                # Extract PSNR and SSIM values from logs
-                psnr_value = None
-                ssim_value = None
-                
-                if os.path.exists(psnr_log):
-                    try:
-                        with open(psnr_log, 'r') as f:
-                            psnr_content = f.read()
-                            # Look for average PSNR value
-                            psnr_matches = re.findall(r'average:(\d+\.\d+)', psnr_content)
-                            if psnr_matches:
-                                psnr_value = float(psnr_matches[-1])  # Use the last one (summary)
-                    except Exception as e:
-                        logger.warning(f"Error extracting PSNR value: {e}")
-                
-                if os.path.exists(ssim_log):
-                    try:
-                        with open(ssim_log, 'r') as f:
-                            ssim_content = f.read()
-                            # Look for average SSIM value
-                            ssim_matches = re.findall(r'All:(\d+\.\d+)', ssim_content)
-                            if ssim_matches:
-                                ssim_value = float(ssim_matches[-1])  # Use the last one (summary)
-                    except Exception as e:
-                        logger.warning(f"Error extracting SSIM value: {e}")
-                
-                # Format the results object
-                formatted_results = {
-                    'vmaf_score': vmaf_score,
-                    'psnr': psnr_value,
-                    'ssim': ssim_value,
-                    'psnr_log': psnr_log if os.path.exists(psnr_log) else None,
-                    'ssim_log': ssim_log if os.path.exists(ssim_log) else None,
-                    'json_path': output_json,
-                    'csv_path': output_csv if os.path.exists(output_csv) else None,
-                    'reference_path': reference_path,
-                    'distorted_path': distorted_path,
-                    'model_path': model_path,
-                    'raw_results': data
-                }
-
-                logger.info(f"VMAF analysis complete. Score: {vmaf_score:.2f}")
-                self.status_update.emit(f"VMAF Score: {vmaf_score:.2f}")
-                self.analysis_complete.emit(formatted_results)
-                return formatted_results
-
-            except Exception as e:
-                error_msg = f"Analysis failed: {str(e)}"
+    def analyze_videos(self, reference_path, distorted_path, model="vmaf_v0.6.1", duration=None):
+        """Analyze videos using VMAF with the correct command format and properly escaped paths"""
+        try:
+            self.status_update.emit(f"Analyzing videos with model: {model}")
+            
+            # Verify files
+            if not os.path.exists(reference_path):
+                error_msg = f"Reference video not found: {reference_path}"
                 logger.error(error_msg)
-                if stderr_output:
-                    logger.error(f"FFmpeg STDERR: {stderr_output[:1000]}")
                 self.error_occurred.emit(error_msg)
                 return None
-
-            finally:
-                # Change back to original directory
-                os.chdir(original_dir)
-
-                # Clean up temp directory
-                if temp_dir and os.path.exists(temp_dir):
+                
+            if not os.path.exists(distorted_path):
+                error_msg = f"Distorted video not found: {distorted_path}"
+                logger.error(error_msg)
+                self.error_occurred.emit(error_msg)
+                return None
+            
+            # Log basic video information to help with debugging
+            logger.info(f"VMAF Reference: {reference_path}")
+            logger.info(f"VMAF Distorted: {distorted_path}")
+            
+            # Create output directory
+            output_dir = os.path.dirname(reference_path)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            vmaf_dir = os.path.join(output_dir, f"vmaf_{timestamp}")
+            os.makedirs(vmaf_dir, exist_ok=True)
+            
+            # Output filenames - Convert paths to use forward slashes to avoid FFmpeg filter syntax issues
+            json_path = os.path.join(vmaf_dir, "vmaf_log.json").replace("\\", "/")
+            csv_path = os.path.join(vmaf_dir, "vmaf_log.csv").replace("\\", "/")
+            psnr_log = os.path.join(vmaf_dir, "psnr_log.txt").replace("\\", "/")
+            ssim_log = os.path.join(vmaf_dir, "ssim_log.txt").replace("\\", "/")
+            
+            # Convert input paths to forward slashes too
+            reference_path_unix = reference_path.replace("\\", "/")
+            distorted_path_unix = distorted_path.replace("\\", "/")
+            
+            # Duration parameter if needed
+            duration_cmd = []
+            if duration and duration > 0:
+                duration_cmd = ["-t", str(duration)]
+                self.status_update.emit(f"Analyzing {duration}s of video")
+            
+            # Build FFmpeg command for VMAF - using exact format from working example
+            vmaf_cmd = [
+                "ffmpeg", 
+                "-hide_banner",
+                "-i", reference_path_unix,
+                "-i", distorted_path_unix
+            ]
+            
+            # Add duration limit if specified
+            if duration_cmd:
+                vmaf_cmd.extend(duration_cmd)
+                
+            # Add complex filter with exact format from working example
+            filter_complex = (
+                f"[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
+                f"[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
+                f"[ref1][dist1]libvmaf=log_path={json_path}:log_fmt=json:model={model};"
+                f"[ref2][dist2]libvmaf=log_path={csv_path}:log_fmt=csv:model={model};"
+                f"[0:v][1:v]psnr=stats_file={psnr_log};"
+                f"[0:v][1:v]ssim=stats_file={ssim_log}"
+            )
+            
+            vmaf_cmd.extend([
+                "-filter_complex", filter_complex,
+                "-f", "null", "-"
+            ])
+            
+            # Log VMAF command
+            logger.info(f"VMAF command: {' '.join(vmaf_cmd)}")
+            
+            # Run VMAF analysis
+            self.status_update.emit("Running VMAF analysis...")
+            
+            # Start process
+            process = subprocess.Popen(
+                vmaf_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            # Monitor progress
+            frame_total = 0
+            frame_count = 0
+            
+            while True:
+                line = process.stderr.readline()
+                if not line and process.poll() is not None:
+                    break
+                    
+                # Try to extract progress info
+                if "frame=" in line:
                     try:
-                        shutil.rmtree(temp_dir)
+                        match = re.search(r'frame=\s*(\d+)', line)
+                        if match:
+                            frame_count = int(match.group(1))
+                            
+                            # Calculate progress percentage
+                            if frame_total == 0:
+                                # We don't have total frames yet, just update based on current frame
+                                self.analysis_progress.emit(min(99, frame_count % 100))
+                            else:
+                                progress = min(99, int((frame_count / frame_total) * 100))
+                                self.analysis_progress.emit(progress)
+                            
+                            # Extract time for total frame estimate if we don't have it yet
+                            if frame_total == 0:
+                                time_match = re.search(r'time=\s*(\d+):(\d+):(\d+\.\d+)', line)
+                                if time_match:
+                                    hours = int(time_match.group(1))
+                                    minutes = int(time_match.group(2))
+                                    seconds = float(time_match.group(3))
+                                    time_secs = hours * 3600 + minutes * 60 + seconds
+                                    # Get approx duration from file metadata
+                                    try:
+                                        ref_info = self._get_video_info(reference_path)
+                                        if ref_info and ref_info.get('duration', 0) > 0:
+                                            # If we know the full duration, we can estimate total frames
+                                            ref_duration = ref_info.get('duration', 0)
+                                            fps = ref_info.get('frame_rate', 25)
+                                            if fps > 0 and ref_duration > 0:
+                                                frame_total = int(ref_duration * fps)
+                                    except Exception as e:
+                                        logger.warning(f"Error estimating total frames: {e}")
+                                
                     except Exception as e:
-                        logger.warning(f"Failed to clean up temp directory: {str(e)}")
-
-            self.alignment_performed = True
-        else:
-            logger.info("Skipping alignment as videos appear to be already aligned")
-
-
+                        logger.error(f"Error parsing progress: {str(e)}")
+                        
+                # Check for errors
+                if "Error" in line or "error" in line:
+                    logger.error(f"VMAF error: {line.strip()}")
+                
+                # Log output for debugging
+                logger.debug(line.strip())
+                
+            # Get process result
+            stdout, stderr = process.communicate()
+            
+            # Check if process completed successfully
+            if process.returncode != 0:
+                error_msg = f"VMAF analysis failed with code {process.returncode}: {stderr}"
+                logger.error(error_msg)
+                self.error_occurred.emit(error_msg)
+                return None
+                
+            # Check if output files exist
+            if not os.path.exists(json_path.replace("/", "\\")):
+                error_msg = "VMAF analysis completed but JSON output file not found"
+                logger.error(error_msg)
+                self.error_occurred.emit(error_msg)
+                return None
+                
+            # Parse VMAF results from JSON
+            try:
+                with open(json_path.replace("/", "\\"), 'r') as f:
+                    vmaf_data = json.load(f)
+                    
+                # Extract VMAF score
+                vmaf_score = None
+                psnr_score = None
+                ssim_score = None
+                
+                if "pooled_metrics" in vmaf_data:
+                    # New format
+                    try:
+                        pool = vmaf_data["pooled_metrics"]
+                        if "vmaf" in pool:
+                            vmaf_score = pool["vmaf"]["mean"]
+                        if "psnr" in pool:
+                            psnr_score = pool["psnr"]["mean"]
+                        if "ssim" in pool:
+                            ssim_score = pool["ssim"]["mean"]
+                    except Exception as e:
+                        logger.error(f"Error parsing VMAF metrics: {str(e)}")
+                elif "frames" in vmaf_data:
+                    # Extract scores from frames
+                    frames = vmaf_data["frames"]
+                    if frames:
+                        vmaf_values = []
+                        psnr_values = []
+                        ssim_values = []
+                        
+                        for frame in frames:
+                            if "metrics" in frame:
+                                metrics = frame["metrics"]
+                                if "vmaf" in metrics:
+                                    vmaf_values.append(metrics["vmaf"])
+                                if "psnr" in metrics:
+                                    psnr_values.append(metrics["psnr"])
+                                if "ssim" in metrics:
+                                    ssim_values.append(metrics["ssim"])
+                        
+                        # Calculate averages
+                        if vmaf_values:
+                            vmaf_score = sum(vmaf_values) / len(vmaf_values)
+                        if psnr_values:
+                            psnr_score = sum(psnr_values) / len(psnr_values)
+                        if ssim_values:
+                            ssim_score = sum(ssim_values) / len(ssim_values)
+                
+                # Try to parse PSNR and SSIM from their log files if available
+                if (psnr_score is None or ssim_score is None):
+                    psnr_log_win = psnr_log.replace("/", "\\")
+                    ssim_log_win = ssim_log.replace("/", "\\")
+                    
+                    if (os.path.exists(psnr_log_win) or os.path.exists(ssim_log_win)):
+                        # Parse PSNR log
+                        if os.path.exists(psnr_log_win) and psnr_score is None:
+                            try:
+                                psnr_values = []
+                                with open(psnr_log_win, 'r') as f:
+                                    for line in f:
+                                        if "psnr_avg" in line:
+                                            match = re.search(r'psnr_avg:(\d+\.\d+)', line)
+                                            if match:
+                                                psnr_values.append(float(match.group(1)))
+                                if psnr_values:
+                                    psnr_score = sum(psnr_values) / len(psnr_values)
+                            except Exception as e:
+                                logger.warning(f"Error parsing PSNR log: {e}")
+                        
+                        # Parse SSIM log
+                        if os.path.exists(ssim_log_win) and ssim_score is None:
+                            try:
+                                ssim_values = []
+                                with open(ssim_log_win, 'r') as f:
+                                    for line in f:
+                                        if "All:" in line:
+                                            match = re.search(r'All:(\d+\.\d+)', line)
+                                            if match:
+                                                ssim_values.append(float(match.group(1)))
+                                if ssim_values:
+                                    ssim_score = sum(ssim_values) / len(ssim_values)
+                            except Exception as e:
+                                logger.warning(f"Error parsing SSIM log: {e}")
+                
+                # Log results
+                logger.info(f"VMAF Score: {vmaf_score}")
+                logger.info(f"PSNR Score: {psnr_score}")
+                logger.info(f"SSIM Score: {ssim_score}")
+                
+                # Return results with Windows paths for consistency with rest of app
+                results = {
+                    'vmaf_score': vmaf_score,
+                    'psnr': psnr_score,
+                    'ssim': ssim_score,
+                    'json_path': json_path.replace("/", "\\"),
+                    'csv_path': csv_path.replace("/", "\\"),
+                    'psnr_log': psnr_log.replace("/", "\\"),
+                    'ssim_log': ssim_log.replace("/", "\\"),
+                    'reference_path': reference_path,
+                    'distorted_path': distorted_path
+                }
+                
+                # Set progress to 100%
+                self.analysis_progress.emit(100)
+                
+                # Return results
+                return results
+                
+            except Exception as e:
+                error_msg = f"Error parsing VMAF results: {str(e)}"
+                logger.error(error_msg)
+                self.error_occurred.emit(error_msg)
+                import traceback
+                logger.error(traceback.format_exc())
+                return None
+                
+        except Exception as e:
+            error_msg = f"Error in VMAF analysis: {str(e)}"
+            logger.error(error_msg)
+            self.error_occurred.emit(error_msg)
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
 
     def _get_video_info(self, video_path):
         try:
@@ -341,28 +371,88 @@ class VMAFAnalyzer(QObject):
             self.error_occurred.emit(f"Error resizing video: {str(e)}")
             return video_path
 
+
+
+
+
 class VMAFAnalysisThread(QThread):
+    """Thread for VMAF analysis with reliable progress reporting"""
     analysis_progress = pyqtSignal(int)
     analysis_complete = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
     status_update = pyqtSignal(str)
-
-    def __init__(self, reference_path, distorted_path, model_path="vmaf_v0.6.1", duration=None):
+    
+    def __init__(self, reference_path, distorted_path, model="vmaf_v0.6.1", duration=None):
         super().__init__()
         self.reference_path = reference_path
         self.distorted_path = distorted_path
-        self.model_path = model_path
+        self.model = model
         self.duration = duration
         self.analyzer = VMAFAnalyzer()
-        self.analyzer.analysis_progress.connect(self.analysis_progress)
-        self.analyzer.analysis_complete.connect(self.analysis_complete)
-        self.analyzer.error_occurred.connect(self.error_occurred)
-        self.analyzer.status_update.connect(self.status_update)
-
+        
+        # Connect signals with direct connections to ensure they're processed immediately
+        self.analyzer.analysis_progress.connect(self._handle_progress, Qt.DirectConnection)
+        self.analyzer.status_update.connect(self.status_update, Qt.DirectConnection)
+        self.analyzer.error_occurred.connect(self.error_occurred, Qt.DirectConnection)
+        
+    def _handle_progress(self, progress):
+        """Handle progress updates from analyzer, ensuring proper values"""
+        try:
+            # Ensure progress is an integer between 0-100
+            progress_value = int(progress)
+            progress_value = max(0, min(100, progress_value))
+            self.analysis_progress.emit(progress_value)
+        except (ValueError, TypeError):
+            # In case of non-integer progress, emit a safe value
+            self.analysis_progress.emit(0)
+        
     def run(self):
-        self.analyzer.analyze_videos(
-            self.reference_path,
-            self.distorted_path,
-            self.model_path,
-            self.duration
-        )
+        """Run VMAF analysis in thread"""
+        try:
+            self.status_update.emit("Starting VMAF analysis...")
+            
+            # Report initial progress
+            self.analysis_progress.emit(0)
+            
+            # Verify input files
+            if not os.path.exists(self.reference_path):
+                self.error_occurred.emit(f"Reference video not found: {self.reference_path}")
+                return
+                
+            if not os.path.exists(self.distorted_path):
+                self.error_occurred.emit(f"Distorted video not found: {self.distorted_path}")
+                return
+            
+            # Run analysis
+            results = self.analyzer.analyze_videos(
+                self.reference_path,
+                self.distorted_path,
+                self.model,
+                self.duration
+            )
+            
+            if results:
+                # Ensure progress is set to 100% at completion
+                self.analysis_progress.emit(100)
+                self.analysis_complete.emit(results)
+                self.status_update.emit("VMAF analysis complete!")
+            else:
+                self.error_occurred.emit("VMAF analysis failed to produce results")
+                
+        except Exception as e:
+            error_msg = f"Error in VMAF analysis thread: {str(e)}"
+            self.error_occurred.emit(error_msg)
+            logger.error(error_msg)
+            import traceback
+            logger.error(traceback.format_exc())
+              
+    def __del__(self):
+        """Ensure thread is properly stopped on destruction"""
+        try:
+            if self.isRunning():
+                self.wait(1000)  # Give it 1 second to finish
+                if self.isRunning():
+                    self.terminate()
+                    logger.warning("VMAFAnalysisThread terminated during destruction")
+        except Exception as e:
+            logger.error(f"Error during VMAFAnalysisThread cleanup: {e}")
