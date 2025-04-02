@@ -1,0 +1,70 @@
+2025-04-02 21:37:58,579 - app.capture - INFO - Test name set to: Test_01
+2025-04-02 21:37:58,581 - app.capture - INFO - Starting bookend capture mode
+2025-04-02 21:37:58,584 - app.capture - INFO - Output path set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_213758\REF03_capture.mp4
+2025-04-02 21:37:58,584 - app.capture - INFO - Using bookend settings: duration=0.5s, min_loops=4, max_time=50s
+2025-04-02 21:37:58,585 - app.capture - INFO - Capture duration set to 50s (loop=8.29s, min_loops=4)
+2025-04-02 21:37:58,587 - app.capture - INFO - Looking for lingering FFmpeg processes to terminate
+2025-04-02 21:38:00,789 - app.capture - INFO - Device connection check skipped for Intensity Shuttle
+2025-04-02 21:38:00,789 - app.capture - INFO - Proceeding with bookend capture (connected status=True)
+2025-04-02 21:38:00,789 - app.capture - INFO - FFmpeg bookend capture command: ffmpeg -y -v warning -f decklink -i Intensity Shuttle -c:v libx264 -preset superfast -crf 23 -g 59 -keyint_min 29 -movflags +faststart -fflags +genpts+igndts -avoid_negative_ts 1 -t 50 C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_213758/REF03_capture.mp4
+Unknown property borderradius
+Unknown property borderradius
+2025-04-02 21:38:43,308 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 21:38:43,308 - app.ui - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-02 21:38:43,311 - app.ui - INFO - Set current device to: Intensity Shuttle
+2025-04-02 21:38:43,311 - app.ui - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-02 21:38:43,313 - app.ui - INFO - Populated resolution dropdown with 4 items
+2025-04-02 21:38:43,314 - app.ui - INFO - Populated frame rate dropdown with 2 items
+2025-04-02 21:38:51,631 - app.capture - INFO - Capture completed successfully
+2025-04-02 21:38:51,632 - app.capture - INFO - Bookend capture completed: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_213758\REF03_capture.mp4
+2025-04-02 21:38:56,120 - app.bookend_alignment - INFO - Starting white bookend alignment process
+2025-04-02 21:38:59,056 - app.bookend_alignment - INFO - Video details: duration=50.02s, frames=1499, fps=29.97
+2025-04-02 21:38:59,146 - app.bookend_alignment - INFO - Frame 0 (t=0.00s) brightness: 66.4
+2025-04-02 21:38:59,253 - app.bookend_alignment - INFO - Frame 74 (t=2.47s) brightness: 66.0
+2025-04-02 21:38:59,376 - app.bookend_alignment - INFO - Frame 148 (t=4.94s) brightness: 72.9
+2025-04-02 21:38:59,550 - app.bookend_alignment - INFO - Frame 222 (t=7.41s) brightness: 66.6
+2025-04-02 21:38:59,670 - app.bookend_alignment - INFO - Frame 296 (t=9.88s) brightness: 66.3
+2025-04-02 21:38:59,822 - app.bookend_alignment - INFO - Frame 370 (t=12.35s) brightness: 71.6
+2025-04-02 21:38:59,906 - app.bookend_alignment - INFO - Frame 444 (t=14.81s) brightness: 66.5
+2025-04-02 21:39:00,032 - app.bookend_alignment - INFO - Frame 518 (t=17.28s) brightness: 66.4
+2025-04-02 21:39:00,176 - app.bookend_alignment - INFO - Frame 592 (t=19.75s) brightness: 71.4
+2025-04-02 21:39:00,254 - app.bookend_alignment - INFO - Frame 666 (t=22.22s) brightness: 66.4
+2025-04-02 21:39:00,374 - app.bookend_alignment - INFO - Frame 740 (t=24.69s) brightness: 66.3
+2025-04-02 21:39:00,513 - app.bookend_alignment - INFO - Frame 814 (t=27.16s) brightness: 70.8
+2025-04-02 21:39:00,681 - app.bookend_alignment - INFO - Frame 888 (t=29.63s) brightness: 67.4
+2025-04-02 21:39:00,790 - app.bookend_alignment - INFO - Frame 962 (t=32.10s) brightness: 65.9
+2025-04-02 21:39:00,917 - app.bookend_alignment - INFO - Frame 1036 (t=34.57s) brightness: 70.7
+2025-04-02 21:39:01,087 - app.bookend_alignment - INFO - Frame 1110 (t=37.04s) brightness: 66.8
+2025-04-02 21:39:01,194 - app.bookend_alignment - INFO - Frame 1184 (t=39.51s) brightness: 65.3
+2025-04-02 21:39:01,318 - app.bookend_alignment - INFO - Frame 1258 (t=41.98s) brightness: 71.3
+2025-04-02 21:39:01,473 - app.bookend_alignment - INFO - Frame 1332 (t=44.44s) brightness: 59.4
+2025-04-02 21:39:01,579 - app.bookend_alignment - INFO - Frame 1406 (t=46.91s) brightness: 65.1
+2025-04-02 21:39:01,579 - app.bookend_alignment - INFO - Video brightness stats: avg=67.5, std=3.0, max=72.9
+2025-04-02 21:39:01,579 - app.bookend_alignment - INFO - Trying whiteness threshold: 200
+2025-04-02 21:39:02,317 - app.bookend_alignment - INFO - Detected white bookend: 0.834s - 1.001s (brightness: 213.2, frames: 2)
+2025-04-02 21:39:07,750 - app.bookend_alignment - INFO - Detected white bookend: 8.342s - 8.508s (brightness: 213.0, frames: 2)
+2025-04-02 21:39:13,283 - app.bookend_alignment - INFO - Detected white bookend: 15.849s - 16.016s (brightness: 213.0, frames: 2)
+2025-04-02 21:39:19,196 - app.bookend_alignment - INFO - Detected white bookend: 23.357s - 23.357s (brightness: 213.0, frames: 1)
+2025-04-02 21:39:25,862 - app.bookend_alignment - INFO - Detected white bookend: 30.864s - 30.864s (brightness: 213.0, frames: 1)
+2025-04-02 21:39:32,914 - app.bookend_alignment - INFO - Detected white bookend: 38.205s - 38.372s (brightness: 213.0, frames: 2)
+2025-04-02 21:39:39,990 - app.bookend_alignment - INFO - Detected white bookend: 45.712s - 45.879s (brightness: 213.0, frames: 2)
+2025-04-02 21:39:43,525 - app.bookend_alignment - INFO - Found 7 white bookend sections with threshold 200
+2025-04-02 21:39:43,553 - app.bookend_alignment - INFO - Successfully detected 7 white bookend sections
+2025-04-02 21:39:43,555 - app.bookend_alignment - INFO - Detected first white bookend at: 0.834s - 1.001s
+2025-04-02 21:39:43,555 - app.bookend_alignment - INFO - Detected last white bookend at: 45.712s - 45.879s
+2025-04-02 21:39:43,557 - app.bookend_alignment - INFO - Content duration between bookends: 44.645s
+2025-04-02 21:39:43,557 - app.bookend_alignment - WARNING - Reference duration (7.290s) differs from content duration (44.645s)
+2025-04-02 21:39:43,557 - app.bookend_alignment - INFO - Detected multiple loops in captured video, looking for individual loops
+2025-04-02 21:39:43,557 - app.bookend_alignment - INFO - Loop 1: 1.034s - 8.309s = 7.275s (diff: 0.015s)
+2025-04-02 21:39:43,559 - app.bookend_alignment - INFO - Loop 2: 8.541s - 15.816s = 7.275s (diff: 0.015s)
+2025-04-02 21:39:43,559 - app.bookend_alignment - INFO - Loop 3: 16.049s - 23.324s = 7.275s (diff: 0.015s)
+2025-04-02 21:39:43,559 - app.bookend_alignment - INFO - Loop 4: 23.390s - 30.831s = 7.441s (diff: 0.152s)
+2025-04-02 21:39:43,560 - app.bookend_alignment - INFO - Loop 5: 30.897s - 38.172s = 7.275s (diff: 0.015s)
+2025-04-02 21:39:43,560 - app.bookend_alignment - INFO - Loop 6: 38.405s - 45.679s = 7.275s (diff: 0.015s)
+2025-04-02 21:39:43,561 - app.bookend_alignment - INFO - Selected loop 2: 8.541s - 15.816s = 7.275s
+2025-04-02 21:39:43,562 - app.bookend_alignment - INFO - Creating aligned reference video: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_213758\REF03_213758_aligned.mp4
+2025-04-02 21:39:52,490 - app.bookend_alignment - INFO - Creating aligned captured video from 8.541s to 15.816s
+2025-04-02 21:40:01,988 - app.bookend_alignment - INFO - Created aligned videos: 7.27s / 7.29s
+2025-04-02 21:40:01,991 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+QThread: Destroyed while thread is still running
+(.venv) PS C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app> 
