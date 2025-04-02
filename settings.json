@@ -22,8 +22,22 @@
         "resolution": "1080p",
         "frame_rate": 24.0,
         "pixel_format": "yuyv422",
-        "available_resolutions": [],
-        "available_frame_rates": []
+        "available_resolutions": [
+            "1920x1080",
+            "1280x720",
+            "720x576",
+            "720x480"
+        ],
+        "available_frame_rates": [
+            23.98,
+            24,
+            25,
+            29.97,
+            30,
+            50,
+            59.94,
+            60
+        ]
     },
     "paths": {
         "default_output_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results",
