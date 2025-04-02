@@ -8,11 +8,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-except Exception as e:
-        logger.error(f"Error repairing video file: {e}")
-
-    return False
-
 def validate_video_file(file_path):
     """Validate if a video file is intact and can be read"""
     if not os.path.exists(file_path):
