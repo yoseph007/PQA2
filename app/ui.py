@@ -1514,11 +1514,25 @@ class MainWindow(QMainWindow):
                 self.combo_resolution.clear()
                 for res in format_info["resolutions"]:
                     self.combo_resolution.addItem(res)
+            else:
+                # If no resolutions detected, fall back to defaults
+                default_resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
+                self.combo_resolution.clear()
+                for res in default_resolutions:
+                    self.combo_resolution.addItem(res)
+                format_info["resolutions"] = default_resolutions
             
             if format_info["frame_rates"]:
                 self.combo_frame_rate.clear()
                 for rate in format_info["frame_rates"]:
                     self.combo_frame_rate.addItem(str(rate))
+            else:
+                # If no frame rates detected, fall back to defaults
+                default_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+                self.combo_frame_rate.clear()
+                for rate in default_rates:
+                    self.combo_frame_rate.addItem(str(rate))
+                format_info["frame_rates"] = default_rates
             
             # Update settings
             new_capture_settings = self.options_manager.get_setting("capture")
@@ -1526,12 +1540,37 @@ class MainWindow(QMainWindow):
             new_capture_settings["available_frame_rates"] = format_info["frame_rates"]
             self.options_manager.update_category("capture", new_capture_settings)
             
-            QMessageBox.information(self, "Format Detection Complete", 
-                                  f"Detected {len(format_info['formats'])} formats for {device}")
+            # Show success message with number of formats
+            num_formats = len(format_info['formats']) if format_info['formats'] else 0
+            if num_formats > 0:
+                QMessageBox.information(self, "Format Detection Complete", 
+                                      f"Detected {num_formats} formats for {device}")
+            else:
+                QMessageBox.information(self, "Format Detection Complete", 
+                                      f"Using default formats for {device}")
         except Exception as e:
             logger.error(f"Error detecting formats: {str(e)}")
             QMessageBox.warning(self, "Format Detection Error", 
                                f"Could not detect formats: {str(e)}")
+            
+            # Even on error, ensure we have default values
+            default_resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
+            default_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+            
+            # Update UI with defaults
+            self.combo_resolution.clear()
+            for res in default_resolutions:
+                self.combo_resolution.addItem(res)
+                
+            self.combo_frame_rate.clear()
+            for rate in default_rates:
+                self.combo_frame_rate.addItem(str(rate))
+            
+            # Update settings with defaults
+            new_capture_settings = self.options_manager.get_setting("capture")
+            new_capture_settings["available_resolutions"] = default_resolutions
+            new_capture_settings["available_frame_rates"] = default_rates
+            self.options_manager.update_category("capture", new_capture_settings)
         finally:
             # Re-enable button
             self.btn_detect_formats.setEnabled(True)

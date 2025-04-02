@@ -129,6 +129,18 @@ class OptionsManager(QObject):
     
     def update_category(self, category, values):
         """Update an entire category of settings"""
+        # Special handling for capture settings to preserve available options
+        if category == "capture" and category in self.settings:
+            # If we're updating capture settings, preserve available_resolutions and available_frame_rates
+            # when they're empty in the new values but present in existing settings
+            if (not values.get("available_resolutions") and 
+                self.settings[category].get("available_resolutions")):
+                values["available_resolutions"] = self.settings[category]["available_resolutions"]
+                
+            if (not values.get("available_frame_rates") and 
+                self.settings[category].get("available_frame_rates")):
+                values["available_frame_rates"] = self.settings[category]["available_frame_rates"]
+                
         self.settings[category] = values
         return self.save_settings()
     

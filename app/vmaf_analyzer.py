@@ -120,10 +120,10 @@ class VMAFAnalyzer(QObject):
             filter_complex = (
                 "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
                 "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
-                f"[ref1][dist1]libvmaf=log_path={vmaf_filename}:log_fmt=json;"
-                f"[ref2][dist2]libvmaf=log_path={csv_filename}:log_fmt=csv;"
-                f"[0:v][1:v]psnr=stats_file={psnr_filename};"
-                f"[0:v][1:v]ssim=stats_file={ssim_filename}"
+                f"[ref1][dist1]libvmaf=log_path='{vmaf_filename}':log_fmt=json;"
+                f"[ref2][dist2]libvmaf=log_path='{csv_filename}':log_fmt=csv;"
+                f"[0:v][1:v]psnr=stats_file='{psnr_filename}';"
+                f"[0:v][1:v]ssim=stats_file='{ssim_filename}'"
             )
 
             # Use the -filter_complex parameter instead of -lavfi which seems more compatible
@@ -445,7 +445,7 @@ class VMAFAnalysisThread(QThread):
     def set_test_name(self, test_name):
         """Set test name for organizing results"""
         self.test_name = test_name
-        self.analyzer.set_test_name(test_name)
+        self.analyzer.set_test_name(self.test_name)
 
     def _handle_progress(self, progress):
         """Handle progress updates from analyzer, ensuring proper values"""
