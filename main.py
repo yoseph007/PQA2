@@ -3,9 +3,11 @@ import sys
 import logging
 import os
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QCoreApplication
 from app.capture import CaptureManager
 from app.utils import FileManager
 from app.ui import MainWindow
+from app.options_manager import OptionsManager
 
 def setup_logging():
     """Setup logging configuration with both file and console handlers"""
@@ -32,13 +34,24 @@ def main():
     
     try:
         # Configure environment for Qt
-        # Set QT_QPA_PLATFORM to offscreen in Replit environment
-        os.environ['QT_QPA_PLATFORM'] = 'offscreen'
-        logger.info("Set QT_QPA_PLATFORM to offscreen for Replit environment")
+        if 'REPL_ID' in os.environ:
+            # Running in Replit environment
+            os.environ['QT_QPA_PLATFORM'] = 'xcb'  # Use X11 platform in Replit
+            logger.info("Running in Replit environment, set QT_QPA_PLATFORM to xcb")
+        else:
+            # Running in other environments (Windows, macOS, etc.)
+            # Handle font issues on Windows
+            if sys.platform == 'win32':
+                # Fix font directory issues on Windows
+                logger.info("Running on Windows, configuring font paths")
+                os.environ['QT_QPA_FONTDIR'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+                os.makedirs(os.environ['QT_QPA_FONTDIR'], exist_ok=True)
+            
+            # Standard configuration for local environment
+            os.environ['QT_QPA_PLATFORM'] = 'offscreen' if 'PYTEST_CURRENT_TEST' in os.environ else ''
         
         # Use software rendering for better compatibility
         os.environ['QT_QUICK_BACKEND'] = 'software'
-        os.environ['QT_XCB_GL_INTEGRATION'] = 'none'
         
         # Initialize application
         app = QApplication(sys.argv)
@@ -47,7 +60,6 @@ def main():
         file_manager = FileManager()
         
         # Create options manager for settings
-        from app.options_manager import OptionsManager
         options_manager = OptionsManager()
         
         # Create and configure capture manager

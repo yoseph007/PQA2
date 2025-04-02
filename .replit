@@ -17,4 +17,4 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "QT_QPA_PLATFORM=offscreen python main.py"
+args = "python main.py"
