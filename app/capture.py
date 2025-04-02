@@ -85,7 +85,7 @@ class CaptureMonitor(QThread):
                                 if match:
                                     frame_num = int(match.group(1))
                                     self.last_frame_count = frame_num
-                                    
+
                                     # Try to estimate total frames from fps and duration
                                     if self.total_frames == 0 and self.duration:
                                         fps_match = re.search(r'fps=\s*([\d.]+)', line)
@@ -93,7 +93,7 @@ class CaptureMonitor(QThread):
                                             fps = float(fps_match.group(1))
                                             if fps > 0:
                                                 self.total_frames = int(self.duration * fps)
-                                    
+
                                     # Calculate progress percentage
                                     if self.duration and self.total_frames > 0:
                                         # If we have both duration and total frames
@@ -105,7 +105,7 @@ class CaptureMonitor(QThread):
                                     else:
                                         # Fallback - increment slowly
                                         progress = min(int(frame_num % 100), 99)
-                                    
+
                                     self.progress_updated.emit(progress)
                             except (ValueError, AttributeError) as e:
                                 logger.warning(f"Error parsing frame number: {e}")
@@ -349,7 +349,7 @@ class CaptureManager(QObject):
 
         logger.info("Starting bookend capture mode")
         self.status_update.emit("Initializing bookend capture mode...")
-        
+
         # Initialize preview capture to show input feed
         try:
             self._start_preview_capture(device_name)
@@ -833,7 +833,7 @@ class CaptureManager(QObject):
             capture_cmd = [
                 self._ffmpeg_path,
                 "-f", "decklink",
-                "-t", "0.1",  # Try for just 0.1 seconds
+                "-t", "0.1",  # Try for just 0.1seconds
                 "-i", device_name,
                 "-f", "null",
                 "-"
@@ -950,16 +950,16 @@ class CaptureManager(QObject):
             logger.warning(f"Error repairing MP4: {e}")
 
         return False, None
-        
+
     def _start_preview_capture(self, device_name):
         """Start a preview capture to show input feed before recording"""
         try:
             # Stop any existing preview
             self._stop_preview_capture()
-            
+
             # Initialize OpenCV capture
             self.preview_cap = cv2.VideoCapture()
-            
+
             # For Windows with DirectShow
             if platform.system() == 'Windows':
                 # Try to open the device
@@ -967,45 +967,45 @@ class CaptureManager(QObject):
             else:
                 # For Linux/macOS try a different approach
                 self.preview_cap.open(device_name)
-                
+
             if not self.preview_cap.isOpened():
                 logger.warning(f"Could not open preview capture for {device_name}")
                 return False
-                
+
             # Set lower resolution for preview to reduce processing load
             self.preview_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             self.preview_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
-            
+
             # Create preview thread
             self.preview_active = True
             self.preview_thread = QThread()
             self.preview_thread.run = self._update_preview
             self.preview_thread.start()
-            
+
             logger.info(f"Preview capture started for {device_name}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error starting preview: {str(e)}")
             self.preview_active = False
             return False
-            
+
     def _stop_preview_capture(self):
         """Stop the preview capture"""
         if hasattr(self, 'preview_active') and self.preview_active:
             self.preview_active = False
-            
+
             # Wait for thread to finish
             if hasattr(self, 'preview_thread') and self.preview_thread:
                 self.preview_thread.quit()
                 self.preview_thread.wait(1000)
-                
+
             # Release capture
             if hasattr(self, 'preview_cap') and self.preview_cap:
                 self.preview_cap.release()
-                
+
             logger.info("Preview capture stopped")
-            
+
     def _update_preview(self):
         """Update preview frames in background thread"""
         while self.preview_active:
@@ -1015,10 +1015,10 @@ class CaptureManager(QObject):
                     self.frame_available.emit(frame)
             except Exception as e:
                 logger.error(f"Error updating preview: {str(e)}")
-                
+
             # Limit to ~15 fps for preview to reduce CPU usage
             time.sleep(0.067)
-            
+
     def _get_preview_frame(self):
         """Get current frame from preview capture"""
         if not hasattr(self, 'preview_cap') or not self.preview_cap:
@@ -1027,13 +1027,45 @@ class CaptureManager(QObject):
             placeholder[:] = (224, 224, 224)  # Light gray background
             cv2.putText(placeholder, "No video feed", (160, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
             return placeholder
-            
+
         if not self.preview_cap.isOpened():
             logger.warning("Preview capture not open")
             return None
-            
+
         ret, frame = self.preview_cap.read()
         if not ret:
             return None
-            
+
         return frame
+
+    def update_capture_progress(self, frame_num):
+        """Handle frame progress update and convert to percentage"""
+        # Calculate progress percentage based on expected total frames
+        # If we have duration and frame rate info from the process, use it
+        if hasattr(self, 'duration') and self.duration:
+            # Get frame rate from process output if available
+            frame_rate = 30  # Default assumption
+            try:
+                if hasattr(self.process, 'stderr') and self.process.stderr:
+                    for line in self.process.stderr:
+                        if "fps" in line:
+                            match = re.search(r'(\d+\.?\d*)\s*fps', line)
+                            if match:
+                                frame_rate = float(match.group(1))
+                                break
+            except:
+                pass  # If any error occurs, just use the default frame rate
+
+            # Calculate expected total frames
+            total_expected = int(self.duration * frame_rate)
+
+            # Calculate percentage (limit to 0-99% until complete)
+            if total_expected > 0:
+                percentage = min(99, int((frame_num / total_expected) * 100))
+                self.progress_updated.emit(percentage)
+            else:
+                # If we can't calculate, at least show some movement
+                self.progress_updated.emit(min(99, (frame_num % 100)))
+        else:
+            # If we don't have duration info, map frame_num to 0-99% range
+            self.progress_updated.emit(min(99, (frame_num % 100)))
