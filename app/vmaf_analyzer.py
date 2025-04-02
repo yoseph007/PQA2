@@ -34,10 +34,6 @@ class VMAFAnalyzer(QObject):
     
     def analyze_videos(self, reference_path, distorted_path, model="vmaf_v0.6.1", duration=None):
         """Run VMAF analysis with the correct command format and properly escaped paths"""
-        tmp_json = normalize_path(os.path.join(vmaf_dir, "vmaf.json"), for_ffmpeg=True)
-        tmp_csv = normalize_path(os.path.join(vmaf_dir, "vmaf.csv"), for_ffmpeg=True)
-        tmp_psnr = normalize_path(os.path.join(vmaf_dir, "psnr.txt"), for_ffmpeg=True)
-        tmp_ssim = normalize_path(os.path.join(vmaf_dir, "ssim.txt"), for_ffmpeg=True)       
         try:
             self.status_update.emit(f"Analyzing videos with model: {model}")
 
