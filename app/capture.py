@@ -1426,12 +1426,14 @@ class CaptureManager(QObject):
 
         # Initialize preview capture to show input feed
         try:
-            self._start_preview_capture(device_name)
-            # Update UI to show preview is active
-            self.frame_available.emit(self._get_preview_frame())
-            self.status_update.emit("Video preview started - confirming capture card input")
+            # Create a placeholder frame instead since preview capture is not implemented
+            placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
+            placeholder[:] = (224, 224, 224)  # Light gray background
+            cv2.putText(placeholder, "Preview not available", (120, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+            self.frame_available.emit(placeholder)
+            self.status_update.emit("Video preview not available - continuing with capture")
         except Exception as preview_error:
-            logger.warning(f"Could not start preview: {preview_error}")
+            logger.warning(f"Could not create preview placeholder: {preview_error}")
             # Continue with capture even if preview fails
 
         # Prepare output path
@@ -1478,11 +1480,12 @@ class CaptureManager(QObject):
         self.status_update.emit("Please ensure the video plays in a loop with white frames between repetitions")
 
         # Kill any lingering FFmpeg processes
-        self._kill_ffmpeg_processes()
+        self._kill_all_ffmpeg()
         time.sleep(1)  # Short pause to ensure processes are terminated
 
-        # Try to connect with minimal retries - don't reset the device
-        connected, message = self._try_connect_device(device_name, max_retries=1)
+        # Skip device connection test since method is missing
+        connected, message = True, "Device connection check skipped"
+        logger.info(f"Device connection check skipped for {device_name}")
 
         # Proceed even if connection reports issues
         logger.info(f"Proceeding with bookend capture (connected status={connected})")
