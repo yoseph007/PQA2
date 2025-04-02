@@ -1,4 +1,3 @@
-
 import os
 import logging
 import subprocess
@@ -9,6 +8,13 @@ from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
 
 logger = logging.getLogger(__name__)
+
+# Set up default logger if not configured elsewhere
+if not logger.handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 
 class BookendAligner(QObject):
     """
@@ -22,7 +28,9 @@ class BookendAligner(QObject):
     def __init__(self):
         super().__init__()
         self._ffmpeg_path = "ffmpeg"  # Assume ffmpeg is in PATH
-        
+  
+    
+
     def align_bookend_videos(self, reference_path, captured_path):
         """
         Align videos based on white frame bookends that surround the content
@@ -94,11 +102,48 @@ class BookendAligner(QObject):
             # Check if reference video duration is similar
             ref_duration = ref_info.get('duration', 0)
             
-            # Allow a small margin of error
-            if abs(ref_duration - content_duration) > 0.5:  # More than half a second difference
+            # IMPROVED: Handle multi-loop videos
+            # If content duration is much longer than reference, we likely have multiple loops
+            if content_duration > ref_duration * 1.5:
                 logger.warning(f"Reference duration ({ref_duration:.3f}s) differs from content duration ({content_duration:.3f}s)")
-                # Continue anyway, but log warning
+                logger.info("Detected multiple loops in captured video, looking for individual loops")
                 
+                # If we have more than 2 bookends, try to find the correct loop
+                if len(bookend_frames) > 2:
+                    # Try to find consecutive bookends that match the reference duration
+                    best_start_idx = 0
+                    best_duration_diff = float('inf')
+                    
+                    for i in range(len(bookend_frames) - 1):
+                        start_bookend = bookend_frames[i]
+                        end_bookend = bookend_frames[i + 1]
+                        
+                        loop_start = start_bookend['end_time'] + 0.033
+                        loop_end = end_bookend['start_time'] - 0.033
+                        loop_duration = loop_end - loop_start
+                        
+                        duration_diff = abs(loop_duration - ref_duration)
+                        
+                        logger.info(f"Loop {i+1}: {loop_start:.3f}s - {loop_end:.3f}s = {loop_duration:.3f}s (diff: {duration_diff:.3f}s)")
+                        
+                        if duration_diff < best_duration_diff:
+                            best_duration_diff = duration_diff
+                            best_start_idx = i
+                    
+                    # Use the best matching loop
+                    start_bookend = bookend_frames[best_start_idx]
+                    end_bookend = bookend_frames[best_start_idx + 1]
+                    
+                    content_start_time = start_bookend['end_time'] + 0.033
+                    content_end_time = end_bookend['start_time'] - 0.033
+                    content_duration = content_end_time - content_start_time
+                    
+                    logger.info(f"Selected loop {best_start_idx+1}: {content_start_time:.3f}s - {content_end_time:.3f}s = {content_duration:.3f}s")
+                else:
+                    # Just use a single reference duration from the start
+                    logger.info(f"Using only first {ref_duration:.3f}s of content")
+                    content_duration = ref_duration
+            
             self.alignment_progress.emit(50)
             self.status_update.emit(f"Creating aligned videos...")
                 
@@ -144,108 +189,10 @@ class BookendAligner(QObject):
             logger.error(traceback.format_exc())
             self.error_occurred.emit(error_msg)
             return None
-            
-    def _detect_white_bookends(self, video_path):
-        """
-        Detect white frame bookend sections in video
-        Returns list of bookend dictionaries with start/end times
-        """
-        try:
-            bookends = []
-            cap = cv2.VideoCapture(video_path)
-            
-            if not cap.isOpened():
-                logger.error(f"Could not open video: {video_path}")
-                return None
-                
-            # Get video properties
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            duration = frame_count / fps if fps > 0 else 0
-            
-            # Set sampling rate - check every 5 frames for speed
-            sample_rate = 5
-            
-            # Counters for white frame detection
-            consecutive_white_frames = 0
-            min_white_frames = int(0.25 * fps / sample_rate)  # At least 0.25 seconds
-            
-            # Current bookend being built
-            current_bookend = None
-            
-            # Whiteness threshold - use high value to avoid false positives
-            whiteness_threshold = 230  # Out of 255
-            
-            logger.info(f"Scanning for white bookends in {video_path} (min frames: {min_white_frames})")
-            
-            for frame_idx in range(0, frame_count, sample_rate):
-                # Report progress for long videos
-                if frame_count > 1000 and frame_idx % 500 == 0:
-                    progress = int(30 + (frame_idx / frame_count) * 40)  # Scale to 30-70%
-                    self.alignment_progress.emit(progress)
-                    
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-                ret, frame = cap.read()
-                
-                if not ret:
-                    break
-                    
-                # Calculate average brightness
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                avg_brightness = np.mean(gray)
-                
-                # Check if it's a white frame
-                is_white_frame = avg_brightness > whiteness_threshold
-                
-                if is_white_frame:
-                    consecutive_white_frames += 1
-                    
-                    # Start a new bookend if needed
-                    if current_bookend is None:
-                        frame_time = frame_idx / fps
-                        current_bookend = {
-                            'start_frame': frame_idx,
-                            'start_time': frame_time,
-                            'frame_count': 1
-                        }
-                else:
-                    # Check if we just finished a bookend
-                    if current_bookend is not None:
-                        # Update end time
-                        current_bookend['end_frame'] = frame_idx - sample_rate
-                        current_bookend['end_time'] = current_bookend['end_frame'] / fps
-                        current_bookend['frame_count'] = consecutive_white_frames
-                        
-                        # Add to bookends if long enough
-                        if consecutive_white_frames >= min_white_frames:
-                            bookends.append(current_bookend)
-                            logger.info(f"Detected white bookend: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s")
-                            
-                        # Reset for next bookend
-                        current_bookend = None
-                        consecutive_white_frames = 0
-            
-            # Check if we have an unfinished bookend at the end
-            if current_bookend is not None:
-                current_bookend['end_frame'] = frame_count - 1
-                current_bookend['end_time'] = duration
-                current_bookend['frame_count'] = consecutive_white_frames
-                
-                if consecutive_white_frames >= min_white_frames:
-                    bookends.append(current_bookend)
-                    logger.info(f"Detected white bookend at end: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s")
-            
-            cap.release()
-            
-            if len(bookends) < 2:
-                logger.warning(f"Only found {len(bookends)} white bookend sections (need at least 2)")
-            
-            return bookends
-            
-        except Exception as e:
-            logger.error(f"Error detecting white bookends: {str(e)}")
-            return None
-            
+
+
+  
+  
     def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration):
         """Create aligned videos based on bookend content timing"""
         try:
@@ -298,7 +245,9 @@ class BookendAligner(QObject):
             import traceback
             logger.error(traceback.format_exc())
             return None, None
-    
+
+
+  
     def _get_video_info(self, video_path):
         """Get detailed information about a video file using FFprobe"""
         try:
@@ -347,7 +296,228 @@ class BookendAligner(QObject):
             else:
                 frame_rate = float(frame_rate_str or 0)
 
+            # Get dimensions and frame count
+            width = int(video_stream.get('width', 0))
+            height = int(video_stream.get('height', 0))
+            frame_count = int(video_stream.get('nb_frames', 0))
 
+            # If nb_frames is missing or zero, estimate from duration
+            if frame_count == 0 and frame_rate > 0:
+                frame_count = int(round(duration * frame_rate))
+
+            # Get pixel format
+            pix_fmt = video_stream.get('pix_fmt', 'unknown')
+
+            return {
+                'path': video_path,
+                'duration': duration,
+                'frame_rate': frame_rate,
+                'width': width,
+                'height': height,
+                'frame_count': frame_count,
+                'pix_fmt': pix_fmt,
+                'total_frames': frame_count
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting video info for {video_path}: {str(e)}")
+            return None 
+    
+ 
+    
+    
+    def _detect_white_bookends(self, video_path):
+        """
+        Enhanced white bookend detection with multiple thresholds and diagnostic output
+        """
+        try:
+            bookends = []
+            cap = cv2.VideoCapture(video_path)
+            
+            if not cap.isOpened():
+                logger.error(f"Could not open video: {video_path}")
+                return None
+                    
+            # Get video properties
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            duration = frame_count / fps if fps > 0 else 0
+            
+            logger.info(f"Video details: duration={duration:.2f}s, frames={frame_count}, fps={fps:.2f}")
+            
+            # Try multiple thresholds - from strict to lenient
+            thresholds = [230, 200, 180, 160]
+            
+            # Create diagnostic frame samples
+            diagnostic_dir = os.path.dirname(video_path)
+            diagnostic_path = os.path.join(diagnostic_dir, "bookend_diagnostic")
+            os.makedirs(diagnostic_path, exist_ok=True)
+            
+            # Sample brightness values across the video
+            brightness_samples = []
+            sample_points = 20
+            sample_interval = max(1, frame_count // sample_points)
+            
+            for i in range(0, min(frame_count, sample_points * sample_interval), sample_interval):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                ret, frame = cap.read()
+                if ret:
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    brightness = np.mean(gray)
+                    brightness_samples.append((i, brightness))
+                    
+                    # Save sample frames for diagnostic purposes
+                    timestamp = i / fps
+                    cv2.imwrite(os.path.join(diagnostic_path, f"frame_{i}_time_{timestamp:.2f}_brightness_{brightness:.1f}.jpg"), frame)
+                    
+                    logger.info(f"Frame {i} (t={timestamp:.2f}s) brightness: {brightness:.1f}")
+            
+            # Calculate stats
+            if brightness_samples:
+                all_brightness = [b for _, b in brightness_samples]
+                avg_brightness = np.mean(all_brightness)
+                std_brightness = np.std(all_brightness)
+                max_brightness = np.max(all_brightness)
+                
+                logger.info(f"Video brightness stats: avg={avg_brightness:.1f}, std={std_brightness:.1f}, max={max_brightness:.1f}")
+                
+                # Adjust thresholds based on video statistics
+                if avg_brightness > 200:
+                    # Very bright video, increase thresholds
+                    thresholds = [240, 230, 220, 210]
+                elif avg_brightness > 150:
+                    # Bright video
+                    thresholds = [230, 210, 190, 170]
+                elif avg_brightness < 100:
+                    # Dark video, lower thresholds
+                    thresholds = [200, 180, 160, 140]
+            
+            # Try each threshold
+            for threshold_idx, whiteness_threshold in enumerate(thresholds):
+                logger.info(f"Trying whiteness threshold: {whiteness_threshold}")
+                
+                # Reset video position
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                
+                # Set sampling rate - check more frames for the lower thresholds
+                sample_rate = 5 if threshold_idx < 2 else 3
+                
+                # Minimum frames to consider as bookend
+                min_white_frames = max(1, int(0.15 * fps / sample_rate))  # At least 0.15 seconds
+                
+                consecutive_white_frames = 0
+                current_bookend = None
+                current_bookends = []
+                
+                for frame_idx in range(0, frame_count, sample_rate):
+                    # Report progress
+                    if frame_count > 1000 and frame_idx % 500 == 0:
+                        progress = int(30 + (frame_idx / frame_count) * 40)  # Scale to 30-70%
+                        self.alignment_progress.emit(progress)
+                        
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                    ret, frame = cap.read()
+                    
+                    if not ret:
+                        break
+                        
+                    # Calculate average brightness
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    avg_brightness = np.mean(gray)
+                    std_dev = np.std(gray)
+                    
+                    # More lenient white frame detection for lower thresholds
+                    is_white_frame = False
+                    if threshold_idx < 2:
+                        # Strict detection (high threshold)
+                        is_white_frame = avg_brightness > whiteness_threshold
+                    else:
+                        # Lenient detection (lower threshold but consider uniformity)
+                        is_white_frame = (avg_brightness > whiteness_threshold and std_dev < 40)
+                    
+                    if is_white_frame:
+                        consecutive_white_frames += 1
+                        
+                        # Start a new bookend if needed
+                        if current_bookend is None:
+                            frame_time = frame_idx / fps
+                            current_bookend = {
+                                'start_frame': frame_idx,
+                                'start_time': frame_time,
+                                'frame_count': 1,
+                                'brightness': avg_brightness,
+                                'std_dev': std_dev
+                            }
+                            
+                            # Save this white frame for diagnostic purposes
+                            if frame_idx % 30 == 0:  # Save every 30th detected white frame to avoid too many files
+                                cv2.imwrite(os.path.join(diagnostic_path, f"white_frame_{frame_idx}_time_{frame_time:.2f}_brightness_{avg_brightness:.1f}.jpg"), frame)
+                    else:
+                        # Check if we just finished a bookend
+                        if current_bookend is not None:
+                            # Update end time
+                            current_bookend['end_frame'] = frame_idx - sample_rate
+                            current_bookend['end_time'] = current_bookend['end_frame'] / fps
+                            current_bookend['frame_count'] = consecutive_white_frames
+                            
+                            # Add to bookends if long enough
+                            if consecutive_white_frames >= min_white_frames:
+                                current_bookends.append(current_bookend)
+                                logger.info(f"Detected white bookend: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s " +
+                                        f"(brightness: {current_bookend.get('brightness', 0):.1f}, frames: {consecutive_white_frames})")
+                                
+                            # Reset for next bookend
+                            current_bookend = None
+                            consecutive_white_frames = 0
+                
+                # Check if we have an unfinished bookend at the end
+                if current_bookend is not None:
+                    current_bookend['end_frame'] = frame_count - 1
+                    current_bookend['end_time'] = duration
+                    current_bookend['frame_count'] = consecutive_white_frames
+                    
+                    if consecutive_white_frames >= min_white_frames:
+                        current_bookends.append(current_bookend)
+                        logger.info(f"Detected white bookend at end: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s " +
+                                f"(brightness: {current_bookend.get('brightness', 0):.1f}, frames: {consecutive_white_frames})")
+                
+                # If we found at least 2 bookends, use these results
+                if len(current_bookends) >= 2:
+                    logger.info(f"Found {len(current_bookends)} white bookend sections with threshold {whiteness_threshold}")
+                    bookends = current_bookends
+                    break
+                    
+                logger.warning(f"Found only {len(current_bookends)} white bookend sections with threshold {whiteness_threshold} (need at least 2)")
+            
+            cap.release()
+            
+            # Final check and summary
+            if len(bookends) < 2:
+                logger.warning(f"Failed to detect white bookends with any threshold. Diagnostic images saved to {diagnostic_path}")
+                logger.warning("Make sure your video has clear white frames at the beginning and end of each loop")
+            else:
+                logger.info(f"Successfully detected {len(bookends)} white bookend sections")
+                
+            return bookends
+            
+        except Exception as e:
+            logger.error(f"Error detecting white bookends: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+    
+    
+    
+    
+    
+    
+    
+ 
+ 
+ 
+  
+
+  
 
 class BookendAlignmentThread(QThread):
     """Thread for bookend video alignment with reliable progress reporting"""
@@ -398,7 +568,6 @@ class BookendAlignmentThread(QThread):
                 self.status_update.emit("Bookend alignment complete!")
             else:
                 self.error_occurred.emit("Bookend alignment failed")
-
         except Exception as e:
             error_msg = f"Error in bookend alignment thread: {str(e)}"
             self.error_occurred.emit(error_msg)
@@ -406,29 +575,10 @@ class BookendAlignmentThread(QThread):
             import traceback
             logger.error(traceback.format_exc())
 
-            # Get dimensions and frame count
-            width = int(video_stream.get('width', 0))
-            height = int(video_stream.get('height', 0))
-            frame_count = int(video_stream.get('nb_frames', 0))
-
-            # If nb_frames is missing or zero, estimate from duration
-            if frame_count == 0 and frame_rate > 0:
-                frame_count = int(round(duration * frame_rate))
-
-            # Get pixel format
-            pix_fmt = video_stream.get('pix_fmt', 'unknown')
-
-            return {
-                'path': video_path,
-                'duration': duration,
-                'frame_rate': frame_rate,
-                'width': width,
-                'height': height,
-                'frame_count': frame_count,
-                'pix_fmt': pix_fmt,
-                'total_frames': frame_count
-            }
-
         except Exception as e:
-            logger.error(f"Error getting video info for {video_path}: {str(e)}")
-            return None
+            error_msg = f"Error in bookend alignment thread: {str(e)}"
+            self.error_occurred.emit(error_msg)
+            logger.error(error_msg)
+            import traceback
+            logger.error(traceback.format_exc())
+            return
