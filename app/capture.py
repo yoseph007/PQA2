@@ -44,7 +44,7 @@ class CaptureMonitor(QThread):
     capture_failed = pyqtSignal(str)
     frame_count_updated = pyqtSignal(int, int)  # current_frame, total_frames
 
-    def __init__(self, process, duration=None):
+    def __init__(self, process, duration=None, total_frames=0):
         super().__init__()
         self.process = process
         self._running = True
@@ -53,7 +53,7 @@ class CaptureMonitor(QThread):
         self.duration = duration  # Expected duration in seconds
         self.is_bookend_capture = True  # Always true since we only use bookend mode now
         self.last_frame_count = 0
-        self.total_frames = 0
+        self.total_frames = total_frames  # Use predefined total frames if provided
         self.last_progress_time = time.time()  # Throttle progress updates
         self.last_progress_value = 0
 
@@ -1717,8 +1717,12 @@ class CaptureManager(QObject):
                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
             )
 
-            # Create a more reliable monitor with longer timeout
-            self.capture_monitor = CaptureMonitor(self.ffmpeg_process, capture_duration * 1.2)
+            # Create a more reliable monitor with proper frame estimation based on max_capture_time
+            frame_rate = self.reference_info.get('frame_rate', 30)  # Default to 30fps if unknown
+            # Use exact max_capture_time for frame count calculation
+            total_frames = int(max_capture_time * frame_rate)
+            logger.info(f"Estimated total frames: {total_frames} based on max_capture_time={max_capture_time}s and fps={frame_rate}")
+            self.capture_monitor = CaptureMonitor(self.ffmpeg_process, max_capture_time, total_frames)
 
             # Connect all required signals properly with error checking
             try:

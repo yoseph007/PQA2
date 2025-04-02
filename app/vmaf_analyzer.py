@@ -285,7 +285,7 @@ class VMAFAnalyzer(QObject):
                             ssim_score = pool["ssim_y"]["mean"]
                     except Exception as e:
                         logger.error(f"Error parsing VMAF metrics from pooled_metrics: {str(e)}")
-                        
+
                 # Fallback to frames if pooled metrics don't exist
                 elif "frames" in vmaf_data:
                     # Extract scores from frames
@@ -376,7 +376,7 @@ class VMAFAnalyzer(QObject):
                             os.remove(primary_capture)
                     except Exception as cleanup_error:
                         logger.warning(f"Could not delete primary capture file: {cleanup_error}")
-                
+
                 # Return results
                 self.analysis_complete.emit(results)
                 return results
@@ -552,3 +552,20 @@ class VMAFAnalysisThread(QThread):
             logger.error(error_msg)
             import traceback
             logger.error(traceback.format_exc())
+
+def start_analysis(self, reference_path, distorted_path):
+    """Start VMAF analysis process using the aligned reference and captured videos"""
+    if not os.path.exists(reference_path) or not os.path.exists(distorted_path):
+        error_msg = f"Reference or distorted video files not found"
+        self.analysis_error.emit(error_msg)
+        return False
+
+    # Create output directory for results
+    self._prepare_output_paths(reference_path, distorted_path)
+
+    # Run the analysis in a thread with proper cleanup handling
+    self.analysis_thread = VMAFAnalysisThread(reference_path, distorted_path)
+    self.analysis_thread.finished.connect(self.analysis_thread.deleteLater)
+    self.analysis_thread.start()
+
+    return True
