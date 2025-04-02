@@ -1,9 +1,9 @@
 {
     "bookend": {
         "min_loops": 2,
-        "max_capture_time": 25,
+        "max_capture_time": 30,
         "bookend_duration": 0.5,
-        "white_threshold": 240
+        "white_threshold": 244
     },
     "vmaf": {
         "default_model": "vmaf_v0.6.1",
@@ -19,30 +19,15 @@
     },
     "capture": {
         "default_device": "Intensity Shuttle",
-        "resolution": "1920x1080",
-        "frame_rate": 23.98,
+        "resolution": "1080p",
+        "frame_rate": 24.0,
         "pixel_format": "yuyv422",
-        "available_resolutions": [
-            "1920x1080",
-            "1280x720",
-            "720x576",
-            "720x480"
-        ],
-        "available_frame_rates": [
-            23.98,
-            24,
-            25,
-            29.97,
-            30,
-            50,
-            59.94,
-            60
-        ]
+        "available_resolutions": [],
+        "available_frame_rates": []
     },
     "paths": {
         "default_output_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results",
         "reference_video_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Ref_Videos",
-        "results_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Ref_Results",
-        "temp_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/archive"
+        "results_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Ref_Results"
     }
 }
