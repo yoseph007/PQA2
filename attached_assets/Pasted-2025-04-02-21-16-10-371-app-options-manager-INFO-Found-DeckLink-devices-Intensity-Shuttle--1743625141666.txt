@@ -1,0 +1,17 @@
+2025-04-02 21:16:10,371 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 21:16:10,372 - app.ui - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-02 21:16:10,372 - app.ui - INFO - Set current device to: Intensity Shuttle
+2025-04-02 21:16:10,373 - app.ui - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-02 21:16:10,374 - app.ui - INFO - Populated resolution dropdown with 4 items
+2025-04-02 21:16:10,375 - app.ui - INFO - Populated frame rate dropdown with 2 items
+2025-04-02 21:16:14,288 - app.capture - INFO - Output directory set to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results
+2025-04-02 21:16:14,289 - app.capture - INFO - Test name set to: Test_01
+2025-04-02 21:16:14,290 - app.capture - INFO - Starting bookend capture mode
+2025-04-02 21:16:14,294 - app.capture - INFO - Output path set to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_211614\REF03_capture.mp4
+2025-04-02 21:16:14,294 - app.capture - INFO - Using bookend settings: duration=0.5s, min_loops=4, max_time=50s
+2025-04-02 21:16:14,294 - app.capture - INFO - Capture duration set to 50s (loop=8.29s, min_loops=4)
+2025-04-02 21:16:14,297 - app.capture - INFO - Looking for lingering FFmpeg processes to terminate
+2025-04-02 21:16:15,328 - app.capture - INFO - Device connection check skipped for Intensity Shuttle
+2025-04-02 21:16:15,328 - app.capture - INFO - Proceeding with bookend capture (connected status=True)
+2025-04-02 21:16:15,328 - app.capture - INFO - FFmpeg bookend capture command: ffmpeg -y -v warning -f decklink -i Intensity Shuttle -c:v libx264 -preset superfast -crf 23 -g 59 -keyint_min 29 -movflags +faststart -fflags +genpts+igndts -avoid_negative_ts 1 -t 50 C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_211614/REF03_capture.mp4
+2025-04-02 21:16:15,333 - app.capture - ERROR - Failed to start bookend capture: 'CaptureManager' object has no attribute 'update_frame_counter'
