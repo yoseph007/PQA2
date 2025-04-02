@@ -1283,6 +1283,25 @@ class CaptureManager(QObject):
     capture_started = pyqtSignal()
     capture_finished = pyqtSignal(bool, str)  # success, output_path
     frame_available = pyqtSignal(np.ndarray)  # For preview frame display
+    
+    def update_frame_counter(self, current_frame, total_frames):
+        """Update frame counter display during capture process"""
+        try:
+            # Format a user-friendly frame counter message
+            if total_frames > 0:
+                percentage = min(100, int((current_frame / total_frames) * 100))
+                frame_msg = f"Capturing: Frame {current_frame}/{total_frames} ({percentage}%)"
+            else:
+                frame_msg = f"Capturing: Frame {current_frame}"
+                
+            # Update status
+            self.status_update.emit(frame_msg)
+            
+            # Log every 100 frames to avoid excessive logging
+            if current_frame % 100 == 0:
+                logger.debug(f"Capture progress: Frame {current_frame}")
+        except Exception as e:
+            logger.error(f"Error updating frame counter: {e}")
 
     def __init__(self):
         super().__init__()
