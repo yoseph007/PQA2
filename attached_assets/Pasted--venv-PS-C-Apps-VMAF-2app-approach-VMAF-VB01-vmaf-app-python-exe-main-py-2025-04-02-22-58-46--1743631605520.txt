@@ -1,0 +1,278 @@
+(.venv) PS C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app> python.exe .\main.py
+2025-04-02 22:58:46,786 - __main__ - INFO - Starting VMAF Test App
+2025-04-02 22:58:46,786 - __main__ - INFO - Running on Windows, configuring font paths
+2025-04-02 22:58:46,799 - app.utils - INFO - File manager initialized with base directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 22:58:46,802 - app.utils - INFO - Created temporary workspace: C:\Users\yos\AppData\Local\Temp\vmaf_app_lzwiam38
+2025-04-02 22:58:46,803 - app.options_manager - INFO - Using settings file: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-02 22:58:46,803 - app.options_manager - INFO - Settings loaded from C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-02 22:58:46,803 - app.capture - INFO - Initializing CaptureManager
+2025-04-02 22:58:46,892 - app.capture - INFO - Found FFmpeg at: ffmpeg
+2025-04-02 22:58:47,253 - app.ui - INFO - Found 1 reference videos
+2025-04-02 22:58:47,254 - app.ui - INFO - VMAF Test App initialized
+2025-04-02 22:58:47,547 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 22:58:47,569 - app.reference_analyzer - INFO - White bookend frame detected at frame 0
+2025-04-02 22:58:47,592 - app.capture - INFO - Reference video set: REF03.mp4, duration: 7.29s, resolution: 1920x1080
+Unknown property borderradius
+Unknown property borderradius
+2025-04-02 22:58:55,165 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 22:58:55,166 - app.ui - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-02 22:58:55,167 - app.ui - INFO - Set current device to: Intensity Shuttle
+2025-04-02 22:58:55,168 - app.ui - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-02 22:58:55,169 - app.ui - INFO - Populated resolution dropdown with 4 items
+2025-04-02 22:58:55,170 - app.ui - INFO - Populated frame rate dropdown with 2 items
+2025-04-02 22:58:58,361 - app.capture - INFO - Output directory set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 22:58:58,361 - app.capture - INFO - Test name set to: Test_01
+2025-04-02 22:58:58,362 - app.capture - INFO - Starting bookend capture mode
+2025-04-02 22:58:58,365 - app.capture - INFO - Output path set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 22:58:58,365 - app.capture - INFO - Using bookend settings: duration=0.5s, min_loops=4, max_time=50s
+2025-04-02 22:58:58,365 - app.capture - INFO - Capture duration set to 50s (loop=8.29s, min_loops=4)
+2025-04-02 22:58:58,366 - app.capture - INFO - Looking for lingering FFmpeg processes to terminate
+2025-04-02 22:59:00,305 - app.capture - INFO - Device connection check skipped for Intensity Shuttle
+2025-04-02 22:59:00,305 - app.capture - INFO - Proceeding with bookend capture (connected status=True)
+2025-04-02 22:59:00,306 - app.capture - INFO - FFmpeg bookend capture command: ffmpeg -y -v warning -f decklink -i Intensity Shuttle -c:v libx264 -preset superfast -crf 23 -g 59 -keyint_min 29 -movflags +faststart -fflags +genpts+igndts -avoid_negative_ts 1 -t 50 C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_225858/REF03_capture.mp4
+2025-04-02 23:01:00,341 - app.capture - WARNING - Capture exceeded expected duration (60.0s), terminating
+2025-04-02 23:01:00,341 - app.capture - INFO - Sending graceful termination signal to FFmpeg process
+2025-04-02 23:01:00,438 - app.capture - INFO - Sent 'q' command to FFmpeg
+2025-04-02 23:01:00,438 - app.capture - INFO - Waiting for FFmpeg to finalize output file...
+2025-04-02 23:01:05,469 - app.capture - INFO - FFmpeg still running, sending terminate signal
+2025-04-02 23:01:05,671 - app.capture - INFO - FFmpeg process terminated
+2025-04-02 23:01:05,673 - app.capture - INFO - Bookend capture completed: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 23:01:11,687 - app.bookend_alignment - INFO - Starting white bookend alignment process
+2025-04-02 23:01:11,784 - app.bookend_alignment - WARNING - Video file validation failed: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 23:01:11,785 - app.bookend_alignment - WARNING - FFmpeg error: [mov,mp4,m4a,3gp,3g2,mj2 @ 0000016e6f6f4a80] moov atom not found
+[in#0 @ 0000016e6f6f4680] Error opening input: Invalid data found when processing input
+Error opening input file C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4.
+Error opening input files: Invalid data found when processing input
+
+2025-04-02 23:01:11,785 - app.bookend_alignment - INFO - Attempting to repair video file: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 23:01:11,878 - app.bookend_alignment - ERROR - FFmpeg repair failed: [mov,mp4,m4a,3gp,3g2,mj2 @ 0000016ca1c2dd80] moov atom not found
+[in#0 @ 0000016ca1c14500] Error opening input: Invalid data found when processing input
+Error opening input file C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4.
+Error opening input files: Invalid data found when processing input
+
+2025-04-02 23:01:11,878 - app.bookend_alignment - ERROR - Failed to repair captured video file
+2025-04-02 23:01:17,984 - app.bookend_alignment - INFO - Starting white bookend alignment process
+2025-04-02 23:01:18,089 - app.bookend_alignment - WARNING - Video file validation failed: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 23:01:18,089 - app.bookend_alignment - WARNING - FFmpeg error: [mov,mp4,m4a,3gp,3g2,mj2 @ 00000240e7f64a80] moov atom not found
+[in#0 @ 00000240e7f64680] Error opening input: Invalid data found when processing input
+Error opening input file C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4.
+Error opening input files: Invalid data found when processing input
+
+2025-04-02 23:01:18,090 - app.bookend_alignment - INFO - Attempting to repair video file: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 23:01:18,180 - app.bookend_alignment - ERROR - FFmpeg repair failed: [mov,mp4,m4a,3gp,3g2,mj2 @ 0000020e15d7dd80] moov atom not found
+[in#0 @ 0000020e15d64500] Error opening input: Invalid data found when processing input
+Error opening input file C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4.
+Error opening input files: Invalid data found when processing input
+
+2025-04-02 23:01:18,180 - app.bookend_alignment - ERROR - Failed to repair captured video file
+Unknown property borderradius
+Unknown property borderradius
+2025-04-02 23:01:27,353 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 23:01:27,353 - app.ui - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-02 23:01:27,354 - app.ui - INFO - Set current device to: Intensity Shuttle
+2025-04-02 23:01:27,354 - app.ui - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-02 23:01:27,355 - app.ui - INFO - Populated resolution dropdown with 4 items
+2025-04-02 23:01:27,355 - app.ui - INFO - Populated frame rate dropdown with 2 items
+2025-04-02 23:01:29,311 - app.capture - INFO - Output directory set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 23:01:29,311 - app.capture - INFO - Test name set to: Test_01
+2025-04-02 23:01:29,312 - app.capture - INFO - Starting bookend capture mode
+2025-04-02 23:01:29,314 - app.capture - INFO - Output path set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_230129\REF03_capture.mp4
+2025-04-02 23:01:29,314 - app.capture - INFO - Using bookend settings: duration=0.5s, min_loops=4, max_time=50s
+2025-04-02 23:01:29,315 - app.capture - INFO - Capture duration set to 50s (loop=8.29s, min_loops=4)
+2025-04-02 23:01:29,316 - app.capture - INFO - Looking for lingering FFmpeg processes to terminate
+2025-04-02 23:01:30,323 - app.capture - INFO - Device connection check skipped for Intensity Shuttle
+2025-04-02 23:01:30,323 - app.capture - INFO - Proceeding with bookend capture (connected status=True)
+2025-04-02 23:01:30,323 - app.capture - INFO - FFmpeg bookend capture command: ffmpeg -y -v warning -f decklink -i Intensity Shuttle -c:v libx264 -preset superfast -crf 23 -g 59 -keyint_min 29 -movflags +faststart -fflags +genpts+igndts -avoid_negative_ts 1 -t 50 C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_230129/REF03_capture.mp4
+2025-04-02 23:01:33,830 - app.capture - ERROR - Capture failed with code 4294967291: [decklink @ 0000016b3fb69040] Cannot Autodetect input stream or No signal
+[in#0 @ 0000016b3fb68c80] Error opening input: I/O error
+Error opening input file Intensity Shuttle.
+Error opening input files: I/O error
+
+2025-04-02 23:01:33,832 - app.capture - ERROR - Capture failed: [decklink @ 0000016b3fb69040] Cannot Autodetect input stream or No signal
+[in#0 @ 0000016b3fb68c80] Error opening input: I/O error
+Error opening input file Intensity Shuttle.
+Error opening input files: I/O error
+
+Unknown property borderradius
+Unknown property borderradius
+2025-04-02 23:01:39,954 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 23:01:39,954 - app.ui - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-02 23:01:39,955 - app.ui - INFO - Set current device to: Intensity Shuttle
+2025-04-02 23:01:39,955 - app.ui - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-02 23:01:39,956 - app.ui - INFO - Populated resolution dropdown with 4 items
+2025-04-02 23:01:39,956 - app.ui - INFO - Populated frame rate dropdown with 2 items
+2025-04-02 23:01:43,455 - app.capture - INFO - Output directory set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 23:01:43,456 - app.capture - INFO - Test name set to: Test_01
+2025-04-02 23:01:43,456 - app.capture - INFO - Starting bookend capture mode
+2025-04-02 23:01:43,458 - app.capture - INFO - Output path set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_230143\REF03_capture.mp4
+2025-04-02 23:01:43,458 - app.capture - INFO - Using bookend settings: duration=0.5s, min_loops=4, max_time=50s
+2025-04-02 23:01:43,458 - app.capture - INFO - Capture duration set to 50s (loop=8.29s, min_loops=4)
+2025-04-02 23:01:43,459 - app.capture - INFO - Looking for lingering FFmpeg processes to terminate
+2025-04-02 23:01:44,472 - app.capture - INFO - Device connection check skipped for Intensity Shuttle
+2025-04-02 23:01:44,472 - app.capture - INFO - Proceeding with bookend capture (connected status=True)
+2025-04-02 23:01:44,472 - app.capture - INFO - FFmpeg bookend capture command: ffmpeg -y -v warning -f decklink -i Intensity Shuttle -c:v libx264 -preset superfast -crf 23 -g 59 -keyint_min 29 -movflags +faststart -fflags +genpts+igndts -avoid_negative_ts 1 -t 50 C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_230143/REF03_capture.mp4
+2025-04-02 23:01:47,961 - app.capture - ERROR - Capture failed with code 4294967291: [decklink @ 0000026887339040] Cannot Autodetect input stream or No signal
+[in#0 @ 0000026887338c80] Error opening input: I/O error
+Error opening input file Intensity Shuttle.
+Error opening input files: I/O error
+
+2025-04-02 23:01:47,964 - app.capture - ERROR - Capture failed: [decklink @ 0000026887339040] Cannot Autodetect input stream or No signal
+[in#0 @ 0000026887338c80] Error opening input: I/O error
+Error opening input file Intensity Shuttle.
+Error opening input files: I/O error
+
+2025-04-02 23:01:57,175 - app.bookend_alignment - INFO - Starting white bookend alignment process
+2025-04-02 23:01:57,255 - app.bookend_alignment - WARNING - Video file validation failed: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 23:01:57,255 - app.bookend_alignment - WARNING - FFmpeg error: [mov,mp4,m4a,3gp,3g2,mj2 @ 0000020010194a80] moov atom not found
+[in#0 @ 0000020010194680] Error opening input: Invalid data found when processing input
+Error opening input file C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4.
+Error opening input files: Invalid data found when processing input
+
+2025-04-02 23:01:57,256 - app.bookend_alignment - INFO - Attempting to repair video file: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 23:01:57,335 - app.bookend_alignment - ERROR - FFmpeg repair failed: [mov,mp4,m4a,3gp,3g2,mj2 @ 000001f928dddd80] moov atom not found
+[in#0 @ 000001f928dc4500] Error opening input: Invalid data found when processing input
+Error opening input file C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4.
+Error opening input files: Invalid data found when processing input
+
+2025-04-02 23:01:57,335 - app.bookend_alignment - ERROR - Failed to repair captured video file
+2025-04-02 23:02:01,599 - app.bookend_alignment - INFO - Starting white bookend alignment process
+2025-04-02 23:02:01,679 - app.bookend_alignment - WARNING - Video file validation failed: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 23:02:01,679 - app.bookend_alignment - WARNING - FFmpeg error: [mov,mp4,m4a,3gp,3g2,mj2 @ 00000224b71c4a80] moov atom not found
+[in#0 @ 00000224b71c4680] Error opening input: Invalid data found when processing input
+Error opening input file C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4.
+Error opening input files: Invalid data found when processing input
+
+2025-04-02 23:02:01,680 - app.bookend_alignment - INFO - Attempting to repair video file: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4
+2025-04-02 23:02:01,773 - app.bookend_alignment - ERROR - FFmpeg repair failed: [mov,mp4,m4a,3gp,3g2,mj2 @ 00000248ca6cdd80] moov atom not found
+[in#0 @ 00000248ca6b4500] Error opening input: Invalid data found when processing input
+Error opening input file C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_225858\REF03_capture.mp4.
+Error opening input files: Invalid data found when processing input
+
+2025-04-02 23:02:01,774 - app.bookend_alignment - ERROR - Failed to repair captured video file
+2025-04-02 23:02:12,631 - app.capture - INFO - Output directory set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 23:02:12,631 - app.capture - INFO - Test name set to: Test_01
+2025-04-02 23:02:12,632 - app.capture - INFO - Starting bookend capture mode
+2025-04-02 23:02:12,634 - app.capture - INFO - Output path set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_230212\REF03_capture.mp4
+2025-04-02 23:02:12,634 - app.capture - INFO - Using bookend settings: duration=0.5s, min_loops=4, max_time=50s
+2025-04-02 23:02:12,635 - app.capture - INFO - Capture duration set to 50s (loop=8.29s, min_loops=4)
+2025-04-02 23:02:12,636 - app.capture - INFO - Looking for lingering FFmpeg processes to terminate
+2025-04-02 23:02:13,649 - app.capture - INFO - Device connection check skipped for Intensity Shuttle
+2025-04-02 23:02:13,650 - app.capture - INFO - Proceeding with bookend capture (connected status=True)
+2025-04-02 23:02:13,650 - app.capture - INFO - FFmpeg bookend capture command: ffmpeg -y -v warning -f decklink -i Intensity Shuttle -c:v libx264 -preset superfast -crf 23 -g 59 -keyint_min 29 -movflags +faststart -fflags +genpts+igndts -avoid_negative_ts 1 -t 50 C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_230212/REF03_capture.mp4
+2025-04-02 23:03:02,920 - app.capture - INFO - Stopping capture
+2025-04-02 23:03:02,921 - app.capture - INFO - Sending graceful termination signal to FFmpeg process
+2025-04-02 23:03:02,921 - app.capture - INFO - Sent 'q' command to FFmpeg
+2025-04-02 23:03:02,921 - app.capture - INFO - Waiting for FFmpeg to finalize output file...
+2025-04-02 23:03:03,424 - app.capture - INFO - FFmpeg process finalized and terminated
+2025-04-02 23:03:03,425 - app.capture - INFO - Cleaning up temporary capture file: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_230212\REF03_capture.mp4
+2025-04-02 23:03:26,454 - app.options_manager - INFO - Settings saved to C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-02 23:03:26,455 - app.ui - INFO - Settings updated, applying changes to UI
+2025-04-02 23:03:26,557 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 23:03:26,557 - app.ui - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-02 23:03:26,558 - app.ui - INFO - Set current device to: Intensity Shuttle
+2025-04-02 23:03:26,558 - app.ui - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-02 23:03:26,559 - app.ui - INFO - Populated resolution dropdown with 4 items
+2025-04-02 23:03:26,560 - app.ui - INFO - Populated frame rate dropdown with 2 items
+2025-04-02 23:03:26,560 - app.capture - INFO - Output directory set to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results
+2025-04-02 23:03:43,055 - app.options_manager - INFO - Settings saved to C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-02 23:03:43,055 - app.ui - INFO - Settings updated, applying changes to UI
+2025-04-02 23:03:43,158 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 23:03:43,158 - app.ui - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-02 23:03:43,159 - app.ui - INFO - Set current device to: Intensity Shuttle
+2025-04-02 23:03:43,160 - app.ui - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-02 23:03:43,161 - app.ui - INFO - Populated resolution dropdown with 4 items
+2025-04-02 23:03:43,161 - app.ui - INFO - Populated frame rate dropdown with 2 items
+2025-04-02 23:03:43,162 - app.capture - INFO - Output directory set to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results
+2025-04-02 23:03:56,895 - app.options_manager - INFO - Settings saved to C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-02 23:03:56,895 - app.ui - INFO - Settings updated, applying changes to UI
+2025-04-02 23:03:56,988 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 23:03:56,989 - app.ui - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-02 23:03:56,989 - app.ui - INFO - Set current device to: Intensity Shuttle
+2025-04-02 23:03:56,990 - app.ui - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-02 23:03:56,991 - app.ui - INFO - Populated resolution dropdown with 4 items
+2025-04-02 23:03:56,991 - app.ui - INFO - Populated frame rate dropdown with 2 items
+2025-04-02 23:03:56,991 - app.capture - INFO - Output directory set to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results
+2025-04-02 23:04:25,678 - app.ui - INFO - Found 1 reference videos
+2025-04-02 23:04:25,809 - app.reference_analyzer - INFO - White bookend frame detected at frame 0
+2025-04-02 23:04:25,827 - app.capture - INFO - Reference video set: REF03.mp4, duration: 7.29s, resolution: 1920x1080
+2025-04-02 23:04:30,679 - app.capture - INFO - Output directory set to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results
+2025-04-02 23:04:30,679 - app.capture - INFO - Test name set to: Test_01
+2025-04-02 23:04:30,680 - app.capture - INFO - Starting bookend capture mode
+2025-04-02 23:04:30,681 - app.capture - INFO - Output path set to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_230430\REF03_capture.mp4
+2025-04-02 23:04:30,682 - app.capture - INFO - Using bookend settings: duration=0.5s, min_loops=3, max_time=25s
+2025-04-02 23:04:30,682 - app.capture - INFO - Capture duration set to 30s (loop=8.29s, min_loops=3)
+2025-04-02 23:04:30,683 - app.capture - INFO - Looking for lingering FFmpeg processes to terminate
+2025-04-02 23:04:31,695 - app.capture - INFO - Device connection check skipped for Intensity Shuttle
+2025-04-02 23:04:31,695 - app.capture - INFO - Proceeding with bookend capture (connected status=True)
+2025-04-02 23:04:31,695 - app.capture - INFO - FFmpeg bookend capture command: ffmpeg -y -v warning -f decklink -i Intensity Shuttle -c:v libx264 -preset superfast -crf 23 -g 59 -keyint_min 29 -movflags +faststart -fflags +genpts+igndts -avoid_negative_ts 1 -t 30 C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_230430/REF03_capture.mp4
+2025-04-02 23:05:02,489 - app.capture - INFO - Capture completed successfully
+2025-04-02 23:05:02,490 - app.capture - INFO - Bookend capture completed: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_230430\REF03_capture.mp4
+2025-04-02 23:05:06,967 - app.bookend_alignment - INFO - Starting white bookend alignment process
+2025-04-02 23:05:09,351 - app.bookend_alignment - INFO - Video details: duration=30.03s, frames=900, fps=29.97
+2025-04-02 23:05:09,436 - app.bookend_alignment - INFO - Frame 0 (t=0.00s) brightness: 61.6
+2025-04-02 23:05:09,551 - app.bookend_alignment - INFO - Frame 45 (t=1.50s) brightness: 65.2
+2025-04-02 23:05:09,650 - app.bookend_alignment - INFO - Frame 90 (t=3.00s) brightness: 61.1
+2025-04-02 23:05:09,737 - app.bookend_alignment - INFO - Frame 135 (t=4.50s) brightness: 73.5
+2025-04-02 23:05:09,929 - app.bookend_alignment - INFO - Frame 180 (t=6.01s) brightness: 70.5
+2025-04-02 23:05:10,088 - app.bookend_alignment - INFO - Frame 225 (t=7.51s) brightness: 61.6
+2025-04-02 23:05:10,217 - app.bookend_alignment - INFO - Frame 270 (t=9.01s) brightness: 65.1
+2025-04-02 23:05:10,315 - app.bookend_alignment - INFO - Frame 315 (t=10.51s) brightness: 60.3
+2025-04-02 23:05:10,517 - app.bookend_alignment - INFO - Frame 360 (t=12.01s) brightness: 73.5
+2025-04-02 23:05:10,710 - app.bookend_alignment - INFO - Frame 405 (t=13.51s) brightness: 68.2
+2025-04-02 23:05:10,863 - app.bookend_alignment - INFO - Frame 450 (t=15.02s) brightness: 61.2
+2025-04-02 23:05:10,987 - app.bookend_alignment - INFO - Frame 495 (t=16.52s) brightness: 65.2
+2025-04-02 23:05:11,089 - app.bookend_alignment - INFO - Frame 540 (t=18.02s) brightness: 60.5
+2025-04-02 23:05:11,278 - app.bookend_alignment - INFO - Frame 585 (t=19.52s) brightness: 73.8
+2025-04-02 23:05:11,467 - app.bookend_alignment - INFO - Frame 630 (t=21.02s) brightness: 68.2
+2025-04-02 23:05:11,620 - app.bookend_alignment - INFO - Frame 675 (t=22.52s) brightness: 60.9
+2025-04-02 23:05:11,745 - app.bookend_alignment - INFO - Frame 720 (t=24.02s) brightness: 64.9
+2025-04-02 23:05:11,840 - app.bookend_alignment - INFO - Frame 765 (t=25.53s) brightness: 59.6
+2025-04-02 23:05:12,038 - app.bookend_alignment - INFO - Frame 810 (t=27.03s) brightness: 73.9
+2025-04-02 23:05:12,225 - app.bookend_alignment - INFO - Frame 855 (t=28.53s) brightness: 64.9
+2025-04-02 23:05:12,226 - app.bookend_alignment - INFO - Video brightness stats: avg=65.7, std=4.9, max=73.9
+2025-04-02 23:05:12,227 - app.bookend_alignment - INFO - Trying whiteness threshold: 200
+2025-04-02 23:05:12,658 - app.bookend_alignment - INFO - Detected white bookend: 0.334s - 0.501s (brightness: 213.0, frames: 2)
+2025-04-02 23:05:21,226 - app.bookend_alignment - INFO - Detected white bookend: 7.841s - 8.008s (brightness: 213.0, frames: 2)
+2025-04-02 23:05:28,764 - app.bookend_alignment - INFO - Detected white bookend: 15.349s - 15.515s (brightness: 213.0, frames: 2)
+2025-04-02 23:05:35,138 - app.bookend_alignment - INFO - Detected white bookend: 22.856s - 23.023s (brightness: 213.0, frames: 2)
+2025-04-02 23:05:40,070 - app.bookend_alignment - INFO - Found 4 white bookend sections with threshold 200
+2025-04-02 23:05:40,081 - app.bookend_alignment - INFO - Successfully detected 4 white bookend sections
+2025-04-02 23:05:40,082 - app.bookend_alignment - INFO - Detected first white bookend at: 0.334s - 0.501s
+2025-04-02 23:05:40,082 - app.bookend_alignment - INFO - Detected last white bookend at: 22.856s - 23.023s
+2025-04-02 23:05:40,082 - app.bookend_alignment - INFO - Content duration between bookends: 22.290s
+2025-04-02 23:05:40,082 - app.bookend_alignment - WARNING - Reference duration (7.290s) differs from content duration (22.290s)
+2025-04-02 23:05:40,082 - app.bookend_alignment - INFO - Detected multiple loops in captured video, looking for individual loops
+2025-04-02 23:05:40,082 - app.bookend_alignment - INFO - Loop 1: 0.534s - 7.808s = 7.275s (diff: 0.015s)
+2025-04-02 23:05:40,082 - app.bookend_alignment - INFO - Loop 2: 8.041s - 15.316s = 7.275s (diff: 0.015s)
+2025-04-02 23:05:40,082 - app.bookend_alignment - INFO - Loop 3: 15.548s - 22.823s = 7.275s (diff: 0.015s)
+2025-04-02 23:05:40,082 - app.bookend_alignment - INFO - Selected loop 1: 0.534s - 7.808s = 7.275s
+2025-04-02 23:05:40,082 - app.bookend_alignment - INFO - Creating aligned reference video: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_230430\REF03_230430_aligned.mp4
+2025-04-02 23:05:46,591 - app.bookend_alignment - INFO - Creating aligned captured video from 0.534s to 7.808s
+2025-04-02 23:05:52,854 - app.bookend_alignment - INFO - Created aligned videos: 7.27s / 7.29s
+2025-04-02 23:05:52,858 - app.vmaf_analyzer - INFO - Set output directory to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results
+2025-04-02 23:05:52,858 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 23:05:52,861 - app.vmaf_analyzer - INFO - Set output directory to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results
+2025-04-02 23:05:52,861 - app.vmaf_analyzer - INFO - Set output directory to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results
+2025-04-02 23:05:52,862 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 23:05:52,862 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 23:05:52,864 - app.vmaf_analyzer - INFO - VMAF Reference: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_230430\REF03_230430_aligned.mp4
+2025-04-02 23:05:52,865 - app.vmaf_analyzer - INFO - Set output directory to: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results
+2025-04-02 23:05:52,865 - app.vmaf_analyzer - INFO - VMAF Distorted: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_230430\REF03_capture_230430_aligned.mp4
+2025-04-02 23:05:52,866 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 23:05:52,869 - app.vmaf_analyzer - INFO - Using existing test directory: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_230430
+2025-04-02 23:05:52,871 - app.vmaf_analyzer - INFO - VMAF Reference: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_230430\REF03_230430_aligned.mp4
+2025-04-02 23:05:52,871 - app.vmaf_analyzer - INFO - VMAF command: ffmpeg -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_230430/REF03_capture_230430_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_230430/REF03_230430_aligned.mp4 -filter_complex [0:v]setpts=PTS-STARTPTS[dist];[1:v]setpts=PTS-STARTPTS[ref];[dist][ref]libvmaf=log_path='Test_01_20250402_230552_vmaf.json':log_fmt=json:psnr=true:ssim=true -f null -    
+2025-04-02 23:05:52,872 - app.vmaf_analyzer - INFO - VMAF Distorted: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_230430\REF03_capture_230430_aligned.mp4
+2025-04-02 23:05:52,874 - app.vmaf_analyzer - INFO - Using existing test directory: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results\Test_01_20250402_230430
+2025-04-02 23:05:52,875 - app.vmaf_analyzer - INFO - VMAF command: ffmpeg -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_230430/REF03_capture_230430_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_230430/REF03_230430_aligned.mp4 -filter_complex [0:v]setpts=PTS-STARTPTS[dist];[1:v]setpts=PTS-STARTPTS[ref];[dist][ref]libvmaf=log_path='Test_01_20250402_230552_vmaf.json':log_fmt=json:psnr=true:ssim=true -f null -    
+2025-04-02 23:05:52,891 - app.vmaf_analyzer - INFO - VMAF subprocess started successfully
+2025-04-02 23:05:52,892 - app.vmaf_analyzer - INFO - VMAF subprocess started successfully
+2025-04-02 23:05:52,933 - app.vmaf_analyzer - ERROR - VMAF error: Error applying option 'psnr' to filter 'libvmaf': Option not found
+2025-04-02 23:05:52,933 - app.vmaf_analyzer - ERROR - VMAF error: Error parsing global options: Option not found
+2025-04-02 23:05:52,934 - app.vmaf_analyzer - ERROR - VMAF error: Error applying option 'psnr' to filter 'libvmaf': Option not found
+2025-04-02 23:05:52,935 - app.vmaf_analyzer - ERROR - VMAF error: Error parsing global options: Option not found
+2025-04-02 23:05:53,000 - app.vmaf_analyzer - ERROR - VMAF analysis failed with code 2880417800: 
+2025-04-02 23:05:53,004 - app.vmaf_analyzer - ERROR - VMAF analysis failed with code 2880417800: 
+2025-04-02 23:06:02,502 - app.ui - INFO - Application closing - cleaning up resources
+2025-04-02 23:06:02,503 - app.ui - INFO - Cleanup complete, proceeding with application close
+(.venv) PS C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app> 
