@@ -1,0 +1,199 @@
+(.venv) PS C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app> python.exe .\main.py
+2025-04-02 21:43:36,679 - __main__ - INFO - Starting VMAF Test App
+2025-04-02 21:43:36,679 - __main__ - INFO - Running on Windows, configuring font paths
+2025-04-02 21:43:36,690 - app.utils - INFO - File manager initialized with base directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 21:43:36,693 - app.utils - INFO - Created temporary workspace: C:\Users\yos\AppData\Local\Temp\vmaf_app_2dnmz7q_
+2025-04-02 21:43:36,693 - app.options_manager - INFO - Using settings file: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-02 21:43:36,693 - app.options_manager - INFO - Settings loaded from C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-02 21:43:36,695 - app.capture - INFO - Initializing CaptureManager
+2025-04-02 21:43:36,786 - app.capture - INFO - Found FFmpeg at: ffmpeg
+2025-04-02 21:43:37,212 - app.ui - INFO - Found 1 reference videos
+2025-04-02 21:43:37,213 - app.ui - INFO - VMAF Test App initialized
+2025-04-02 21:43:37,584 - app.reference_analyzer - INFO - White bookend frame detected at frame 0
+2025-04-02 21:43:37,588 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 21:43:37,623 - app.capture - INFO - Reference video set: REF03.mp4, duration: 7.29s, resolution: 1920x1080
+2025-04-02 21:43:49,506 - app.capture - INFO - Output directory set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 21:43:49,506 - app.capture - INFO - Test name set to: Test_01
+2025-04-02 21:43:49,507 - app.capture - INFO - Starting bookend capture mode
+2025-04-02 21:43:49,514 - app.capture - INFO - Output path set to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_214349\REF03_capture.mp4
+2025-04-02 21:43:49,514 - app.capture - INFO - Using bookend settings: duration=0.5s, min_loops=4, max_time=50s
+2025-04-02 21:43:49,514 - app.capture - INFO - Capture duration set to 50s (loop=8.29s, min_loops=4)
+2025-04-02 21:43:49,515 - app.capture - INFO - Looking for lingering FFmpeg processes to terminate
+2025-04-02 21:43:51,476 - app.capture - INFO - Device connection check skipped for Intensity Shuttle
+2025-04-02 21:43:51,476 - app.capture - INFO - Proceeding with bookend capture (connected status=True)
+2025-04-02 21:43:51,476 - app.capture - INFO - FFmpeg bookend capture command: ffmpeg -y -v warning -f decklink -i Intensity Shuttle -c:v libx264 -preset superfast -crf 23 -g 59 -keyint_min 29 -movflags +faststart -fflags +genpts+igndts -avoid_negative_ts 1 -t 50 C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_214349/REF03_capture.mp4
+2025-04-02 21:43:51,480 - app.capture - INFO - Capture monitor connections established successfully
+2025-04-02 21:43:51,494 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:43:51,555 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:43:52,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:43:53,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:43:54,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:43:55,509 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:43:56,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:43:57,518 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:43:58,518 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:43:59,502 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:00,518 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:01,518 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:02,513 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:03,518 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:04,512 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:05,518 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:06,518 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:07,515 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:08,515 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:09,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:10,518 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:11,520 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:12,532 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:13,520 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:14,534 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:15,524 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:16,521 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:17,520 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:18,520 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:19,520 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:20,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:21,528 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:22,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:23,518 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:24,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:25,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:26,534 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:27,536 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:28,536 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:29,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:30,520 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:31,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:32,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:33,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:34,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:35,520 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:36,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:37,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:38,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:39,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:40,520 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:41,519 - app.capture - INFO - Capture progress: Frame 0
+Capture progress: Frame 0/?
+2025-04-02 21:44:42,306 - app.capture - INFO - Capture completed successfully
+2025-04-02 21:44:42,307 - app.capture - INFO - Bookend capture completed: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_214349\REF03_capture.mp4
+2025-04-02 21:44:49,142 - app.bookend_alignment - INFO - Starting white bookend alignment process
+2025-04-02 21:44:52,897 - app.bookend_alignment - INFO - Video details: duration=50.02s, frames=1499, fps=29.97
+2025-04-02 21:44:52,992 - app.bookend_alignment - INFO - Frame 0 (t=0.00s) brightness: 64.8
+2025-04-02 21:44:53,068 - app.bookend_alignment - INFO - Frame 74 (t=2.47s) brightness: 65.1
+2025-04-02 21:44:53,170 - app.bookend_alignment - INFO - Frame 148 (t=4.94s) brightness: 65.0
+2025-04-02 21:44:53,325 - app.bookend_alignment - INFO - Frame 222 (t=7.41s) brightness: 68.2
+2025-04-02 21:44:53,417 - app.bookend_alignment - INFO - Frame 296 (t=9.88s) brightness: 64.7
+2025-04-02 21:44:53,526 - app.bookend_alignment - INFO - Frame 370 (t=12.35s) brightness: 64.0
+2025-04-02 21:44:53,674 - app.bookend_alignment - INFO - Frame 444 (t=14.81s) brightness: 74.2
+2025-04-02 21:44:53,749 - app.bookend_alignment - INFO - Frame 518 (t=17.28s) brightness: 64.9
+2025-04-02 21:44:53,853 - app.bookend_alignment - INFO - Frame 592 (t=19.75s) brightness: 63.6
+2025-04-02 21:44:54,001 - app.bookend_alignment - INFO - Frame 666 (t=22.22s) brightness: 83.5
+2025-04-02 21:44:54,070 - app.bookend_alignment - INFO - Frame 740 (t=24.69s) brightness: 64.9
+2025-04-02 21:44:54,175 - app.bookend_alignment - INFO - Frame 814 (t=27.16s) brightness: 61.5
+2025-04-02 21:44:54,315 - app.bookend_alignment - INFO - Frame 888 (t=29.63s) brightness: 86.9
+2025-04-02 21:44:54,485 - app.bookend_alignment - INFO - Frame 962 (t=32.10s) brightness: 62.6
+2025-04-02 21:44:54,585 - app.bookend_alignment - INFO - Frame 1036 (t=34.57s) brightness: 60.6
+2025-04-02 21:44:54,716 - app.bookend_alignment - INFO - Frame 1110 (t=37.04s) brightness: 91.5
+2025-04-02 21:44:54,882 - app.bookend_alignment - INFO - Frame 1184 (t=39.51s) brightness: 61.5
+2025-04-02 21:44:54,978 - app.bookend_alignment - INFO - Frame 1258 (t=41.98s) brightness: 59.2
+2025-04-02 21:44:55,107 - app.bookend_alignment - INFO - Frame 1332 (t=44.44s) brightness: 91.0
+2025-04-02 21:44:55,270 - app.bookend_alignment - INFO - Frame 1406 (t=46.91s) brightness: 60.8
+2025-04-02 21:44:55,271 - app.bookend_alignment - INFO - Video brightness stats: avg=68.9, std=10.2, max=91.5
+2025-04-02 21:44:55,271 - app.bookend_alignment - INFO - Trying whiteness threshold: 200
+2025-04-02 21:44:56,757 - app.bookend_alignment - INFO - Detected white bookend: 1.835s - 1.835s (brightness: 213.2, frames: 1)
+2025-04-02 21:45:02,815 - app.bookend_alignment - INFO - Detected white bookend: 9.176s - 9.343s (brightness: 213.0, frames: 2)
+2025-04-02 21:45:07,995 - app.bookend_alignment - INFO - Detected white bookend: 16.683s - 16.850s (brightness: 213.0, frames: 2)
+2025-04-02 21:45:13,622 - app.bookend_alignment - INFO - Detected white bookend: 24.191s - 24.358s (brightness: 213.0, frames: 2)
+2025-04-02 21:45:19,073 - app.bookend_alignment - INFO - Detected white bookend: 31.698s - 31.865s (brightness: 213.0, frames: 2)
+2025-04-02 21:45:24,315 - app.bookend_alignment - INFO - Detected white bookend: 39.206s - 39.206s (brightness: 213.0, frames: 1)
+2025-04-02 21:45:29,860 - app.bookend_alignment - INFO - Detected white bookend: 46.713s - 46.713s (brightness: 213.0, frames: 1)
+2025-04-02 21:45:31,914 - app.bookend_alignment - INFO - Found 7 white bookend sections with threshold 200
+2025-04-02 21:45:31,937 - app.bookend_alignment - INFO - Successfully detected 7 white bookend sections
+2025-04-02 21:45:31,939 - app.bookend_alignment - INFO - Detected first white bookend at: 1.835s - 1.835s
+2025-04-02 21:45:31,939 - app.bookend_alignment - INFO - Detected last white bookend at: 46.713s - 46.713s
+2025-04-02 21:45:31,939 - app.bookend_alignment - INFO - Content duration between bookends: 44.812s
+2025-04-02 21:45:31,940 - app.bookend_alignment - WARNING - Reference duration (7.290s) differs from content duration (44.812s)
+2025-04-02 21:45:31,940 - app.bookend_alignment - INFO - Detected multiple loops in captured video, looking for individual loops
+2025-04-02 21:45:31,940 - app.bookend_alignment - INFO - Loop 1: 1.868s - 9.143s = 7.275s (diff: 0.015s)
+2025-04-02 21:45:31,940 - app.bookend_alignment - INFO - Loop 2: 9.376s - 16.650s = 7.275s (diff: 0.015s)
+2025-04-02 21:45:31,940 - app.bookend_alignment - INFO - Loop 3: 16.883s - 24.158s = 7.275s (diff: 0.015s)
+2025-04-02 21:45:31,941 - app.bookend_alignment - INFO - Loop 4: 24.391s - 31.665s = 7.275s (diff: 0.015s)
+2025-04-02 21:45:31,941 - app.bookend_alignment - INFO - Loop 5: 31.898s - 39.173s = 7.275s (diff: 0.015s)
+2025-04-02 21:45:31,941 - app.bookend_alignment - INFO - Loop 6: 39.239s - 46.680s = 7.441s (diff: 0.152s)
+2025-04-02 21:45:31,941 - app.bookend_alignment - INFO - Selected loop 1: 1.868s - 9.143s = 7.275s
+2025-04-02 21:45:31,942 - app.bookend_alignment - INFO - Creating aligned reference video: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_214349\REF03_214349_aligned.mp4
+2025-04-02 21:45:38,777 - app.bookend_alignment - INFO - Creating aligned captured video from 1.868s to 9.143s
+2025-04-02 21:45:46,456 - app.bookend_alignment - INFO - Created aligned videos: 7.27s / 7.30s
+2025-04-02 21:45:46,458 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 21:45:46,459 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 21:45:46,459 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 21:45:46,460 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 21:45:46,461 - app.vmaf_analyzer - INFO - VMAF Reference: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_214349\REF03_214349_aligned.mp4
+2025-04-02 21:45:46,461 - app.vmaf_analyzer - INFO - VMAF Reference: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_214349\REF03_214349_aligned.mp4
+2025-04-02 21:45:46,461 - app.vmaf_analyzer - INFO - VMAF Distorted: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_214349\REF03_capture_214349_aligned.mp4
+2025-04-02 21:45:46,462 - app.vmaf_analyzer - INFO - VMAF Distorted: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_214349\REF03_capture_214349_aligned.mp4
+2025-04-02 21:45:46,462 - app.vmaf_analyzer - INFO - Using existing test directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_214349
+2025-04-02 21:45:46,462 - app.vmaf_analyzer - INFO - Using existing test directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_214349
+2025-04-02 21:45:46,463 - app.vmaf_analyzer - INFO - VMAF command: ffmpeg -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_214349/REF03_capture_214349_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_214349/REF03_214349_aligned.mp4 -filter_complex [0:v]setpts=PTS-STARTPTS[distorted];[1:v]setpts=PTS-STARTPTS[reference];[distorted][reference]libvmaf=log_path='Test_01_20250402_214546_vmaf.json':log_fmt=json:psnr=true:ssim=true -f null -
+2025-04-02 21:45:46,463 - app.vmaf_analyzer - INFO - VMAF command: ffmpeg -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_214349/REF03_capture_214349_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_214349/REF03_214349_aligned.mp4 -filter_complex [0:v]setpts=PTS-STARTPTS[distorted];[1:v]setpts=PTS-STARTPTS[reference];[distorted][reference]libvmaf=log_path='Test_01_20250402_214546_vmaf.json':log_fmt=json:psnr=true:ssim=true -f null -
+2025-04-02 21:45:46,470 - app.vmaf_analyzer - INFO - VMAF subprocess started successfully
+2025-04-02 21:45:46,470 - app.vmaf_analyzer - INFO - VMAF subprocess started successfully
+2025-04-02 21:45:46,493 - app.vmaf_analyzer - ERROR - VMAF error: Error applying option 'psnr' to filter 'libvmaf': Option not found
+2025-04-02 21:45:46,494 - app.vmaf_analyzer - ERROR - VMAF error: Error applying option 'psnr' to filter 'libvmaf': Option not found
+2025-04-02 21:45:46,494 - app.vmaf_analyzer - ERROR - VMAF error: Error parsing global options: Option not found
+2025-04-02 21:45:46,494 - app.vmaf_analyzer - ERROR - VMAF error: Error parsing global options: Option not found
+2025-04-02 21:45:46,556 - app.vmaf_analyzer - ERROR - VMAF analysis failed with code 2880417800: 
+2025-04-02 21:45:46,557 - app.vmaf_analyzer - ERROR - VMAF analysis failed with code 2880417800: 
