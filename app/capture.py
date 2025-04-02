@@ -26,6 +26,7 @@ class CaptureMonitor(QThread):
     progress_updated = pyqtSignal(int)
     capture_complete = pyqtSignal()
     capture_failed = pyqtSignal(str)
+    frame_count_updated = pyqtSignal(int, int)  # current_frame, total_frames
 
     def __init__(self, process, duration=None):
         super().__init__()
@@ -37,16 +38,23 @@ class CaptureMonitor(QThread):
         self.is_bookend_capture = True  # Always true since we only use bookend mode now
         self.last_frame_count = 0
         self.total_frames = 0
+        self.last_progress_time = time.time()  # Throttle progress updates
+        self.last_progress_value = 0
 
     def run(self):
         """Monitor process output and emit signals"""
         logger.debug("Starting capture monitor")
+        
+        # Send initial progress
+        self.progress_updated.emit(0)
 
         while self._running:
             # Check for process completion
             if self.process.poll() is not None:
                 if self.process.returncode == 0:
                     logger.info("Capture completed successfully")
+                    # Set progress to 99% - we'll set to 100% after post-processing
+                    self.progress_updated.emit(99)
                     self.capture_complete.emit()
                 else:
                     # Get any remaining error output
@@ -67,6 +75,7 @@ class CaptureMonitor(QThread):
             if self.duration and (time.time() - self.start_time) > self.duration * 2.0:
                 logger.warning(f"Capture exceeded expected duration ({self.duration}s), terminating")
                 self._terminate_process()
+                self.progress_updated.emit(99)  # Almost complete
                 self.capture_complete.emit()
                 break
 
@@ -87,26 +96,59 @@ class CaptureMonitor(QThread):
                                     self.last_frame_count = frame_num
 
                                     # Try to estimate total frames from fps and duration
-                                    if self.total_frames == 0 and self.duration:
-                                        fps_match = re.search(r'fps=\s*([\d.]+)', line)
-                                        if fps_match:
+                                    fps = 30  # Default fps assumption
+                                    fps_match = re.search(r'fps=\s*([\d.]+)', line)
+                                    if fps_match:
+                                        try:
                                             fps = float(fps_match.group(1))
-                                            if fps > 0:
-                                                self.total_frames = int(self.duration * fps)
+                                        except:
+                                            pass  # Keep the default
+
+                                    # Update total_frames if we now have fps info
+                                    if self.total_frames == 0 and self.duration and fps > 0:
+                                        self.total_frames = int(self.duration * fps)
+                                        logger.debug(f"Estimated total frames: {self.total_frames} (fps={fps}, duration={self.duration}s)")
+
+                                    # Try to find time encoding information as fallback for progress
+                                    time_elapsed = None
+                                    time_match = re.search(r'time=(\d+):(\d+):(\d+\.\d+)', line)
+                                    if time_match:
+                                        hours = int(time_match.group(1))
+                                        minutes = int(time_match.group(2))
+                                        seconds = float(time_match.group(3))
+                                        time_elapsed = hours * 3600 + minutes * 60 + seconds
 
                                     # Calculate progress percentage
-                                    if self.duration and self.total_frames > 0:
-                                        # If we have both duration and total frames
-                                        progress = min(int((frame_num / self.total_frames) * 100), 99)
-                                    elif self.duration:
-                                        # If we only have duration, use elapsed time
-                                        elapsed = time.time() - self.start_time
-                                        progress = min(int((elapsed / self.duration) * 100), 99)
-                                    else:
-                                        # Fallback - increment slowly
-                                        progress = min(int(frame_num % 100), 99)
-
-                                    self.progress_updated.emit(progress)
+                                    current_time = time.time()
+                                    # Only update every 0.25 seconds to avoid too many updates
+                                    if current_time - self.last_progress_time >= 0.25:
+                                        progress = 0
+                                        
+                                        if self.duration and self.total_frames > 0:
+                                            # If we have both duration and total frames (most accurate)
+                                            progress = min(int((frame_num / self.total_frames) * 95), 95)
+                                        elif time_elapsed is not None and self.duration:
+                                            # If we have elapsed time from output and expected duration
+                                            progress = min(int((time_elapsed / self.duration) * 95), 95)
+                                        elif self.duration:
+                                            # If we only have process duration, use elapsed time
+                                            elapsed = current_time - self.start_time
+                                            progress = min(int((elapsed / self.duration) * 95), 95)
+                                        else:
+                                            # Fallback - increment in small steps based on frames
+                                            # Ensure we never report 0% after starting
+                                            progress = max(5, min(int((frame_num % 1000) / 10), 95))
+                                        
+                                        # Only emit if progress changed to avoid flooding UI
+                                        if progress != self.last_progress_value:
+                                            self.progress_updated.emit(progress)
+                                            self.last_progress_value = progress
+                                            
+                                        # Update timestamp
+                                        self.last_progress_time = current_time
+                                        
+                                    # Always emit frame count updates for UI display
+                                    self.frame_count_updated.emit(frame_num, self.total_frames)
                             except (ValueError, AttributeError) as e:
                                 logger.warning(f"Error parsing frame number: {e}")
 
@@ -116,7 +158,21 @@ class CaptureMonitor(QThread):
                 except Exception as e:
                     logger.warning(f"Error reading FFmpeg output: {e}")
 
+            # Don't burn CPU with polling
             time.sleep(0.1)
+            
+            # Update progress based on elapsed time for smoother appearance
+            # Only if no recent frame-based updates
+            current_time = time.time()
+            if self.duration and (current_time - self.last_progress_time) >= 1.0:
+                elapsed = current_time - self.start_time
+                time_progress = min(int((elapsed / self.duration) * 95), 95)
+                
+                # Only emit if progress increased to avoid jumping back
+                if time_progress > self.last_progress_value:
+                    self.progress_updated.emit(time_progress)
+                    self.last_progress_value = time_progress
+                    self.last_progress_time = current_time
 
     def _terminate_process(self):
         """Safely terminate the FFmpeg process with proper signal to finalize file"""
@@ -512,7 +568,7 @@ class CaptureManager(QObject):
         QTimer.singleShot(500, lambda: self._post_process_bookend_capture(output_path))
 
     def _post_process_bookend_capture(self, output_path):
-        """Process captured video with bookends"""
+        """Process captured video with bookends and move to temporary folder"""
         try:
             # Verify file integrity
             logger.info(f"Processing captured bookend video: {output_path}")
@@ -554,12 +610,39 @@ class CaptureManager(QObject):
                 logger.info(f"Captured bookend video duration: {duration:.2f}s")
             except (json.JSONDecodeError, IndexError) as e:
                 logger.warning(f"Could not parse duration: {e}, continuing anyway")
-
+                
+            # Move to temporary folder if configured in options
+            temp_dir = None
+            if hasattr(self, 'options_manager') and self.options_manager:
+                temp_dir = self.options_manager.get_setting("paths", "temp_dir")
+            
+            # If no temp dir configured or doesn't exist, use system temp
+            if not temp_dir or not os.path.exists(temp_dir):
+                import tempfile
+                temp_dir = tempfile.gettempdir()
+                
+            # Create a new filename in temp dir
+            temp_filename = f"temp_bookend_capture_{int(time.time())}.mp4"
+            temp_path = os.path.join(temp_dir, temp_filename)
+            
+            # Copy the file to temp location
+            import shutil
+            shutil.copy2(output_path, temp_path)
+            logger.info(f"Moved capture file to temporary location: {temp_path}")
+            
+            # Delete the original file to save space
+            try:
+                os.remove(output_path)
+                logger.info(f"Deleted original capture file: {output_path}")
+            except Exception as e:
+                logger.warning(f"Could not delete original capture file: {e}")
+                
             # Mark as completed
             self.state = CaptureState.COMPLETED
             self.state_changed.emit(self.state)
             self.status_update.emit("Bookend capture and processing complete")
-            self.capture_finished.emit(True, output_path)
+            # Return the temp path instead of original
+            self.capture_finished.emit(True, temp_path)
 
         except Exception as e:
             error_msg = f"Error processing bookend capture: {str(e)}"

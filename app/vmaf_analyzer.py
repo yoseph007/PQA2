@@ -111,8 +111,8 @@ class VMAFAnalyzer(QObject):
             if not model.endswith('.json'):
                 model_name = f"{model}.json"
 
-            # Build a more reliable FFmpeg command using separate filters
-            # instead of a complex filter chain that has path escaping issues
+            # Build a more reliable FFmpeg command using a single VMAF filter
+            # to avoid redundant processing and multiple VMAF sessions
             vmaf_cmd = [
                 "ffmpeg", 
                 "-hide_banner",
@@ -129,14 +129,12 @@ class VMAFAnalyzer(QObject):
             current_dir = os.getcwd()
             os.chdir(test_dir) # Changed to use test_dir
 
-            # Now use simple filenames instead of full paths in the filter
+            # Simplified filter graph with only one VMAF process
+            # This also outputs PSNR and SSIM with just one filter chain
             filter_complex = (
-                "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
-                "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
-                f"[ref1][dist1]libvmaf=log_path='{vmaf_filename}':log_fmt=json;"
-                f"[ref2][dist2]libvmaf=log_path='{csv_filename}':log_fmt=csv;"
-                f"[0:v][1:v]psnr=stats_file='{psnr_filename}';"
-                f"[0:v][1:v]ssim=stats_file='{ssim_filename}'"
+                "[0:v]setpts=PTS-STARTPTS[distorted];"
+                "[1:v]setpts=PTS-STARTPTS[reference];"
+                f"[distorted][reference]libvmaf=log_path='{vmaf_filename}':log_fmt=json:psnr=1:ssim=1"
             )
 
             # Use the -filter_complex parameter instead of -lavfi which seems more compatible
@@ -279,35 +277,41 @@ class VMAFAnalyzer(QObject):
                             vmaf_score = pool["vmaf"]["mean"]
                         if "psnr" in pool:
                             psnr_score = pool["psnr"]["mean"]
+                        if "psnr_y" in pool:  # Sometimes it's labeled as psnr_y
+                            psnr_score = pool["psnr_y"]["mean"]
                         if "ssim" in pool:
                             ssim_score = pool["ssim"]["mean"]
+                        if "ssim_y" in pool:  # Sometimes it's labeled as ssim_y
+                            ssim_score = pool["ssim_y"]["mean"]
                     except Exception as e:
                         logger.error(f"Error parsing VMAF metrics from pooled_metrics: {str(e)}")
+                        
+                # Fallback to frames if pooled metrics don't exist
+                elif "frames" in vmaf_data:
+                    # Extract scores from frames
+                    frames = vmaf_data["frames"]
+                    if frames:
+                        vmaf_values = []
+                        psnr_values = []
+                        ssim_values = []
 
-                # If PSNR/SSIM are still None, try to parse from the log files
-                if psnr_score is None and os.path.exists(psnr_log.replace("/", "\\")):
-                    try:
-                        with open(psnr_log.replace("/", "\\"), 'r') as f:
-                            psnr_content = f.read()
-                            # Try to find the average PSNR value
-                            psnr_match = re.search(r'average:([0-9.]+)', psnr_content)
-                            if psnr_match:
-                                psnr_score = float(psnr_match.group(1))
-                                logger.info(f"Parsed PSNR from log file: {psnr_score}")
-                    except Exception as e:
-                        logger.error(f"Error parsing PSNR log: {str(e)}")
+                        for frame in frames:
+                            if "metrics" in frame:
+                                metrics = frame["metrics"]
+                                if "vmaf" in metrics:
+                                    vmaf_values.append(metrics["vmaf"])
+                                if "psnr" in metrics or "psnr_y" in metrics:
+                                    psnr_values.append(metrics.get("psnr", metrics.get("psnr_y", 0)))
+                                if "ssim" in metrics or "ssim_y" in metrics:
+                                    ssim_values.append(metrics.get("ssim", metrics.get("ssim_y", 0)))
 
-                if ssim_score is None and os.path.exists(ssim_log.replace("/", "\\")):
-                    try:
-                        with open(ssim_log.replace("/", "\\"), 'r') as f:
-                            ssim_content = f.read()
-                            # Try to find the average SSIM value
-                            ssim_match = re.search(r'All:([0-9.]+)', ssim_content)
-                            if ssim_match:
-                                ssim_score = float(ssim_match.group(1))
-                                logger.info(f"Parsed SSIM from log file: {ssim_score}")
-                    except Exception as e:
-                        logger.error(f"Error parsing SSIM log: {str(e)}")
+                        # Calculate averages
+                        if vmaf_values:
+                            vmaf_score = sum(vmaf_values) / len(vmaf_values)
+                        if psnr_values:
+                            psnr_score = sum(psnr_values) / len(psnr_values)
+                        if ssim_values:
+                            ssim_score = sum(ssim_values) / len(ssim_values)
                 elif "frames" in vmaf_data:
                     # Extract scores from frames
                     frames = vmaf_data["frames"]
