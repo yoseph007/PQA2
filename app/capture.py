@@ -1498,6 +1498,57 @@ class CaptureManager(QObject):
         # Reset capture monitor
         self.capture_monitor = None
 
+    def stop_capture(self, cleanup_temp=False):
+        """Stop any active capture process"""
+        if not self.is_capturing:
+            return
+
+        logger.info("Stopping capture")
+        self.status_update.emit("Stopping capture...")
+
+        # Stop capture monitor if active
+        if hasattr(self, 'capture_monitor') and self.capture_monitor:
+            self.capture_monitor.stop()
+
+        # Force kill any lingering FFmpeg processes
+        if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
+            try:
+                # Try to terminate gracefully first
+                self.ffmpeg_process.terminate()
+                # Wait a short time for it to terminate
+                for _ in range(10):  # 1 second timeout
+                    if self.ffmpeg_process.poll() is not None:
+                        break
+                    time.sleep(0.1)
+
+                # If still running, force kill
+                if self.ffmpeg_process.poll() is None:
+                    self.ffmpeg_process.kill()
+                    # Make sure it's dead
+                    self.ffmpeg_process.wait()
+            except Exception as e:
+                logger.error(f"Error killing FFmpeg process: {e}")
+
+        # Reset state
+        self.state = CaptureState.IDLE
+        self.state_changed.emit(self.state)
+        self.ffmpeg_process = None
+
+        # Clean up temporary files if requested
+        if cleanup_temp and self.current_output_path and os.path.exists(self.current_output_path):
+            try:
+                logger.info(f"Cleaning up temporary capture file: {self.current_output_path}")
+                os.remove(self.current_output_path)
+                self.current_output_path = None
+            except Exception as e:
+                logger.error(f"Error removing temporary file: {e}")
+
+        # Add delay before allowing another capture
+        time.sleep(1)  # 1 second delay
+
+        self.status_update.emit("Capture stopped by user")
+        self.capture_finished.emit(False, "Capture cancelled by user")
+
     def start_bookend_capture(self, device_name):
         """
         Start capture of a looped video with white frame bookends
