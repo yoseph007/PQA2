@@ -47,12 +47,16 @@ def main():
         # Create file manager for consistent path handling
         file_manager = FileManager()
         
+        # Create options manager for settings
+        from app.options_manager import OptionsManager
+        options_manager = OptionsManager()
+        
         # Create and configure capture manager
         capture_manager = CaptureManager()
         capture_manager.path_manager = file_manager
         
         # Create main window and connect to managers
-        window = MainWindow(capture_manager, file_manager)
+        window = MainWindow(capture_manager, file_manager, options_manager)
         window.show()
         
         # Start application loop
