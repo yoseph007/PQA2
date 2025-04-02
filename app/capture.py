@@ -120,8 +120,8 @@ class CaptureMonitor(QThread):
                                         except:
                                             pass  # Keep the default
 
-                                    # Update total_frames if we now have fps info
-                                    if self.total_frames == 0 and self.duration and fps > 0:
+                                    # Always update total_frames when we have fps info, even if it was set before
+                                    if self.duration and fps > 0:
                                         self.total_frames = int(self.duration * fps)
                                         logger.debug(f"Estimated total frames: {self.total_frames} (fps={fps}, duration={self.duration}s)")
 

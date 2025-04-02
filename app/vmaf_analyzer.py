@@ -476,15 +476,24 @@ class VMAFAnalysisThread(QThread):
     def __del__(self):
         """Clean up resources when thread is destroyed"""
         try:
+            # Wait for thread to finish before disconnecting signals
+            self.wait()
+            
             # Disconnect all signals to prevent issues during thread destruction
-            self.disconnect()
+            try:
+                self.disconnect()
+            except:
+                pass
 
             # Also disconnect signals from the analyzer if it exists
             if hasattr(self, 'analyzer'):
-                self.analyzer.analysis_progress.disconnect()
-                self.analyzer.status_update.disconnect()
-                self.analyzer.error_occurred.disconnect()
-                self.analyzer.analysis_complete.disconnect()
+                try:
+                    self.analyzer.analysis_progress.disconnect()
+                    self.analyzer.status_update.disconnect()
+                    self.analyzer.error_occurred.disconnect()
+                    self.analyzer.analysis_complete.disconnect()
+                except:
+                    pass
         except Exception as e:
             # Just log errors during cleanup but don't raise them
             pass

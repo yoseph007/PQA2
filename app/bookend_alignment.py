@@ -725,17 +725,25 @@ class BookendAlignmentThread(QThread):
         self.captured_path = captured_path
         self.delete_primary = delete_primary
         self.aligner = BookendAligner()
+        self._running = True
 
         # Connect signals with direct connections for responsive UI updates
         self.aligner.alignment_progress.connect(self.alignment_progress, Qt.DirectConnection)
         self.aligner.alignment_complete.connect(self.alignment_complete, Qt.DirectConnection)
         self.aligner.error_occurred.connect(self.error_occurred, Qt.DirectConnection)
         self.aligner.status_update.connect(self.status_update, Qt.DirectConnection)
+        
+    def __del__(self):
+        """Clean up resources when thread is destroyed"""
+        self.wait()  # Wait for thread to finish before destroying
 
 
     def run(self):
         """Run alignment in thread"""
         try:
+            if not self._running:
+                return
+                
             self.status_update.emit("Starting bookend alignment process...")
 
             # Report initial progress
@@ -756,6 +764,10 @@ class BookendAlignmentThread(QThread):
                 self.captured_path
             )
 
+            # Check if thread is still running before emitting signals
+            if not self._running:
+                return
+                
             if result:
                 # After successful alignment, we can delete the primary capture file
                 if self.delete_primary and os.path.exists(self.captured_path):
@@ -773,8 +785,14 @@ class BookendAlignmentThread(QThread):
             else:
                 self.error_occurred.emit("Bookend alignment failed")
         except Exception as e:
-            error_msg = f"Error in bookend alignment thread: {str(e)}"
-            self.error_occurred.emit(error_msg)
-            logger.error(error_msg)
-            import traceback
-            logger.error(traceback.format_exc())
+            if self._running:  # Only emit errors if thread is still running
+                error_msg = f"Error in bookend alignment thread: {str(e)}"
+                self.error_occurred.emit(error_msg)
+                logger.error(error_msg)
+                import traceback
+                logger.error(traceback.format_exc())
+                
+    def quit(self):
+        """Override quit to properly clean up resources"""
+        self._running = False
+        super().quit()
