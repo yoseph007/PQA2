@@ -628,6 +628,9 @@ class MainWindow(QMainWindow):
             
             # Analyze the reference video
             self.analyze_reference(file_path)
+        else:
+            self.lbl_reference_path.setText("Invalid reference path")
+            self.lbl_setup_status.setText("Please select a valid reference video")
 
     def analyze_reference(self, file_path):
         """Analyze reference video to extract metadata"""
