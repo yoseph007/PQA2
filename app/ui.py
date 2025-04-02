@@ -1280,6 +1280,15 @@ class MainWindow(QMainWindow):
         # Re-enable button
         self.btn_run_combined_analysis.setEnabled(True)
 
+    def update_frame_counter(self, current_frame, total_frames):
+        """Update frame counter display during capture"""
+        if hasattr(self, 'lbl_capture_frame_counter'):
+            # Format with thousands separator for readability
+            if total_frames > 0:
+                self.lbl_capture_frame_counter.setText(f"Frames: {current_frame:,} / {total_frames:,}")
+            else:
+                self.lbl_capture_frame_counter.setText(f"Frames: {current_frame:,}")
+
     def handle_vmaf_complete(self, results):
         """Handle completion of VMAF analysis"""
         self.vmaf_results = results
@@ -1356,15 +1365,9 @@ class MainWindow(QMainWindow):
 
         ssim_log = results.get('ssim_log')
         if ssim_log and os.path.exists(ssim_log):
-
-    def update_frame_counter(self, current_frame, total_frames):
-        """Update frame counter display during capture"""
-        if hasattr(self, 'lbl_capture_frame_counter'):
-            # Format with thousands separator for readability
-            if total_frames > 0:
-                self.lbl_capture_frame_counter.setText(f"Frames: {current_frame:,} / {total_frames:,}")
-            else:
-                self.lbl_capture_frame_counter.setText(f"Frames: {current_frame:,}")
+            item = QListWidgetItem(f"SSIM Log: {os.path.basename(ssim_log)}")
+            item.setData(Qt.UserRole, ssim_log)
+            self.list_result_files.addItem(item)
 
         csv_path = results.get('csv_path')
         if csv_path and os.path.exists(csv_path):
@@ -1602,7 +1605,6 @@ class MainWindow(QMainWindow):
                     logger.warning(f"{thread_name} thread didn't respond to quit - forcing termination")
                     thread.terminate()
                     thread.wait(1000)
-
 
     def _setup_options_tab(self):
         """Set up the Options tab with all configurable settings"""

@@ -28,6 +28,7 @@
     "paths": {
         "default_output_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results",
         "reference_video_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Ref_Videos",
-        "results_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Ref_Results"
+        "results_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Ref_Results",
+        "temp_dir": ""
     }
 }
