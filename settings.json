@@ -1,0 +1,46 @@
+{
+    "bookend": {
+        "min_loops": 3,
+        "max_capture_time": 120,
+        "bookend_duration": 0.5,
+        "white_threshold": 240
+    },
+    "vmaf": {
+        "default_model": "vmaf_v0.6.1",
+        "available_models": [
+            "vmaf_v0.6.1",
+            "vmaf_4k_v0.6.1",
+            "vmaf_b_v0.6.3"
+        ],
+        "subsample": 1,
+        "threads": 0,
+        "output_format": "json"
+    },
+    "capture": {
+        "default_device": "Intensity Shuttle",
+        "resolution": "1080p",
+        "frame_rate": 30,
+        "pixel_format": "uyvy422",
+        "available_resolutions": [
+            "1080p",
+            "720p",
+            "576p",
+            "480p"
+        ],
+        "available_frame_rates": [
+            23.98,
+            24,
+            25,
+            29.97,
+            30,
+            50,
+            59.94,
+            60
+        ]
+    },
+    "paths": {
+        "default_output_dir": "",
+        "reference_video_dir": "",
+        "results_dir": ""
+    }
+}
