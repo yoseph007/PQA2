@@ -63,6 +63,7 @@ class VMAFAnalyzer(QObject):
             if not output_dir:
                 output_dir = os.path.dirname(reference_path)
                 
+            # Create the VMAF output directory with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             vmaf_dir = os.path.join(output_dir, f"vmaf_{timestamp}")
             os.makedirs(vmaf_dir, exist_ok=True)

@@ -44,7 +44,8 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         """Set up the application UI"""
         self.setWindowTitle("VMAF Test App")
-        self.setGeometry(100, 100, 1000, 800)
+        self.setGeometry(100, 100, 1200, 800)
+        self.setFixedSize(1200, 800)  # Set fixed size to prevent resizing
 
         # Central widget and main layout
         central_widget = QWidget()
@@ -250,7 +251,7 @@ class MainWindow(QMainWindow):
         self.txt_capture_log.setLineWrapMode(QTextEdit.WidgetWidth)  # Enable line wrapping
         self.txt_capture_log.setMinimumHeight(150)
         self.txt_capture_log.setMaximumHeight(200)  # Fix height to prevent stretching
-        self.txt_capture_log.setFixedWidth(600)  # Fixed width to avoid UI stretching with long messages
+        self.txt_capture_log.setFixedWidth(550)  # Fixed width to avoid UI stretching with long messages
         log_layout.addWidget(self.txt_capture_log)
         log_group.setLayout(log_layout)
         right_layout.addWidget(log_group)
@@ -377,6 +378,7 @@ class MainWindow(QMainWindow):
         self.txt_analysis_log.setLineWrapMode(QTextEdit.WidgetWidth)
         self.txt_analysis_log.setMinimumHeight(150)
         self.txt_analysis_log.setMaximumHeight(200)  # Fix height to prevent stretching
+        self.txt_analysis_log.setFixedWidth(800)  # Fixed width to avoid UI stretching with long messages
         log_layout.addWidget(self.txt_analysis_log)
         log_group.setLayout(log_layout)
         layout.addWidget(log_group)
