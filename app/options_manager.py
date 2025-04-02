@@ -16,6 +16,10 @@ class OptionsManager(QObject):
 
     def __init__(self, settings_file=None):
         super().__init__()
+        
+        # Initialize timing variables for debouncing
+        self.last_save_time = 0  # Track the last time settings were saved
+        self.save_debounce_ms = 1000  # Minimum time between saves in milliseconds
 
         # Set up settings file in config directory
         if settings_file is None:
@@ -25,6 +29,8 @@ class OptionsManager(QObject):
             self.settings_file = os.path.join(config_dir, "settings.json")
         else:
             self.settings_file = settings_file
+            
+        logger.info(f"Using settings file: {self.settings_file}")
 
         # Default settings
         self.default_settings = {
@@ -425,19 +431,4 @@ class OptionsManager(QObject):
         # For now, assume it's in the system PATH
         return "ffmpeg" # Replace with your actual ffmpeg path detection
 
-    def __init__(self, settings_file=None):
-        super().__init__()
-        
-        self.last_save_time = 0  # Track the last time settings were saved
-        self.save_debounce_ms = 1000  # Minimum time between saves in milliseconds
-        
-        # Set up settings file in config directory
-        if settings_file is None:
-            # Create config directory if it doesn't exist
-            config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
-            os.makedirs(config_dir, exist_ok=True)
-            self.settings_file = os.path.join(config_dir, "settings.json")
-        else:
-            self.settings_file = settings_file
-            
-        logger.info(f"Using settings file: {self.settings_file}")
+    # This was a duplicate __init__ method - removed
