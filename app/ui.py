@@ -27,13 +27,16 @@ logger = logging.getLogger(__name__)
 
 class MainWindow(QMainWindow):
     """Main application window for VMAF Test App"""
-    def __init__(self, capture_mgr=None, file_manager=None, options_manager=None):
+    def __init__(self, capture_manager, file_manager, options_manager):
         super().__init__()
 
-        # Initialize managers
-        self.capture_mgr = capture_mgr or CaptureManager()
-        self.file_manager = file_manager or FileManager()
-        self.options_manager = options_manager or OptionsManager()
+        # Store manager references
+        self.capture_mgr = capture_manager
+        self.file_mgr = file_manager
+        self.options_mgr = options_manager
+
+        # Flag to handle headless mode
+        self.headless_mode = False
 
         # Set up UI
         self._setup_ui()
@@ -2128,8 +2131,7 @@ class MainWindow(QMainWindow):
             # Update settings
             new_capture_settings = self.options_manager.get_setting("capture")
             new_capture_settings["available_resolutions"] = format_info["resolutions"]
-            new_capture_settings["available_frame_rates"]= format_info["frame_rates"]
-            new_capture_settings["resolution_framerates"] = format_info["resolution_framerates"]
+            new_capture_settings["available_frame_rates"]= format_info["frame_rates"]new_capture_settings["resolution_framerates"] = format_info["resolution_framerates"]
             self.options_manager.update_category("capture", new_capture_settings)
 
             # Show success message with number of formats

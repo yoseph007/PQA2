@@ -36,9 +36,10 @@ def main():
         # Configure environment for Qt
         if 'REPL_ID' in os.environ:
             # Running in Replit environment
-            os.environ['QT_QPA_PLATFORM'] = 'xcb'  # Use xcb platform in Replit instead of offscreen
+            os.environ['QT_QPA_PLATFORM'] = 'minimal'  # Use minimal platform in Replit
             os.environ['QT_DEBUG_PLUGINS'] = '1'  # Help debug plugin issues
-            logger.info("Running in Replit environment, set QT_QPA_PLATFORM to xcb")
+            os.environ['QT_LOGGING_RULES'] = 'qt.qpa.*=true'  # More verbose QPA logging
+            logger.info("Running in Replit environment, set QT_QPA_PLATFORM to minimal")
         else:
             # Running in other environments (Windows, macOS, etc.)
             # Handle font issues on Windows
@@ -69,6 +70,12 @@ def main():
         
         # Create main window and connect to managers
         window = MainWindow(capture_manager, file_manager, options_manager)
+        
+        # Set headless mode flag if running in Replit
+        if 'REPL_ID' in os.environ:
+            window.headless_mode = True
+            logger.info("Setting headless mode for Replit environment")
+            
         window.show()
         
         # Start application loop

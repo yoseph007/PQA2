@@ -8,6 +8,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Define MAX_REPAIR_ATTEMPTS constant
+MAX_REPAIR_ATTEMPTS = 3
+
 def validate_video_file(file_path):
     """Validate if a video file is intact and can be read"""
     if not os.path.exists(file_path):
