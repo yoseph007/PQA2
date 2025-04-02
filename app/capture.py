@@ -531,6 +531,9 @@ class BookendCaptureManager(QObject):
                     self.progress_updated.emit(time_progress)
                     self.last_progress_value = time_progress
                     self.last_progress_time = current_time
+                else:
+                    # This was the missing indented block after 'else'
+                    pass
 
     def _terminate_process(self):
         """Safely terminate the FFmpeg process with proper signal to finalize file"""

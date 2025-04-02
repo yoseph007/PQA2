@@ -79,4 +79,5 @@ wheels/
 MANIFEST
 
 # Config directory (contains settings.json)
-/config/
+config/
+ffmpeg_bin/
