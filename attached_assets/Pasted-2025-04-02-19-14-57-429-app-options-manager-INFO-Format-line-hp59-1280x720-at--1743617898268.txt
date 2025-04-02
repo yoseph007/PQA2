@@ -1,0 +1,52 @@
+2025-04-02 19:14:57,429 - app.options_manager - INFO - Format line:     hp59            1280x720 at 60000/1001 fps
+2025-04-02 19:14:57,430 - app.options_manager - INFO - Format line:     hp60            1280x720 at 60000/1000 fps
+2025-04-02 19:14:57,430 - app.options_manager - INFO - Format line: [in#0 @ 0000019dee294040] Error opening input: Immediate exit requested
+2025-04-02 19:14:57,430 - app.options_manager - INFO - Format line: Error opening input file Intensity Shuttle.
+2025-04-02 19:14:57,431 - app.options_manager - INFO - Format line:
+2025-04-02 19:14:57,431 - app.options_manager - INFO - Found formats for Intensity Shuttle: 0 formats
+2025-04-02 19:14:57,431 - app.ui - INFO - Got format info for Intensity Shuttle: 0 formats found
+2025-04-02 19:14:57,433 - app.options_manager - INFO - Settings saved to settings.json
+2025-04-02 19:14:57,433 - app.ui - INFO - Settings updated, applying changes to UI
+2025-04-02 19:14:57,544 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-02 19:14:57,544 - app.ui - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-02 19:14:57,545 - app.ui - INFO - Set current device to: Intensity Shuttle
+2025-04-02 19:14:57,652 - app.capture - INFO - Device Intensity Shuttle found in device list
+2025-04-02 19:14:57,653 - app.ui - INFO - Device 'Intensity Shuttle' availability: True, message: Device listed in available devices
+2025-04-02 19:14:57,762 - app.options_manager - INFO - Parsing format output for Intensity Shuttle:
+2025-04-02 19:14:57,763 - app.options_manager - INFO - Format line: ffmpeg version n7.1.1-ffmpeg-windows-build-helpers Copyright (c) 2000-2025 the FFmpeg developers
+2025-04-02 19:14:57,763 - app.options_manager - INFO - Format line:   built with gcc 10.2.0 (GCC)
+2025-04-02 19:14:57,764 - app.options_manager - INFO - Format line:   configuration: --pkg-config=pkg-config --pkg-config-flags=--static --extra-version=ffmpeg-windows-build-helpers --enable-version3 --disable-debug --disable-w32threads --arch=x86_64 --target-os=mingw32 --cross-prefix=/home/runner/work/ffmpeg-stable-autobuild/ffmpeg-stable-autobuild/sandbox/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32- --enable-libcaca --enable-gray --enable-libtesseract --enable-fontconfig --enable-gmp --enable-libass --enable-libbluray --enable-libbs2b --enable-libflite --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-filter=drawtext --enable-libgme --enable-libgsm --enable-libilbc --enable-libmodplug --enable-libmp3lame --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopus --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libtheora --enable-libtwolame --enable-libvo-amrwbenc --enable-libvorbis --enable-libwebp --enable-libzimg --enable-libzvbi --enable-libmysofa --enable-libopenjpeg --enable-libopenh264 --enable-libvmaf --enable-libsrt --enable-libxml2 --enable-opengl --enable-libdav1d --enable-gnutls --enable-vulkan --enable-libsvtav1 --enable-libvpx --enable-libaom --enable-nvenc --enable-nvdec --extra-libs=-lz --extra-libs=-lpng --extra-libs=-lm --extra-libs=-lfreetype --extra-libs=-lshlwapi --extra-libs=-lmpg123 --extra-libs=-lpthread --extra-cflags=-DLIBTWOLAME_STATIC --extra-cflags=-DMODPLUG_STATIC --extra-cflags=-DCACA_STATIC --enable-amf --enable-libmfx --enable-libaribcaption --enable-gpl --enable-frei0r --enable-librubberband --enable-libvidstab --enable-libx264 --enable-libx265 --enable-avisynth --enable-libaribb24 --enable-libxvid --enable-libdavs2 --enable-libxavs2 --enable-libxavs --extra-cflags='-mtune=generic' --extra-cflags=-O3 --enable-static --disable-shared --prefix=/home/runner/work/ffmpeg-stable-autobuild/ffmpeg-stable-autobuild/sandbox/cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32 --enable-nonfree --enable-libfdk-aac --enable-decklink
+2025-04-02 19:14:57,764 - app.options_manager - INFO - Format line:   libavutil      59. 39.100 / 59. 39.100
+2025-04-02 19:14:57,765 - app.options_manager - INFO - Format line:   libavcodec     61. 19.101 / 61. 19.101
+2025-04-02 19:14:57,765 - app.options_manager - INFO - Format line:   libavformat    61.  7.100 / 61.  7.100
+2025-04-02 19:14:57,766 - app.options_manager - INFO - Format line:   libavdevice    61.  3.100 / 61.  3.100
+2025-04-02 19:14:57,766 - app.options_manager - INFO - Format line:   libavfilter    10.  4.100 / 10.  4.100
+2025-04-02 19:14:57,767 - app.options_manager - INFO - Format line:   libswscale      8.  3.100 /  8.  3.100
+2025-04-02 19:14:57,767 - app.options_manager - INFO - Format line:   libswresample   5.  3.100 /  5.  3.100
+2025-04-02 19:14:57,767 - app.options_manager - INFO - Format line:   libpostproc    58.  3.100 / 58.  3.100
+2025-04-02 19:14:57,768 - app.options_manager - INFO - Format line: [decklink @ 0000022599d4d940] Supported formats for 'Intensity Shuttle':
+2025-04-02 19:14:57,768 - app.options_manager - INFO - Format line:     format_code     description
+2025-04-02 19:14:57,768 - app.options_manager - INFO - Format line:     ntsc            720x486 at 30000/1001 fps (interlaced, lower field first)
+2025-04-02 19:14:57,769 - app.options_manager - INFO - Format line:     nt23            720x486 at 24000/1001 fps
+2025-04-02 19:14:57,769 - app.options_manager - INFO - Format line:     pal             720x576 at 25000/1000 fps (interlaced, upper field first)
+2025-04-02 19:14:57,769 - app.options_manager - INFO - Format line:     ntsp            720x486 at 60000/1001 fps
+2025-04-02 19:14:57,770 - app.options_manager - INFO - Format line:     palp            720x576 at 50000/1000 fps
+2025-04-02 19:14:57,770 - app.options_manager - INFO - Format line:     23ps            1920x1080 at 24000/1001 fps
+2025-04-02 19:14:57,771 - app.options_manager - INFO - Format line:     24ps            1920x1080 at 24000/1000 fps
+2025-04-02 19:14:57,771 - app.options_manager - INFO - Format line:     Hp25            1920x1080 at 25000/1000 fps
+2025-04-02 19:14:57,771 - app.options_manager - INFO - Format line:     Hp29            1920x1080 at 30000/1001 fps
+2025-04-02 19:14:57,772 - app.options_manager - INFO - Format line:     Hp30            1920x1080 at 30000/1000 fps
+2025-04-02 19:14:57,772 - app.options_manager - INFO - Format line:     Hi50            1920x1080 at 25000/1000 fps (interlaced, upper field first)
+2025-04-02 19:14:57,773 - app.options_manager - INFO - Format line:     Hi59            1920x1080 at 30000/1001 fps (interlaced, upper field first)
+2025-04-02 19:14:57,774 - app.options_manager - INFO - Format line:     Hi60            1920x1080 at 30000/1000 fps (interlaced, upper field first)
+2025-04-02 19:14:57,775 - app.options_manager - INFO - Format line:     hp50            1280x720 at 50000/1000 fps
+2025-04-02 19:14:57,776 - app.options_manager - INFO - Format line:     hp59            1280x720 at 60000/1001 fps
+2025-04-02 19:14:57,776 - app.options_manager - INFO - Format line:     hp60            1280x720 at 60000/1000 fps
+2025-04-02 19:14:57,777 - app.options_manager - INFO - Format line: [in#0 @ 0000022599d34040] Error opening input: Immediate exit requested
+2025-04-02 19:14:57,777 - app.options_manager - INFO - Format line: Error opening input file Intensity Shuttle.
+2025-04-02 19:14:57,778 - app.options_manager - INFO - Format line:
+2025-04-02 19:14:57,778 - app.options_manager - INFO - Found formats for Intensity Shuttle: 0 formats
+2025-04-02 19:14:57,778 - app.ui - INFO - Got format info for Intensity Shuttle: 0 formats found
+2025-04-02 19:14:57,780 - app.options_manager - INFO - Settings saved to settings.json
+2025-04-02 19:14:57,780 - app.ui - INFO - Settings updated, applying changes to UI
+(.venv) PS C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app> 

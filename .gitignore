@@ -49,3 +49,14 @@ test_results/
 *.bak
 *.tmp
 *.mp4
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Configuration files
+config/
+
+# C extensions
+*.so

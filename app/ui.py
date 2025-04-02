@@ -607,13 +607,13 @@ class MainWindow(QMainWindow):
             if video_files:
                 for video_path in sorted(video_files):
                     self.combo_reference_videos.addItem(os.path.basename(video_path), video_path)
-                self.status_update.emit(f"Found {len(video_files)} reference videos")
+                logger.info(f"Found {len(video_files)} reference videos")
             else:
                 self.combo_reference_videos.addItem("No reference videos found", "")
-                self.status_update.emit("No reference videos found in the configured directory")
+                logger.info("No reference videos found in the configured directory")
         except Exception as e:
             logger.error(f"Error loading reference videos: {str(e)}")
-            self.combo_reference_videos.addItem(f"Error: {str(e)}", "")
+            self.combo_reference_videos.addItem("Error loading videos", "")
             
     def reference_selected(self, index):
         """Handle reference video selection from dropdown"""
@@ -790,35 +790,8 @@ class MainWindow(QMainWindow):
                         self.device_status_indicator.setStyleSheet("background-color: #00AA00; border-radius: 8px;")
                         self.device_status_indicator.setToolTip(f"Capture card status: connected ({message})")
 
-                        # Also attempt to get formats for the device to populate the settings
-                        if hasattr(self, 'options_manager') and self.options_manager:
-                            try:
-                                # Get the formats
-                                format_info = self.options_manager.get_decklink_formats(selected_device)
-                                logger.info(f"Got format info for {selected_device}: {len(format_info.get('formats', []))} formats found")
-
-                                # Update settings with detected resolutions and frame rates
-                                capture_settings = self.options_manager.get_setting("capture")
-
-                                # Only update if we got valid data
-                                if format_info.get("resolutions"):
-                                    capture_settings["available_resolutions"] = format_info["resolutions"]
-                                    logger.info(f"Detected resolutions: {format_info['resolutions']}")
-
-                                if format_info.get("frame_rates"):
-                                    capture_settings["available_frame_rates"] = format_info["frame_rates"]
-                                    logger.info(f"Detected frame rates: {format_info['frame_rates']}")
-
-                                # Always update device name in settings
-                                capture_settings["default_device"] = selected_device
-
-                                # Update settings
-                                self.options_manager.update_category("capture", capture_settings)
-                                
-                                # Force update UI fields
-                                self._populate_capture_settings_fields()
-                            except Exception as e:
-                                logger.warning(f"Error getting device formats: {str(e)}")
+                        # Only attempt to get formats when explicitly requested (not during auto-refresh)
+                        # This prevents infinite loops where settings changes trigger more refreshes
                     else:
                         # Red for unavailable device
                         self.device_status_indicator.setStyleSheet("background-color: #AA0000; border-radius: 8px;")
@@ -842,8 +815,9 @@ class MainWindow(QMainWindow):
             self.options_device_indicator.setStyleSheet(self.device_status_indicator.styleSheet())
             self.options_device_indicator.setToolTip(self.device_status_indicator.toolTip())
 
-        # Make sure to populate UI fields from settings
-        self._populate_capture_settings_fields()
+        # Make sure to populate UI fields from settings, but don't trigger format detection
+        if hasattr(self, 'combo_resolution') and hasattr(self, 'combo_frame_rate'):
+            self._populate_capture_settings_fields()
         
     def _populate_capture_settings_fields(self):
         """Update UI fields with current capture settings"""
