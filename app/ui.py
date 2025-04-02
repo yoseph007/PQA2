@@ -4,12 +4,15 @@ from datetime import datetime
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QPushButton, QLabel, QComboBox, QProgressBar, QFileDialog,
                            QGroupBox, QMessageBox, QTabWidget, QSplitter, QTextEdit,
-                           QListWidget, QListWidgetItem, QStyle, QFormLayout, QCheckBox)
-from PyQt5.QtCore import Qt, pyqtSlot, QTimer
-from PyQt5.QtGui import QPixmap, QImage
+                           QListWidget, QListWidgetItem, QStyle, QFormLayout, QCheckBox,
+                           QSizePolicy, QFrame)
+from PyQt5.QtCore import Qt, pyqtSlot, QTimer, QSize
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QFont, QPen
 import cv2
 import subprocess
 import platform
+import numpy as np
+import time
 
 # Import application modules
 from .reference_analyzer import ReferenceAnalysisThread
@@ -146,11 +149,13 @@ class MainWindow(QMainWindow):
         layout.addStretch()
 
     def _setup_capture_tab(self):
-        """Set up the Capture tab with fixed log window heights"""
+        """Set up the Capture tab with enhanced layout and robust log handling"""
         layout = QVBoxLayout(self.capture_tab)
 
-        # Summary of setup
+        # Summary of setup with improved styling
         self.lbl_capture_summary = QLabel("No reference video selected")
+        self.lbl_capture_summary.setStyleSheet("font-weight: bold; color: #444; background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
+        self.lbl_capture_summary.setWordWrap(True)
         layout.addWidget(self.lbl_capture_summary)
 
         # Main content splitter
@@ -230,29 +235,80 @@ class MainWindow(QMainWindow):
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
 
-        # Preview at the top
+        # Enhanced Preview with better visuals and status indicators
         preview_group = QGroupBox("Video Preview")
         preview_layout = QVBoxLayout()
 
+        # Preview frame with improved styling
+        preview_frame = QFrame()
+        preview_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+        preview_frame.setLineWidth(1)
+        preview_inner_layout = QVBoxLayout(preview_frame)
+        
+        # Preview label with enhanced styling and initial placeholder
         self.lbl_preview = QLabel("No video feed")
         self.lbl_preview.setAlignment(Qt.AlignCenter)
         self.lbl_preview.setMinimumSize(480, 270)
-        self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black;")  # Light grey background
-        preview_layout.addWidget(self.lbl_preview)
-
+        self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black; border-radius: 4px;")
+        preview_inner_layout.addWidget(self.lbl_preview)
+        preview_inner_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Add status indicator for preview
+        preview_status_layout = QHBoxLayout()
+        self.lbl_preview_status = QLabel("Status: No video feed")
+        self.lbl_preview_status.setStyleSheet("color: #666; font-size: 9pt;")
+        
+        # Frame counter
+        self.lbl_frame_counter = QLabel("Frame: 0")
+        self.lbl_frame_counter.setStyleSheet("color: #666; font-size: 9pt;")
+        
+        preview_status_layout.addWidget(self.lbl_preview_status)
+        preview_status_layout.addStretch()
+        preview_status_layout.addWidget(self.lbl_frame_counter)
+        
+        # Show a placeholder image initially
+        self._show_placeholder_image("Waiting for video capture to start...")
+        
+        # Add components to layouts
+        preview_layout.addWidget(preview_frame)
+        preview_layout.addLayout(preview_status_layout)
         preview_group.setLayout(preview_layout)
         right_layout.addWidget(preview_group)
 
-        # Capture log at the bottom with fixed width and height
+        # Enhanced capture log with better error visibility and auto-scrolling
         log_group = QGroupBox("Capture Log")
         log_layout = QVBoxLayout()
+        
+        # Create log text area with enhanced styling and error highlighting
         self.txt_capture_log = QTextEdit()
         self.txt_capture_log.setReadOnly(True)
         self.txt_capture_log.setLineWrapMode(QTextEdit.WidgetWidth)  # Enable line wrapping
         self.txt_capture_log.setMinimumHeight(150)
         self.txt_capture_log.setMaximumHeight(200)  # Fix height to prevent stretching
         self.txt_capture_log.setFixedWidth(550)  # Fixed width to avoid UI stretching with long messages
+        
+        # Set custom stylesheet for better readability
+        self.txt_capture_log.setStyleSheet("""
+            QTextEdit {
+                background-color: #f8f8f8;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 10pt;
+                padding: 4px;
+                border: 1px solid #ddd;
+            }
+        """)
+        
+        # Add clear log button
+        log_controls = QHBoxLayout()
+        self.btn_clear_capture_log = QPushButton("Clear Log")
+        self.btn_clear_capture_log.setMaximumWidth(100)
+        self.btn_clear_capture_log.clicked.connect(self.txt_capture_log.clear)
+        log_controls.addStretch()
+        log_controls.addWidget(self.btn_clear_capture_log)
+        
+        # Add components to layouts
         log_layout.addWidget(self.txt_capture_log)
+        log_layout.addLayout(log_controls)
         log_group.setLayout(log_layout)
         right_layout.addWidget(log_group)
 
@@ -769,26 +825,64 @@ class MainWindow(QMainWindow):
 
     def update_preview(self, frame):
         """Update the preview with a video frame"""
-        # Convert OpenCV frame to QImage
-        height, width, channel = frame.shape
-        bytes_per_line = 3 * width
+        try:
+            # Check if frame is valid
+            if frame is None or frame.size == 0:
+                logger.warning("Received empty frame for preview")
+                self._show_placeholder_image("No valid video frame received")
+                return
+                
+            # Convert OpenCV frame to QImage
+            height, width, channel = frame.shape
+            bytes_per_line = 3 * width
 
-        # Convert BGR to RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Convert BGR to RGB
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        # Create QImage and QPixmap
-        q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(q_img)
+            # Create QImage and QPixmap
+            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            pixmap = QPixmap.fromImage(q_img)
 
-        # Scale pixmap to fit label while maintaining aspect ratio
-        scaled_pixmap = pixmap.scaled(
-            self.lbl_preview.size(),
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation
-        )
+            # Scale pixmap to fit label while maintaining aspect ratio
+            scaled_pixmap = pixmap.scaled(
+                self.lbl_preview.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
 
-        # Update label
-        self.lbl_preview.setPixmap(scaled_pixmap)
+            # Update label
+            self.lbl_preview.setPixmap(scaled_pixmap)
+            
+        except Exception as e:
+            logger.error(f"Error updating preview: {str(e)}")
+            self._show_placeholder_image(f"Preview error: {str(e)}")
+            
+    def _show_placeholder_image(self, message="No video feed"):
+        """Show a placeholder image with text when no video is available"""
+        try:
+            # Create a blank image
+            placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
+            placeholder[:] = (224, 224, 224)  # Light gray background
+            
+            # Add text
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            text_size = cv2.getTextSize(message, font, 0.7, 2)[0]
+            text_x = (placeholder.shape[1] - text_size[0]) // 2
+            text_y = (placeholder.shape[0] + text_size[1]) // 2
+            cv2.putText(placeholder, message, (text_x, text_y), font, 0.7, (0, 0, 0), 2)
+            
+            # Convert to QImage and display
+            rgb_image = cv2.cvtColor(placeholder, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_image.shape
+            bytes_per_line = ch * w
+            q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            self.lbl_preview.setPixmap(QPixmap.fromImage(q_img))
+            
+        except Exception as e:
+            logger.error(f"Error creating placeholder: {str(e)}")
+            # Fallback to text-only label
+            self.lbl_preview.setText(message)
+            self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black;")
 
     def run_combined_analysis(self):
         """Run video alignment and VMAF analysis in sequence"""
@@ -1145,12 +1239,41 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(message)
 
     def log_to_capture(self, message):
-        """Add message to capture log"""
-        self.txt_capture_log.append(message)
+        """Add message to capture log with smart formatting for errors and warnings"""
+        # Apply HTML formatting for different message types
+        formatted_message = message
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # Format errors in red
+        if "error" in message.lower() or "failed" in message.lower() or "exception" in message.lower():
+            formatted_message = f'<span style="color: #D32F2F; font-weight: bold;">[{timestamp}] {message}</span>'
+        # Format warnings in orange
+        elif "warning" in message.lower() or "caution" in message.lower():
+            formatted_message = f'<span style="color: #FF9800;">[{timestamp}] {message}</span>'
+        # Format success messages in green
+        elif "success" in message.lower() or "complete" in message.lower() or "finished" in message.lower():
+            formatted_message = f'<span style="color: #388E3C; font-weight: bold;">[{timestamp}] {message}</span>'
+        # Regular messages with timestamp
+        else:
+            formatted_message = f'[{timestamp}] {message}'
+            
+        # Append to log
+        self.txt_capture_log.append(formatted_message)
+        
+        # Auto-scroll to bottom
         self.txt_capture_log.verticalScrollBar().setValue(
             self.txt_capture_log.verticalScrollBar().maximum()
         )
+        
+        # Update status bar (without HTML formatting)
         self.statusBar().showMessage(message)
+        
+        # If error message, flash status bar to draw attention
+        if "error" in message.lower():
+            current_style = self.statusBar().styleSheet()
+            self.statusBar().setStyleSheet("background-color: #FFCDD2;")  # Light red
+            # Reset style after 2 seconds
+            QTimer.singleShot(2000, lambda: self.statusBar().setStyleSheet(current_style))
 
     def log_to_analysis(self, message):
         """Add message to analysis log"""
