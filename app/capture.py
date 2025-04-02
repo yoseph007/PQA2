@@ -1686,18 +1686,18 @@ class CaptureManager(QObject):
             cmd = [
                 self._ffmpeg_path,
                 "-y",                     # Overwrite output
-                "-v", "warning",          # Reduced verbosity
+                "-v", "info",             # Use info verbosity to show more feedback
                 "-f", "decklink",         # Force format
                 "-i", device_name,        # Input device
                 "-c:v", "libx264",        # Video codec
                 "-preset", "superfast",   # Faster preset to reduce processing lag
                 "-crf", "23",             # Slightly lower quality for better performance
-                "-g", str(int(frame_rate * 2)),  # Keyframe interval (2 seconds)
+                "-g", str(frame_rate),    # Fix keyframe interval to match frame rate
                 "-keyint_min", str(int(frame_rate)), # Minimum keyframe interval
                 "-movflags", "+faststart", # Optimize for web streaming
                 "-fflags", "+genpts+igndts", # More resilient timestamp handling
                 "-avoid_negative_ts", "1", # Handle negative timestamps
-                "-t", str(capture_duration) # Duration with extra buffer
+                "-t", str(max_capture_time) # Use exact setting from options, not calculated duration
             ]
 
             # Use forward slashes for FFmpeg
@@ -1781,6 +1781,9 @@ class CaptureManager(QObject):
             if not hasattr(self, 'ffmpeg_process') or self.ffmpeg_process is None or self.ffmpeg_process.poll() is not None:
                 return
 
+            # Emit a visible status message to ensure user knows recording is active
+            self.status_update.emit("◉ RECORDING ACTIVE - Please wait until automatic completion")
+            
             # Update capture duration
             if hasattr(self, 'capture_start_time'):
                 elapsed = time.time() - self.capture_start_time
