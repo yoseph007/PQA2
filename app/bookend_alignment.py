@@ -3,10 +3,99 @@ import logging
 import subprocess
 import cv2
 import numpy as np
+import time
 from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
+import shutil
+
+def repair_video_file(video_path):
+    """
+    Repair a video file with missing moov atom by remuxing it with FFmpeg
+    
+    Args:
+        video_path: Path to the video file that needs repair
+        
+    Returns:
+        bool: True if repair was successful, False otherwise
+    """
+    if not os.path.exists(video_path):
+        logger.error(f"Cannot repair nonexistent file: {video_path}")
+        return False
+        
+    try:
+        # Create a temporary file name
+        temp_path = f"{video_path}.repaired.mp4"
+        logger.info(f"Attempting to repair video file: {video_path}")
+        
+        # Use FFmpeg to remux the file - this often fixes moov atom issues
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "warning",
+            "-i", video_path, 
+            "-c", "copy",  # Copy streams without re-encoding
+            "-movflags", "faststart",  # Place moov atom at the beginning
+            temp_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            logger.error(f"FFmpeg repair failed: {result.stderr}")
+            return False
+            
+        # Replace the original file with the repaired one
+        try:
+            # Remove original if repair was successful
+            os.remove(video_path)
+            os.rename(temp_path, video_path)
+            logger.info(f"Successfully repaired video file: {video_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Error replacing original file after repair: {e}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error during video repair: {e}")
+        return False
+
+def validate_video_file(video_path):
+    """
+    Validate that a video file is readable and has proper format
+    
+    Args:
+        video_path: Path to the video file to validate
+        
+    Returns:
+        bool: True if file is valid, False otherwise
+    """
+    if not os.path.exists(video_path):
+        logger.error(f"Cannot validate nonexistent file: {video_path}")
+        return False
+        
+    try:
+        # Use FFmpeg to probe the file
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-i", video_path,
+            "-f", "null", "-"  # Output to null
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            logger.warning(f"Video file validation failed: {video_path}")
+            logger.warning(f"FFmpeg error: {result.stderr}")
+            return False
+            
+        return True
+    except Exception as e:
+        logger.error(f"Error validating video: {e}")
+        return False
+
 
 logger = logging.getLogger(__name__)
+
+# Maximum retries for processing video files
+MAX_REPAIR_ATTEMPTS = 3
 
 class BookendAligner(QObject):
     """

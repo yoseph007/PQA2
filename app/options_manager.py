@@ -181,10 +181,6 @@ class OptionsManager(QObject):
         """Reset all settings to defaults"""
         self.settings = self.default_settings.copy()
         return self.save_settings()
-        
-    # Initialize tracking variables
-    last_save_time = 0  # Track the last time settings were saved
-    save_debounce_ms = 1000  # Minimum time between saves in milliseconds
 
     def get_decklink_devices(self):
         """Query available DeckLink devices using FFmpeg"""
@@ -221,81 +217,22 @@ class OptionsManager(QObject):
 
     def get_decklink_formats(self, device):
         """Get available formats for a DeckLink device"""
-        formats = []
-        resolution_framerates = []  # Store resolution and frame rate as combined format options
+        format_list = []
+        format_map = {}  # Map of resolution -> list of frame rates
         
         try:
+            # Try using dshow for Windows first for more detailed format information
+            if platform.system() == 'Windows':
+                return self.get_decklink_formats_dshow(device)
+            
+            # Use regular decklink format if dshow fails or on other platforms
             # Check if ffmpeg is available
             ffmpeg_path = self._find_ffmpeg()
             if not ffmpeg_path:
                 logger.warning("FFmpeg not found, unable to detect DeckLink formats")
-                return {"formats": [], "resolution_framerates": [], "resolutions": [], "frame_rates": []}
+                return {"formats": [], "format_map": {}}
 
-            # Try to get device formats in multiple ways:
-            
-            # First, try using dshow for more detailed information on Windows
-            if platform.system() == 'Windows':
-                # Try with DirectShow Decklink Video Capture
-                dshow_cmd = [ffmpeg_path, "-f", "dshow", "-list_options", "true", "-i", "video=Decklink Video Capture"]
-                logger.info(f"Getting DirectShow formats using command: {' '.join(dshow_cmd)}")
-                
-                try:
-                    dshow_process = subprocess.Popen(dshow_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    dshow_stdout, dshow_stderr = dshow_process.communicate(timeout=5)
-                    
-                    # Process DirectShow output
-                    dshow_output = dshow_stdout + dshow_stderr
-                    dshow_lines = dshow_output.splitlines()
-                    
-                    # Log a sample of the output
-                    logger.info(f"DirectShow format detection returned {len(dshow_lines)} lines")
-                    for line in dshow_lines[:10]:  # Log first 10 lines
-                        logger.info(f"DirectShow format: {line}")
-                    
-                    # DirectShow format pattern for Decklink
-                    dshow_pattern = r'pixel_format=\w+\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
-                    
-                    # Process the DirectShow options
-                    for line in dshow_lines:
-                        match = re.search(dshow_pattern, line)
-                        if match:
-                            resolution, fps = match.groups()
-                            format_name = f"{resolution} @ {fps}fps"
-                            
-                            # Store as a combined format
-                            if format_name not in resolution_framerates:
-                                resolution_framerates.append(format_name)
-                                
-                                formats.append({
-                                    "resolution": resolution,
-                                    "frame_rate": float(fps),
-                                    "name": format_name
-                                })
-                    
-                    # If we found formats with DirectShow, return them
-                    if formats:
-                        logger.info(f"Found {len(formats)} formats using DirectShow")
-                        
-                        # Extract the unique resolutions and frame rates for UI filtering
-                        resolutions = sorted(list(set(f["resolution"] for f in formats)), 
-                                       key=lambda r: int(r.split('x')[0]), 
-                                       reverse=True)
-                                       
-                        frame_rates = sorted(list(set(f["frame_rate"] for f in formats)))
-                        
-                        return {
-                            "formats": formats,
-                            "resolution_framerates": [f["name"] for f in formats],
-                            "resolutions": resolutions,
-                            "frame_rates": frame_rates
-                        }
-                except subprocess.TimeoutExpired:
-                    dshow_process.kill()
-                    logger.warning("Timeout getting DirectShow formats, falling back to decklink format")
-                except Exception as dshow_e:
-                    logger.warning(f"Error getting DirectShow formats: {dshow_e}")
-            
-            # If DirectShow failed or we're not on Windows, try with decklink format
+            # Use ffmpeg to get available formats
             cmd = [ffmpeg_path, "-f", "decklink", "-list_formats", "1", "-i", device]
             logger.info(f"Getting formats for {device} using command: {' '.join(cmd)}")
 
@@ -307,11 +244,15 @@ class OptionsManager(QObject):
                 process.kill()
                 logger.warning(f"Timeout getting formats for {device}")
                 # Return default formats if timeout
+                default_format_map = {
+                    "1920x1080": [23.98, 24, 25, 29.97, 30],
+                    "1280x720": [50, 59.94, 60],
+                    "720x576": [25, 50],
+                    "720x480": [29.97, 59.94]
+                }
                 return {
-                    "formats": self._get_default_formats(),
-                    "resolution_framerates": self._get_default_resolution_framerates(),
-                    "resolutions": ["1920x1080", "1280x720", "720x576", "720x480"],
-                    "frame_rates": [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+                    "formats": [],
+                    "format_map": default_format_map
                 }
 
             # Parse output to extract formats
@@ -320,19 +261,10 @@ class OptionsManager(QObject):
             # Combine stdout and stderr for parsing as FFmpeg outputs to stderr
             output = stdout + stderr
 
-            # Log only the first few lines and last few lines to avoid log spam
+            # Log output for debugging
             lines = output.splitlines()
-            if len(lines) > 10:
-                logger.info(f"Parsing format output for {device} (showing first 5 and last 5 of {len(lines)} lines):")
-                for line in lines[:5]:
-                    logger.info(f"Format line: {line}")
-                logger.info("... [output truncated] ...")
-                for line in lines[-5:]:
-                    logger.info(f"Format line: {line}")
-            else:
-                logger.info(f"Parsing format output for {device}:")
-                for line in lines:
-                    logger.info(f"Format line: {line}")
+            for line in lines[:10]:  # Log first 10 lines
+                logger.info(f"Format line: {line}")
 
             # Process all lines for format detection
             for line in lines:
@@ -344,80 +276,148 @@ class OptionsManager(QObject):
                     if '/' in frame_rate:
                         num, denom = frame_rate.split('/')
                         rate = float(num) / float(denom)
-                        frame_rate_str = f"{rate:.2f}"
                     else:
                         rate = float(frame_rate)
-                        frame_rate_str = frame_rate
                     
-                    # Create a name that combines resolution and frame rate
-                    format_name = f"{resolution} @ {frame_rate_str}fps"
-                    
-                    # Add as a combined format
-                    if format_name not in resolution_framerates:
-                        resolution_framerates.append(format_name)
+                    # Format the rate nicely
+                    nice_rate = rate
+                    if abs(rate - 23.976) < 0.01:
+                        nice_rate = 23.98
+                    elif abs(rate - 29.97) < 0.01:
+                        nice_rate = 29.97
+                    elif abs(rate - 59.94) < 0.01:
+                        nice_rate = 59.94
                         
-                        formats.append({
-                            "id": format_id,
-                            "resolution": resolution,
-                            "frame_rate": rate,
-                            "name": format_name
-                        })
+                    format_item = {
+                        "id": format_id,
+                        "resolution": resolution,
+                        "frame_rate": nice_rate,
+                        "display": f"{resolution} @ {nice_rate} fps"
+                    }
+                    format_list.append(format_item)
+                    
+                    # Add to format map
+                    if resolution not in format_map:
+                        format_map[resolution] = []
+                    if nice_rate not in format_map[resolution]:
+                        format_map[resolution].append(nice_rate)
 
             # If no formats found, use default formats
-            if not formats:
+            if not format_list:
                 logger.info(f"No formats found for {device}, using default formats")
+                default_format_map = {
+                    "1920x1080": [23.98, 24, 25, 29.97, 30],
+                    "1280x720": [50, 59.94, 60],
+                    "720x576": [25, 50],
+                    "720x480": [29.97, 59.94]
+                }
                 return {
-                    "formats": self._get_default_formats(),
-                    "resolution_framerates": self._get_default_resolution_framerates(),
-                    "resolutions": ["1920x1080", "1280x720", "720x576", "720x480"],
-                    "frame_rates": [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+                    "formats": [],
+                    "format_map": default_format_map
                 }
 
-            # Extract just the resolutions and frame rates for UI filtering
-            resolutions = sorted(list(set(f["resolution"] for f in formats)), 
-                           key=lambda r: int(r.split('x')[0]), 
-                           reverse=True)
-                           
-            frame_rates = sorted(list(set(f["frame_rate"] for f in formats)))
-            
-            logger.info(f"Found formats for {device}: {len(formats)} formats")
+            # Sort frame rates within each resolution
+            for res in format_map:
+                format_map[res] = sorted(format_map[res])
+
+            logger.info(f"Found formats for {device}: {len(format_list)} formats")
             return {
-                "formats": formats,
-                "resolution_framerates": resolution_framerates,
-                "resolutions": resolutions,
-                "frame_rates": frame_rates
+                "formats": format_list,
+                "format_map": format_map
             }
 
         except Exception as e:
             logger.error(f"Error getting DeckLink formats: {str(e)}")
             # Return default formats in case of error
+            default_format_map = {
+                "1920x1080": [23.98, 24, 25, 29.97, 30],
+                "1280x720": [50, 59.94, 60],
+                "720x576": [25, 50],
+                "720x480": [29.97, 59.94]
+            }
             return {
-                "formats": self._get_default_formats(),
-                "resolution_framerates": self._get_default_resolution_framerates(),
-                "resolutions": ["1920x1080", "1280x720", "720x576", "720x480"],
-                "frame_rates": [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+                "formats": [],
+                "format_map": default_format_map
             }
             
-    def _get_default_formats(self):
-        """Return a list of default format dictionaries"""
-        default_formats = []
-        for res in ["1920x1080", "1280x720", "720x576", "720x480"]:
-            for fps in [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]:
-                default_formats.append({
-                    "resolution": res,
-                    "frame_rate": fps,
-                    "name": f"{res} @ {fps}fps",
-                    "id": "default"
-                })
-        return default_formats
+    def get_decklink_formats_dshow(self, device):
+        """Get available formats for a DeckLink device using DirectShow on Windows"""
+        format_list = []
+        format_map = {}  # Map of resolution -> list of frame rates
         
-    def _get_default_resolution_framerates(self):
-        """Return a list of default resolution-framerate combinations"""
-        combinations = []
-        for res in ["1920x1080", "1280x720", "720x576", "720x480"]:
-            for fps in [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]:
-                combinations.append(f"{res} @ {fps}fps")
-        return combinations
+        try:
+            # Use ffmpeg to get available formats using dshow
+            cmd = ["ffmpeg", "-hide_banner", "-f", "dshow", "-list_options", "true", "-i", f"video=Decklink Video Capture"]
+            logger.info(f"Getting formats using dshow: {' '.join(cmd)}")
+            
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                stdout, stderr = process.communicate(timeout=10)  # 10 second timeout
+            except subprocess.TimeoutExpired:
+                process.kill()
+                logger.warning("Timeout getting dshow formats")
+                return {"formats": [], "format_map": {}}
+                
+            # Combine output
+            output = stdout + stderr
+            lines = output.splitlines()
+            
+            # Log output for debugging
+            for line in lines[:15]:  # Log first 15 lines
+                logger.info(f"Format line: {line}")
+            
+            # Format pattern for dshow output
+            format_pattern = r'pixel_format=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)\s+max\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
+            
+            for line in lines:
+                match = re.search(format_pattern, line)
+                if match:
+                    pixel_format, min_res, min_fps, max_res, max_fps = match.groups()
+                    resolution = min_res  # Assuming min and max are the same
+                    frame_rate = float(min_fps)
+                    
+                    # Format the rate nicely
+                    nice_rate = frame_rate
+                    if abs(frame_rate - 23.976) < 0.01:
+                        nice_rate = 23.98
+                    elif abs(frame_rate - 29.97) < 0.01:
+                        nice_rate = 29.97
+                    elif abs(frame_rate - 59.94) < 0.01:
+                        nice_rate = 59.94
+                    
+                    format_item = {
+                        "id": f"{resolution}_{nice_rate}",
+                        "resolution": resolution,
+                        "frame_rate": nice_rate,
+                        "pixel_format": pixel_format,
+                        "display": f"{resolution} @ {nice_rate} fps"
+                    }
+                    format_list.append(format_item)
+                    
+                    # Add to format map
+                    if resolution not in format_map:
+                        format_map[resolution] = []
+                    if nice_rate not in format_map[resolution]:
+                        format_map[resolution].append(nice_rate)
+            
+            # If no formats found, return empty
+            if not format_list:
+                logger.warning("No formats found via dshow")
+                return {"formats": [], "format_map": {}}
+                
+            # Sort frame rates within each resolution
+            for res in format_map:
+                format_map[res] = sorted(format_map[res])
+                
+            logger.info(f"Found formats via dshow: {len(format_list)} formats")
+            return {
+                "formats": format_list,
+                "format_map": format_map
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting dshow formats: {str(e)}")
+            return {"formats": [], "format_map": {}}
 
     def _find_ffmpeg(self):
         """Find the path to ffmpeg"""
@@ -425,7 +425,19 @@ class OptionsManager(QObject):
         # For now, assume it's in the system PATH
         return "ffmpeg" # Replace with your actual ffmpeg path detection
 
-
-    self.last_save_time = 0  # Track the last time settings were saved
-    self.save_debounce_ms = 1000  # Minimum time between saves in milliseconds
-    logger.info(f"Using settings file: {self.settings_file}")
+    def __init__(self, settings_file=None):
+        super().__init__()
+        
+        self.last_save_time = 0  # Track the last time settings were saved
+        self.save_debounce_ms = 1000  # Minimum time between saves in milliseconds
+        
+        # Set up settings file in config directory
+        if settings_file is None:
+            # Create config directory if it doesn't exist
+            config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
+            os.makedirs(config_dir, exist_ok=True)
+            self.settings_file = os.path.join(config_dir, "settings.json")
+        else:
+            self.settings_file = settings_file
+            
+        logger.info(f"Using settings file: {self.settings_file}")
