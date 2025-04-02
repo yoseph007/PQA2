@@ -1602,11 +1602,38 @@ class CaptureManager(QObject):
 
             # Create a more reliable monitor with longer timeout
             self.capture_monitor = CaptureMonitor(self.ffmpeg_process, capture_duration * 1.2)
-            self.capture_monitor.progress_updated.connect(self.progress_update)
-            self.capture_monitor.capture_complete.connect(self._on_bookend_capture_complete)
-            self.capture_monitor.capture_failed.connect(self._on_capture_failed)
-            self.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
-            self.capture_monitor.start()
+            
+            # Connect all required signals properly with error checking
+            try:
+                self.capture_monitor.progress_updated.connect(self.progress_update)
+                self.capture_monitor.capture_complete.connect(self._on_bookend_capture_complete)
+                self.capture_monitor.capture_failed.connect(self._on_capture_failed)
+                
+                # Ensure this method exists in this class before connecting
+                if hasattr(self, 'update_frame_counter'):
+                    self.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
+                else:
+                    # Add a fallback implementation if the method doesn't exist
+                    logger.warning("update_frame_counter method not found, using fallback implementation")
+                    def fallback_frame_counter(current_frame, total_frames):
+                        percentage = 0
+                        if total_frames > 0:
+                            percentage = min(100, int((current_frame / total_frames) * 100))
+                        self.status_update.emit(f"Frame: {current_frame}/{total_frames if total_frames > 0 else '?'} ({percentage}%)")
+                    
+                    # Add the method to the instance
+                    self.update_frame_counter = fallback_frame_counter
+                    self.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
+                
+                self.capture_monitor.start()
+            except Exception as e:
+                error_msg = f"Error connecting capture monitor signals: {str(e)}"
+                logger.error(error_msg)
+                self.status_update.emit(error_msg)
+                self.state = CaptureState.ERROR
+                self.state_changed.emit(self.state)
+                self.capture_finished.emit(False, error_msg)
+                return False
 
             # Update state
             self.state = CaptureState.CAPTURING
