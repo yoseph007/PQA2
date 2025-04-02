@@ -26,7 +26,7 @@ try:
     pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 except ImportError:
     logger.warning("Pytesseract not available - some OCR functions may be limited")
-    
+
 # Define capture states for better management
 class CaptureState(Enum):
     IDLE = 0
@@ -59,7 +59,7 @@ class CaptureMonitor(QThread):
     def run(self):
         """Monitor process output and emit signals"""
         logger.debug("Starting capture monitor")
-        
+
         # Send initial progress
         self.progress_updated.emit(0)
 
@@ -138,7 +138,7 @@ class CaptureMonitor(QThread):
                                     # Only update every 0.25 seconds to avoid too many updates
                                     if current_time - self.last_progress_time >= 0.25:
                                         progress = 0
-                                        
+
                                         if self.duration and self.total_frames > 0:
                                             # If we have both duration and total frames (most accurate)
                                             progress = min(int((frame_num / self.total_frames) * 95), 95)
@@ -153,15 +153,15 @@ class CaptureMonitor(QThread):
                                             # Fallback - increment in small steps based on frames
                                             # Ensure we never report 0% after starting
                                             progress = max(5, min(int((frame_num % 1000) / 10), 95))
-                                        
+
                                         # Only emit if progress changed to avoid flooding UI
                                         if progress != self.last_progress_value:
                                             self.progress_updated.emit(progress)
                                             self.last_progress_value = progress
-                                            
+
                                         # Update timestamp
                                         self.last_progress_time = current_time
-                                        
+
                                     # Always emit frame count updates for UI display
                                     self.frame_count_updated.emit(frame_num, self.total_frames)
                             except (ValueError, AttributeError) as e:
@@ -175,14 +175,14 @@ class CaptureMonitor(QThread):
 
             # Don't burn CPU with polling
             time.sleep(0.1)
-            
+
             # Update progress based on elapsed time for smoother appearance
             # Only if no recent frame-based updates
             current_time = time.time()
             if self.duration and (current_time - self.last_progress_time) >= 1.0:
                 elapsed = current_time - self.start_time
                 time_progress = min(int((elapsed / self.duration) * 95), 95)
-                
+
                 # Only emit if progress increased to avoid jumping back
                 if time_progress > self.last_progress_value:
                     self.progress_updated.emit(time_progress)
@@ -208,7 +208,7 @@ class CaptureMonitor(QThread):
                             logger.info("Sent 'q' command to FFmpeg")
                     except Exception as e:
                         logger.warning(f"Could not send 'q' command: {e}")
-                        
+
                     # Give FFmpeg time to finalize the output
                     logger.info("Waiting for FFmpeg to finalize output file...")
                     for _ in range(50):  # 5 second timeout
@@ -216,7 +216,7 @@ class CaptureMonitor(QThread):
                             logger.info("FFmpeg process finalized and terminated")
                             break
                         time.sleep(0.1)
-                    
+
                     # If still running, try terminate() instead of kill()
                     if self.process.poll() is None:
                         logger.info("FFmpeg still running, sending terminate signal")
@@ -231,7 +231,7 @@ class CaptureMonitor(QThread):
                     # Unix-like systems
                     import signal
                     self.process.send_signal(signal.SIGINT)
-                    
+
                     # Wait for process to terminate
                     logger.info("Waiting for FFmpeg to finalize output file...")
                     for _ in range(100):  # 10 second timeout
@@ -264,14 +264,14 @@ class CaptureMonitor(QThread):
 
 class BookendCaptureManager(QObject):
     """Manager for capturing bookend videos"""
-    
+
     # Signals for UI updates
     capture_state_changed = pyqtSignal(str, str)  # state, message
     capture_progress = pyqtSignal(int)  # 0-100%
     preview_frame = pyqtSignal(QImage)  # For live preview
     capture_completed = pyqtSignal(str)  # path to captured file
     capture_error = pyqtSignal(str)  # error message
-    
+
     def __init__(self, options_manager):
         super().__init__()
         self.options_manager = options_manager
@@ -285,21 +285,21 @@ class BookendCaptureManager(QObject):
         self.preview_timer.timeout.connect(self.update_preview)
         self.preview_cap = None
         self.mutex = QMutex()  # Mutex for thread safety
-        
+
     def set_test_name(self, test_name):
         """Set the test name for file naming"""
         self.test_name = test_name
-        
+
     def set_output_directory(self, output_dir):
         """Set the output directory for captures"""
         self.output_dir = output_dir
-        
+
     def start_capture(self):
         """Start a bookend capture with white frames at start and end"""
         if self.state != CaptureState.IDLE:
             logger.warning(f"Cannot start capture while in state: {self.state}")
             return False
-            
+
     def _on_bookend_capture_complete(self):
         """Handle completion of bookend capture"""
         output_path = self.current_output_path
@@ -315,7 +315,7 @@ class BookendCaptureManager(QObject):
             self.state = CaptureState.ERROR
             self.state_changed.emit(self.state)
             self.capture_finished.emit(False, error_msg)
-            
+
     def stop_capture(self, cleanup_temp=False):
         """Stop any active capture process"""
         if not self.is_capturing:
@@ -416,7 +416,7 @@ class BookendCaptureManager(QObject):
 
         self.status_update.emit(f"Error: {user_msg}")
         self.capture_finished.emit(False, user_msg)
-        
+
     def _kill_ffmpeg_processes(self):
         """Kill any lingering FFmpeg processes that might be using the capture device"""
         try:
@@ -523,7 +523,7 @@ class BookendCaptureManager(QObject):
             available = True
 
         return available, message
-        
+
     def _test_device_availability(self, device_name):
         """More robust test if the device is available for capture"""
         try:
@@ -613,7 +613,7 @@ class BookendCaptureManager(QObject):
         except Exception as e:
             logger.error(f"Error in device availability test: {e}")
             return False, f"Error testing device: {str(e)}"
-            
+
     def _try_connect_device(self, device_name, max_retries=3):
         """Try to connect to a device with retries and improved reliability"""
 
@@ -668,7 +668,7 @@ class BookendCaptureManager(QObject):
 
         # Try to connect to verify recovery
         return self._try_connect_device(device_name, max_retries=1)
-        
+
     def _repair_mp4_if_needed(self, mp4_path):
         """Attempt to repair an MP4 file with missing moov atom"""
         try:
@@ -713,12 +713,12 @@ class BookendCaptureManager(QObject):
                 # "Decklink Video Capture" is the common name for Blackmagic devices in DirectShow
                 logger.info("Trying to open preview with 'Decklink Video Capture'")
                 self.preview_cap.open("video=Decklink Video Capture", cv2.CAP_DSHOW)
-                
+
                 # If that didn't work, try with the provided device name
                 if not self.preview_cap.isOpened():
                     logger.info(f"Trying to open preview with '{device_name}'")
                     self.preview_cap.open(f"video={device_name}", cv2.CAP_DSHOW)
-                    
+
                 # As a last resort, try default camera
                 if not self.preview_cap.isOpened():
                     logger.info("Trying default camera as fallback")
@@ -756,7 +756,7 @@ class BookendCaptureManager(QObject):
             if placeholder is not None:
                 self.frame_available.emit(placeholder)
             return False
-            
+
     def _stop_preview_capture(self):
         """Stop the preview capture"""
         if hasattr(self, 'preview_active') and self.preview_active:
@@ -903,33 +903,33 @@ class BookendCaptureManager(QObject):
                 logger.info(f"Captured bookend video duration: {duration:.2f}s")
             except (json.JSONDecodeError, IndexError) as e:
                 logger.warning(f"Could not parse duration: {e}, continuing anyway")
-                
+
             # Move to temporary folder if configured in options
             temp_dir = None
             if hasattr(self, 'options_manager') and self.options_manager:
                 temp_dir = self.options_manager.get_setting("paths", "temp_dir")
-            
+
             # If no temp dir configured or doesn't exist, use system temp
             if not temp_dir or not os.path.exists(temp_dir):
                 import tempfile
                 temp_dir = tempfile.gettempdir()
-                
+
             # Create a new filename in temp dir
             temp_filename = f"temp_bookend_capture_{int(time.time())}.mp4"
             temp_path = os.path.join(temp_dir, temp_filename)
-            
+
             # Copy the file to temp location
             import shutil
             shutil.copy2(output_path, temp_path)
             logger.info(f"Moved capture file to temporary location: {temp_path}")
-            
+
             # Delete the original file to save space
             try:
                 os.remove(output_path)
                 logger.info(f"Deleted original capture file: {output_path}")
             except Exception as e:
                 logger.warning(f"Could not delete original capture file: {e}")
-                
+
             # Mark as completed
             self.state = CaptureState.COMPLETED
             self.state_changed.emit(self.state)
@@ -944,40 +944,40 @@ class BookendCaptureManager(QObject):
             self.state_changed.emit(self.state)
             self.status_update.emit(f"Error: {error_msg}")
             self.capture_finished.emit(False, error_msg)
-            
+
         if not self.test_name:
             self.test_name = f"Test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            
+
         self.state = CaptureState.INITIALIZING
         self.capture_state_changed.emit("INITIALIZING", "Initializing bookend capture mode...")
-        
+
         # Get capture settings
         capture_settings = self.options_manager.get_setting("capture")
         bookend_settings = self.options_manager.get_setting("bookend")
-        
+
         device = capture_settings.get("default_device", "Intensity Shuttle")
         resolution = capture_settings.get("resolution", "1920x1080")
         frame_rate = capture_settings.get("frame_rate", 30)
         pixel_format = capture_settings.get("pixel_format", "uyvy422")
         max_capture_time = bookend_settings.get("max_capture_time", 120)
-        
+
         # Create output directory
         date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
         test_dir = os.path.join(self.output_dir, f"{self.test_name}_{date_str}")
         os.makedirs(test_dir, exist_ok=True)
-        
+
         # Path for captured video
         output_path = os.path.join(test_dir, "REF03_capture.mp4")
-        
+
         # Log capture information
         logger.info(f"Starting bookend capture process...")
         logger.info(f"Using test name: {self.test_name}")
         logger.info(f"Starting bookend frame capture...")
-        
+
         # Emit progress and state updates
         self.capture_state_changed.emit("INITIALIZING", "Initializing bookend capture mode...")
         self.capture_progress.emit(0)
-        
+
         try:
             # Build FFmpeg command for capturing
             cmd = [
@@ -988,7 +988,7 @@ class BookendCaptureManager(QObject):
                 "-audio_input", "embedded",
                 "-format_code", "hp60",  # This might need to be adjusted based on resolution/frame rate
                 "-i", device,
-                
+
                 # Output format settings
                 "-c:v", "libx264",
                 "-preset", "fast",
@@ -996,18 +996,18 @@ class BookendCaptureManager(QObject):
                 "-pix_fmt", "yuv420p",
                 "-r", str(frame_rate),
                 "-t", str(max_capture_time),  # Maximum capture duration
-                
+
                 # Audio settings
                 "-c:a", "aac",
                 "-b:a", "192k",
-                
+
                 # Output file
                 "-y",  # Overwrite if exists
                 output_path
             ]
-            
+
             logger.info(f"Executing FFmpeg command: {' '.join(cmd)}")
-            
+
             # Start capture process
             self.ffmpeg_process = subprocess.Popen(
                 cmd,
@@ -1017,24 +1017,24 @@ class BookendCaptureManager(QObject):
                 text=True,
                 bufsize=1  # Line buffered
             )
-            
+
             # Set capture start time
             self.capture_start_time = time.time()
-            
+
             # Update state
             self.state = CaptureState.CAPTURING
             self.capture_state_changed.emit("CAPTURING", "Capturing video with white bookends...")
-            
+
             # Start preview timer
             self.start_preview()
-            
+
             # Monitor the process
             monitor_thread = QThread()
             monitor_thread.run = self._monitor_capture
             monitor_thread.start()
-            
+
             return True
-            
+
         except Exception as e:
             error_msg = f"Failed to start capture: {str(e)}"
             logger.error(error_msg)
@@ -1042,39 +1042,39 @@ class BookendCaptureManager(QObject):
             self.capture_state_changed.emit("ERROR", error_msg)
             self.capture_error.emit(error_msg)
             return False
-            
+
     def _monitor_capture(self):
         """Monitor the capture process and update progress"""
         try:
             if not self.ffmpeg_process:
                 return
-                
+
             start_time = time.time()
             max_duration = self.options_manager.get_setting("bookend", "max_capture_time")
-            
+
             # Read output while process is running
             while self.ffmpeg_process.poll() is None:
                 elapsed = time.time() - start_time
-                
+
                 # Update progress
                 progress = min(int((elapsed / max_duration) * 100), 99)
                 self.capture_progress.emit(progress)
-                
+
                 # Check if process should be terminated
                 if elapsed > max_duration + 5:  # Allow 5 seconds grace period
                     logger.warning("Capture exceeded maximum duration, terminating")
                     self.ffmpeg_process.terminate()
                     break
-                    
+
                 # Sleep to avoid using too much CPU
                 time.sleep(0.5)
-                
+
             # Process completed
             if self.ffmpeg_process.returncode == 0:
                 logger.info("Capture completed successfully")
                 self.state = CaptureState.PROCESSING
                 self.capture_state_changed.emit("PROCESSING", "Processing captured bookend video...")
-                
+
                 # Process the captured video
                 self._process_captured_video()
             else:
@@ -1083,13 +1083,13 @@ class BookendCaptureManager(QObject):
                 self.state = CaptureState.ERROR
                 self.capture_state_changed.emit("ERROR", f"Capture failed: {stderr}")
                 self.capture_error.emit(f"Capture failed: {stderr}")
-                
+
         except Exception as e:
             logger.error(f"Error monitoring capture: {str(e)}")
             self.state = CaptureState.ERROR
             self.capture_state_changed.emit("ERROR", f"Error monitoring capture: {str(e)}")
             self.capture_error.emit(f"Error monitoring capture: {str(e)}")
-            
+
     def _process_captured_video(self):
         """Process the captured video file"""
         try:
@@ -1097,7 +1097,7 @@ class BookendCaptureManager(QObject):
             date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             test_dir = os.path.join(self.output_dir, f"{self.test_name}_{date_str}")
             captured_file = os.path.join(test_dir, "REF03_capture.mp4")
-            
+
             if not os.path.exists(captured_file):
                 error_msg = f"Captured file not found: {captured_file}"
                 logger.error(error_msg)
@@ -1105,21 +1105,21 @@ class BookendCaptureManager(QObject):
                 self.capture_state_changed.emit("ERROR", error_msg)
                 self.capture_error.emit(error_msg)
                 return
-                
+
             # Validate the captured file
             from app.bookend_alignment import validate_video_file, repair_video_file
-            
+
             if not validate_video_file(captured_file):
                 logger.warning(f"Captured file is not valid, attempting repair: {captured_file}")
-                
+
                 # Try to repair the file
                 for attempt in range(1, MAX_REPAIR_ATTEMPTS + 1):
                     logger.info(f"Repair attempt {attempt}/{MAX_REPAIR_ATTEMPTS}")
-                    
+
                     if repair_video_file(captured_file):
                         logger.info(f"Successfully repaired video file on attempt {attempt}")
                         break
-                        
+
                     # If we've tried all attempts and still failed
                     if attempt == MAX_REPAIR_ATTEMPTS:
                         error_msg = f"Failed to repair video file after {MAX_REPAIR_ATTEMPTS} attempts"
@@ -1128,48 +1128,48 @@ class BookendCaptureManager(QObject):
                         self.capture_state_changed.emit("ERROR", error_msg)
                         self.capture_error.emit(error_msg)
                         return
-            
+
             # Video is valid, signal completion
             logger.info("Bookend capture and processing complete")
             self.state = CaptureState.COMPLETED
             self.capture_state_changed.emit("COMPLETED", "Bookend capture complete")
             self.capture_progress.emit(100)
             self.capture_completed.emit(captured_file)
-            
+
         except Exception as e:
             error_msg = f"Error processing bookend capture: {str(e)}"
             logger.error(error_msg)
             self.state = CaptureState.ERROR
             self.capture_state_changed.emit("ERROR", error_msg)
             self.capture_error.emit(error_msg)
-            
+
     def cancel_capture(self):
         """Cancel the current capture"""
         if self.state != CaptureState.CAPTURING and self.state != CaptureState.INITIALIZING:
             return
-            
+
         logger.info("Cancelling capture...")
-        
+
         # Stop the preview
         self.stop_preview()
-        
+
         # Terminate FFmpeg process
         if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
             logger.info("Terminating FFmpeg process")
-            
+
             # Try to send 'q' to gracefully terminate
             try:
                 self.ffmpeg_process.stdin.write('q\n')
                 self.ffmpeg_process.stdin.flush()
-                
+
                 # Wait briefly for graceful termination
                 time.sleep(1)
-                
+
                 # If still running, terminate
                 if self.ffmpeg_process.poll() is None:
                     self.ffmpeg_process.terminate()
                     time.sleep(0.5)
-                    
+
                     # If still running, kill
                     if self.ffmpeg_process.poll() is None:
                         self.ffmpeg_process.kill()
@@ -1182,29 +1182,29 @@ class BookendCaptureManager(QObject):
                         self.ffmpeg_process.kill()
                 except:
                     pass
-        
+
         self.state = CaptureState.IDLE
         self.capture_state_changed.emit("IDLE", "Capture cancelled")
-        
+
     def start_preview(self):
         """Start video preview"""
         try:
             # Close any existing preview
             self.stop_preview()
-            
+
             # Start preview timer
             self.preview_timer.start(100)  # Update every 100ms
         except Exception as e:
             logger.error(f"Error starting preview: {str(e)}")
-            
+
     def stop_preview(self):
         """Stop video preview"""
         self.preview_timer.stop()
-        
+
         if self.preview_cap:
             self.preview_cap.release()
             self.preview_cap = None
-            
+
     def update_preview(self):
         """Update the preview frame"""
         self.mutex.lock()
@@ -1212,11 +1212,11 @@ class BookendCaptureManager(QObject):
             # Only update if we're capturing
             if self.state != CaptureState.CAPTURING:
                 return
-                
+
             # Try to open the preview source if not already open
             if self.preview_cap is None:
                 device = self.options_manager.get_setting("capture", "default_device")
-                
+
                 # Try to open the device for preview
                 try:
                     # On Windows, try to use DirectShow
@@ -1225,28 +1225,28 @@ class BookendCaptureManager(QObject):
                     else:
                         # On other platforms, use default
                         self.preview_cap = cv2.VideoCapture(0)
-                        
+
                     if not self.preview_cap.isOpened():
                         logger.warning(f"Could not open preview device: {device}")
                         return
                 except Exception as e:
                     logger.error(f"Error opening preview device: {str(e)}")
                     return
-            
+
             # Read a frame
             ret, frame = self.preview_cap.read()
             if not ret:
                 logger.warning("Could not read frame for preview")
                 return
-                
+
             # Convert to QImage for preview signal
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
             q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888).rgbSwapped()
-            
+
             # Emit the frame
             self.preview_frame.emit(q_img)
-            
+
         except Exception as e:
             logger.error(f"Error updating preview: {str(e)}")
         finally:

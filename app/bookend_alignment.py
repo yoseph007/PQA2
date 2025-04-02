@@ -13,11 +13,11 @@ def validate_video_file(file_path):
     if not os.path.exists(file_path):
         logger.error(f"File does not exist: {file_path}")
         return False
-        
+
     if os.path.getsize(file_path) == 0:
         logger.error(f"File is empty: {file_path}")
         return False
-        
+
     try:
         # Use ffprobe to validate file
         cmd = [
@@ -28,13 +28,13 @@ def validate_video_file(file_path):
             "-of", "json",
             file_path
         ]
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        
+
         if result.returncode != 0:
             logger.error(f"FFprobe validation failed: {result.stderr}")
             return False
-            
+
         # Check if we got valid JSON output with a video stream
         import json
         try:
@@ -43,22 +43,22 @@ def validate_video_file(file_path):
         except json.JSONDecodeError:
             logger.error(f"Invalid JSON response from FFprobe")
             return False
-            
+
     except Exception as e:
         logger.error(f"Error validating video file: {e}")
         return False
-        
+
     return True
 
 def repair_video_file(file_path):
     """Attempt to repair a corrupted MP4 file"""
     try:
         logger.info(f"Attempting to repair video file: {file_path}")
-        
+
         # Create temporary output path
         output_dir = os.path.dirname(file_path)
         temp_path = os.path.join(output_dir, f"temp_fixed_{os.path.basename(file_path)}")
-        
+
         # Run FFmpeg to copy and potentially fix the file
         cmd = [
             "ffmpeg",
@@ -69,19 +69,19 @@ def repair_video_file(file_path):
             "-y",  # Overwrite if file exists
             temp_path
         ]
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        
+
         if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
             # Replace original with fixed version
             import shutil
             shutil.move(temp_path, file_path)
             logger.info(f"Successfully repaired video file: {file_path}")
-            
+
             # Validate the repaired file
             if validate_video_file(file_path):
                 return True
-                
+
         # If the standard repair didn't work, try a more aggressive approach
         cmd = [
             "ffmpeg",
@@ -94,19 +94,19 @@ def repair_video_file(file_path):
             "-y",
             temp_path
         ]
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        
+
         if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
             # Replace original with fixed version
             import shutil
             shutil.move(temp_path, file_path)
             logger.info(f"Successfully repaired video file using re-encoding: {file_path}")
             return validate_video_file(file_path)
-            
+
     except Exception as e:
         logger.error(f"Error repairing video file: {e}")
-        
+
     return False
 
 # Define maximum repair attempts
@@ -245,70 +245,6 @@ class BookendAligner(QObject):
                 logger.error(error_msg)
                 self.error_occurred.emit(error_msg)
                 return None
-                
-# Add these missing functions to bookend_alignment.py
-def validate_video_file(file_path):
-    """Check if a video file is valid and can be read by FFmpeg"""
-    try:
-        # Use FFprobe to check file validity
-        command = [
-            "ffprobe",
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=codec_type",
-            "-of", "json",
-            file_path
-        ]
-        
-        result = subprocess.run(command, capture_output=True, text=True)
-        
-        # If return code is 0 and we find a video stream, the file is valid
-        if result.returncode == 0 and "video" in result.stdout:
-            return True
-        
-        logger.warning(f"Invalid video file: {file_path}")
-        logger.warning(f"FFprobe error: {result.stderr}")
-        return False
-    except Exception as e:
-        logger.error(f"Error validating video file: {str(e)}")
-        return False
-
-def repair_video_file(file_path):
-    """Attempt to repair a corrupted MP4 file"""
-    try:
-        # Create a backup of the original file
-        backup_path = file_path + ".backup"
-        shutil.copy2(file_path, backup_path)
-        
-        # Get the directory and filename
-        dir_path = os.path.dirname(file_path)
-        filename = os.path.basename(file_path)
-        temp_path = os.path.join(dir_path, f"repaired_{filename}")
-        
-        # Try to repair using FFmpeg
-        command = [
-            "ffmpeg",
-            "-v", "warning",
-            "-i", file_path,
-            "-c", "copy",
-            "-movflags", "faststart",
-            temp_path
-        ]
-        
-        result = subprocess.run(command, capture_output=True, text=True)
-        
-        if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
-            # Replace the original with the repaired file
-            shutil.move(temp_path, file_path)
-            logger.info(f"Successfully repaired video file: {file_path}")
-            return True
-        else:
-            logger.warning(f"Failed to repair video file: {file_path}")
-            logger.warning(f"FFmpeg error: {result.stderr}")
-            return False
-    except Exception as e:
-        logger.error(f"Error repairing video file: {str(e)}")
-        return False
 
             # Validate video files first
             if not validate_video_file(captured_path):
@@ -320,7 +256,7 @@ def repair_video_file(file_path):
                     return None
                 else:
                     self.status_update.emit("Video file repaired successfully")
-            
+
             # Get video info
             ref_info = self._get_video_info(reference_path)
             cap_info = self._get_video_info(captured_path)
