@@ -532,7 +532,7 @@ class BookendCaptureManager(QObject):
                     self.last_progress_value = time_progress
                     self.last_progress_time = current_time
                 else:
-                    # This was the missing indented block after 'else'
+                    # Do nothing if progress didn't increase
                     pass
 
     def _terminate_process(self):

@@ -1,6 +1,117 @@
 import os
 import logging
 import subprocess
+
+import subprocess
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+def validate_video_file(file_path):
+    """Validate if a video file is intact and can be read"""
+    if not os.path.exists(file_path):
+        logger.error(f"File does not exist: {file_path}")
+        return False
+        
+    if os.path.getsize(file_path) == 0:
+        logger.error(f"File is empty: {file_path}")
+        return False
+        
+    try:
+        # Use ffprobe to validate file
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=codec_type",
+            "-of", "json",
+            file_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        
+        if result.returncode != 0:
+            logger.error(f"FFprobe validation failed: {result.stderr}")
+            return False
+            
+        # Check if we got valid JSON output with a video stream
+        import json
+        try:
+            info = json.loads(result.stdout)
+            return 'streams' in info and len(info['streams']) > 0
+        except json.JSONDecodeError:
+            logger.error(f"Invalid JSON response from FFprobe")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error validating video file: {e}")
+        return False
+        
+    return True
+
+def repair_video_file(file_path):
+    """Attempt to repair a corrupted MP4 file"""
+    try:
+        logger.info(f"Attempting to repair video file: {file_path}")
+        
+        # Create temporary output path
+        output_dir = os.path.dirname(file_path)
+        temp_path = os.path.join(output_dir, f"temp_fixed_{os.path.basename(file_path)}")
+        
+        # Run FFmpeg to copy and potentially fix the file
+        cmd = [
+            "ffmpeg",
+            "-v", "warning",
+            "-i", file_path,
+            "-c", "copy",
+            "-movflags", "faststart",  # This helps with fixing moov atom issues
+            "-y",  # Overwrite if file exists
+            temp_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+            # Replace original with fixed version
+            import shutil
+            shutil.move(temp_path, file_path)
+            logger.info(f"Successfully repaired video file: {file_path}")
+            
+            # Validate the repaired file
+            if validate_video_file(file_path):
+                return True
+                
+        # If the standard repair didn't work, try a more aggressive approach
+        cmd = [
+            "ffmpeg",
+            "-v", "warning",
+            "-err_detect", "ignore_err",  # More tolerant of errors
+            "-i", file_path,
+            "-c:v", "libx264",  # Re-encode video
+            "-preset", "ultrafast",
+            "-crf", "23",
+            "-y",
+            temp_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        
+        if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+            # Replace original with fixed version
+            import shutil
+            shutil.move(temp_path, file_path)
+            logger.info(f"Successfully repaired video file using re-encoding: {file_path}")
+            return validate_video_file(file_path)
+            
+    except Exception as e:
+        logger.error(f"Error repairing video file: {e}")
+        
+    return False
+
+# Define maximum repair attempts
+MAX_REPAIR_ATTEMPTS = 3
+
 import cv2
 import numpy as np
 import time
@@ -135,6 +246,17 @@ class BookendAligner(QObject):
                 self.error_occurred.emit(error_msg)
                 return None
 
+            # Validate video files first
+            if not validate_video_file(captured_path):
+                self.status_update.emit("Captured video file appears invalid, attempting repair...")
+                if not repair_video_file(captured_path):
+                    error_msg = "Failed to repair captured video file"
+                    logger.error(error_msg)
+                    self.error_occurred.emit(error_msg)
+                    return None
+                else:
+                    self.status_update.emit("Video file repaired successfully")
+            
             # Get video info
             ref_info = self._get_video_info(reference_path)
             cap_info = self._get_video_info(captured_path)

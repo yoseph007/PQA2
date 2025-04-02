@@ -240,11 +240,11 @@ class MainWindow(QMainWindow):
         self.pb_capture_progress.setTextVisible(True)
         self.pb_capture_progress.setAlignment(Qt.AlignCenter)
         progress_layout.addWidget(self.pb_capture_progress)
-        
+
         # Add frame counter label
         self.lbl_capture_frame_counter = QLabel("Frames: 0 / 0")
         progress_layout.addWidget(self.lbl_capture_frame_counter)
-        
+
         capture_layout.addLayout(progress_layout)
 
         capture_group.setLayout(capture_layout)
@@ -556,7 +556,7 @@ class MainWindow(QMainWindow):
             self.capture_mgr.capture_started.connect(self.handle_capture_started)
             self.capture_mgr.capture_finished.connect(self.handle_capture_finished)
             self.capture_mgr.frame_available.connect(self.update_preview)
-            
+
             # Connect to capture monitor frame counter if available
             if hasattr(self.capture_mgr, 'capture_monitor') and self.capture_mgr.capture_monitor:
                 self.capture_mgr.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
@@ -564,7 +564,7 @@ class MainWindow(QMainWindow):
         # Connect options manager signals
         if hasattr(self, 'options_manager') and self.options_manager:
             self.options_manager.settings_updated.connect(self.handle_settings_updated)
-            
+
         # Initialize reference video dropdown
         self.refresh_reference_videos()
 
@@ -579,30 +579,30 @@ class MainWindow(QMainWindow):
     def refresh_reference_videos(self):
         """Populate dropdown with available reference videos from configured directory"""
         self.combo_reference_videos.clear()
-        
+
         # Get reference directory from settings
         reference_folder = None
         if hasattr(self, 'options_manager') and self.options_manager:
             reference_folder = self.options_manager.get_setting("paths", "reference_video_dir")
-        
+
         # If not configured, use default location
         if not reference_folder or not os.path.exists(reference_folder):
             script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             reference_folder = os.path.join(script_dir, "tests", "test_data")
-            
+
             # If still doesn't exist, create it
             if not os.path.exists(reference_folder):
                 os.makedirs(reference_folder, exist_ok=True)
-                
+
         # Find all video files
         video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
         video_files = []
-        
+
         try:
             for file in os.listdir(reference_folder):
                 if any(file.lower().endswith(ext) for ext in video_extensions):
                     video_files.append(os.path.join(reference_folder, file))
-                    
+
             # Add to dropdown
             if video_files:
                 for video_path in sorted(video_files):
@@ -614,18 +614,18 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error loading reference videos: {str(e)}")
             self.combo_reference_videos.addItem("Error loading videos", "")
-            
+
     def reference_selected(self, index):
         """Handle reference video selection from dropdown"""
         if index < 0:
             return
-            
+
         file_path = self.combo_reference_videos.currentData()
         if file_path and os.path.exists(file_path):
             # Update UI
             self.lbl_reference_path.setText("Selected: " + os.path.basename(file_path))
             self.lbl_reference_path.setToolTip(file_path)
-            
+
             # Analyze the reference video
             self.analyze_reference(file_path)
         else:
@@ -733,7 +733,7 @@ class MainWindow(QMainWindow):
         """Refresh list of capture devices and update status indicator"""
         self.device_combo.clear()
         self.device_combo.addItem("Detecting devices...")
-        self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")  # Grey while checking
+        self.device_status_indicator.setStyleSheet("background-color: #808080; borderradius: 8px;")  # Grey while checking
         self.device_status_indicator.setToolTip("Checking device status...")
 
         # Use options manager to get devices
@@ -750,7 +750,7 @@ class MainWindow(QMainWindow):
                 logger.info(f"Found devices from options manager: {devices}")
             except Exception as e:
                 logger.error(f"Error getting devices from options manager: {e}")
-                
+
         # If no devices found, add default options
         if not devices:
             # Common Blackmagic device names as fallback
@@ -787,7 +787,7 @@ class MainWindow(QMainWindow):
                 if selected_device:
                     available, message = self.capture_mgr._test_device_availability(selected_device)
                     logger.info(f"Device '{selected_device}' availability: {available}, message: {message}")
-                    
+
                     if available:
                         # Green for connected device
                         self.device_status_indicator.setStyleSheet("background-color: #00AA00; border-radius: 8px;")
@@ -821,31 +821,31 @@ class MainWindow(QMainWindow):
         # Make sure to populate UI fields from settings, but don't trigger format detection
         if hasattr(self, 'combo_resolution') and hasattr(self, 'combo_frame_rate'):
             self._populate_capture_settings_fields()
-        
+
     def _populate_capture_settings_fields(self):
         """Update UI fields with current capture settings"""
         if not hasattr(self, 'options_manager') or not self.options_manager:
             logger.warning("Options manager not available, can't populate capture settings fields")
             return
-            
+
         if not hasattr(self, 'combo_resolution') or not hasattr(self, 'combo_frame_rate'):
             logger.warning("UI elements not initialized, can't populate capture settings fields")
             return
-            
+
         try:
             # Get current settings
             capture_settings = self.options_manager.get_setting("capture")
-            
+
             # Update resolution dropdown
             if capture_settings.get("available_resolutions"):
                 # Save current selection if any
                 current_resolution = self.combo_resolution.currentText()
-                
+
                 # Clear and repopulate
                 self.combo_resolution.clear()
                 for res in capture_settings["available_resolutions"]:
                     self.combo_resolution.addItem(res)
-                    
+
                 # Restore previous selection or set from settings
                 if current_resolution and self.combo_resolution.findText(current_resolution) >= 0:
                     self.combo_resolution.setCurrentText(current_resolution)
@@ -853,7 +853,7 @@ class MainWindow(QMainWindow):
                     idx = self.combo_resolution.findText(capture_settings["resolution"])
                     if idx >= 0:
                         self.combo_resolution.setCurrentIndex(idx)
-                        
+
                 logger.info(f"Populated resolution dropdown with {self.combo_resolution.count()} items")
             else:
                 logger.warning("No available resolutions in settings")
@@ -867,12 +867,12 @@ class MainWindow(QMainWindow):
             if capture_settings.get("available_frame_rates"):
                 # Save current selection if any
                 current_rate = self.combo_frame_rate.currentText()
-                
+
                 # Clear and repopulate
                 self.combo_frame_rate.clear()
                 for rate in capture_settings["available_frame_rates"]:
                     self.combo_frame_rate.addItem(str(rate))
-                    
+
                 # Restore previous selection or set from settings
                 if current_rate and self.combo_frame_rate.findText(current_rate) >= 0:
                     self.combo_frame_rate.setCurrentText(current_rate)
@@ -881,7 +881,7 @@ class MainWindow(QMainWindow):
                     idx = self.combo_frame_rate.findText(rate_str)
                     if idx >= 0:
                         self.combo_frame_rate.setCurrentIndex(idx)
-                        
+
                 logger.info(f"Populated frame rate dropdown with {self.combo_frame_rate.count()} items")
             else:
                 logger.warning("No available frame rates in settings")
@@ -890,7 +890,7 @@ class MainWindow(QMainWindow):
                 self.combo_frame_rate.clear()
                 for rate in default_rates:
                     self.combo_frame_rate.addItem(str(rate))
-                    
+
             # Update pixel format dropdown
             if hasattr(self, 'combo_pixel_format') and capture_settings.get("pixel_format"):
                 idx = self.combo_pixel_format.findText(capture_settings["pixel_format"])
@@ -1038,13 +1038,13 @@ class MainWindow(QMainWindow):
                 self.lbl_preview_status.setText("Status: Preview available (headless mode)")
                 self.lbl_frame_counter.setText(f"Frame received")
                 return
-                
+
             # Check if frame is valid
             if frame is None:
                 logger.warning("Received None frame for preview")
                 self._show_placeholder_image("No video feed received")
                 return
-            
+
             if isinstance(frame, np.ndarray) and frame.size == 0:
                 logger.warning("Received empty frame for preview")
                 self._show_placeholder_image("Empty video frame received")
@@ -1057,7 +1057,7 @@ class MainWindow(QMainWindow):
                     logger.warning(f"Frame is not numpy array but {type(frame)}")
                     self._show_placeholder_image("Invalid frame format")
                     return
-                
+
                 # Convert BGR to RGB
                 if len(frame.shape) == 3 and frame.shape[2] == 3:
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -1074,13 +1074,13 @@ class MainWindow(QMainWindow):
                     logger.warning(f"Unsupported frame format: {frame.shape}")
                     self._show_placeholder_image("Unsupported frame format")
                     return
-                
+
                 # Create QImage with correct parameters
                 q_img = QImage(rgb_frame.data, width, height, bytes_per_line, img_format)
-                
+
                 # Create pixmap and scale it
                 pixmap = QPixmap.fromImage(q_img)
-                
+
                 # Scale pixmap to fit label while maintaining aspect ratio
                 label_size = self.lbl_preview.size()
                 if label_size.width() > 0 and label_size.height() > 0:
@@ -1089,13 +1089,13 @@ class MainWindow(QMainWindow):
                         Qt.KeepAspectRatio,
                         Qt.SmoothTransformation
                     )
-                    
+
                     # Update label
                     self.lbl_preview.setPixmap(scaled_pixmap)
-                    
+
                     # Update status
                     self.lbl_preview_status.setText(f"Status: Live preview ({width}x{height})")
-                    
+
                     # Update frame counter
                     frame_count = getattr(self, '_frame_count', 0) + 1
                     self._frame_count = frame_count
@@ -1655,7 +1655,7 @@ class MainWindow(QMainWindow):
         """Create the bookend options group with improved clarity"""
         bookend_group = QGroupBox("Bookend Capture Settings")
         bookend_layout = QVBoxLayout()
-        
+
         # Add explanation of bookend method at the top
         explanation = QLabel(
             "The bookend capture method uses white frames at the beginning and end of a looped "
@@ -1665,11 +1665,11 @@ class MainWindow(QMainWindow):
         explanation.setWordWrap(True)
         explanation.setStyleSheet("font-style: italic; color: #666;")
         bookend_layout.addWidget(explanation)
-        
+
         # Create form layout for settings
         form_layout = QFormLayout()
         form_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        
+
         # Get current bookend settings
         bookend_settings = settings.get("bookend", self.options_manager.default_settings["bookend"])
 
@@ -1737,22 +1737,22 @@ class MainWindow(QMainWindow):
         self.slider_white_threshold.setRange(200, 255)
         self.slider_white_threshold.setValue(bookend_settings.get("white_threshold", 240))
         self.lbl_white_threshold = QLabel(str(self.slider_white_threshold.value()))
-        
+
         # Add color indicator for threshold
         self.threshold_color_indicator = QFrame()
         self.threshold_color_indicator.setFixedSize(24, 24)
         self.threshold_color_indicator.setFrameShape(QFrame.Box)
         self.threshold_color_indicator.setFrameShadow(QFrame.Plain)
         self.threshold_color_indicator.setLineWidth(1)
-        
+
         # Function to update color indicator
         def update_threshold_indicator(value):
             self.lbl_white_threshold.setText(str(value))
             self.threshold_color_indicator.setStyleSheet(f"background-color: rgb({value}, {value}, {value});")
-        
+
         self.slider_white_threshold.valueChanged.connect(update_threshold_indicator)
         update_threshold_indicator(self.slider_white_threshold.value())  # Set initial color
-        
+
         threshold_help = QPushButton("?")
         threshold_help.setMaximumWidth(24)
         threshold_help.clicked.connect(lambda: QMessageBox.information(
@@ -1761,13 +1761,13 @@ class MainWindow(QMainWindow):
             "Higher values (closer to 255) require brighter, more pure white frames.\n\n"
             "Lower values (closer to 200) are more lenient but may detect non-bookend frames."
         ))
-        
+
         threshold_layout.addWidget(self.slider_white_threshold)
         threshold_layout.addWidget(self.lbl_white_threshold)
         threshold_layout.addWidget(self.threshold_color_indicator)
         threshold_layout.addWidget(threshold_help)
         form_layout.addRow("White Threshold:", threshold_layout)
-        
+
         bookend_layout.addLayout(form_layout)
         bookend_group.setLayout(bookend_layout)
         return bookend_group
@@ -1874,12 +1874,12 @@ class MainWindow(QMainWindow):
                 for fps in [29.97, 25, 30, 50, 59.94, 60]:
                     default_formats.append(f"{res} @ {fps}fps")
             self.combo_format.addItems(default_formats)
-        
+
         # Try to set current format from settings
         current_resolution = capture_settings.get("resolution", "1920x1080")
         current_rate = capture_settings.get("frame_rate", 30)
         current_format = f"{current_resolution} @ {current_rate}fps"
-        
+
         index = self.combo_format.findText(current_format)
         if index >= 0:
             self.combo_format.setCurrentIndex(index)
@@ -1922,29 +1922,29 @@ class MainWindow(QMainWindow):
         self.refresh_capture_devices()
 
         return capture_group
-        
+
     def _update_resolution_framerate_from_format(self, format_text):
         """Update the hidden resolution and frame rate fields from the format selection"""
         if not format_text:
             return
-            
+
         # Parse the format text like "1920x1080 @ 30fps"
         try:
             parts = format_text.split("@")
             if len(parts) == 2:
                 resolution = parts[0].strip()
                 fps_part = parts[1].strip()
-                
+
                 # Remove "fps" suffix
                 fps = fps_part.replace("fps", "").strip()
-                
+
                 # Update the hidden fields
                 self.combo_resolution.clear()
                 self.combo_resolution.addItem(resolution)
-                
+
                 self.combo_frame_rate.clear()
                 self.combo_frame_rate.addItem(fps)
-                
+
                 logger.debug(f"Updated resolution to {resolution} and frame rate to {fps}")
         except Exception as e:
             logger.error(f"Error parsing format text '{format_text}': {e}")
@@ -2084,7 +2084,7 @@ class MainWindow(QMainWindow):
                 self.combo_format.clear()
                 for format_name in resolution_framerates:
                     self.combo_format.addItem(format_name)
-                
+
                 # Update format info label
                 self.lbl_format_info.setText(f"Detected {len(resolution_framerates)} available video formats")
             else:
@@ -2096,7 +2096,7 @@ class MainWindow(QMainWindow):
                         format_name = f"{res} @ {fps}fps"
                         default_formats.append(format_name)
                         self.combo_format.addItem(format_name)
-                
+
                 format_info["resolution_framerates"] = default_formats
                 self.lbl_format_info.setText("Using default formats (detection failed)")
 
@@ -2128,7 +2128,7 @@ class MainWindow(QMainWindow):
             # Update settings
             new_capture_settings = self.options_manager.get_setting("capture")
             new_capture_settings["available_resolutions"] = format_info["resolutions"]
-            new_capture_settings["available_frame_rates"] = format_info["frame_rates"]
+            new_capture_settings["available_frame_rates"]= format_info["frame_rates"]
             new_capture_settings["resolution_framerates"] = format_info["resolution_framerates"]
             self.options_manager.update_category("capture", new_capture_settings)
 
@@ -2161,7 +2161,7 @@ class MainWindow(QMainWindow):
             self.combo_frame_rate.clear()
             for rate in default_rates:
                 self.combo_frame_rate.addItem(str(rate))
-                
+
             self.combo_format.clear()
             for format_name in default_formats:
                 self.combo_format.addItem(format_name)
@@ -2172,7 +2172,7 @@ class MainWindow(QMainWindow):
             new_capture_settings["available_frame_rates"] = default_rates
             new_capture_settings["resolution_framerates"] = default_formats
             self.options_manager.update_category("capture", new_capture_settings)
-            
+
             self.lbl_format_info.setText("Using default formats (detection failed)")
         finally:
             # Re-enable button
@@ -2242,7 +2242,7 @@ class MainWindow(QMainWindow):
             # Capture settings
             capture_settings = self.options_manager.get_setting("capture")
             capture_settings["default_device"] = self.combo_default_device.currentText()
-            
+
             # Parse format for resolution and frame rate
             format_text = self.combo_format.currentText()
             if format_text and "@" in format_text:
@@ -2250,7 +2250,7 @@ class MainWindow(QMainWindow):
                 if len(parts) == 2:
                     resolution = parts[0].strip()
                     fps_str = parts[1].strip().replace("fps", "").strip()
-                    
+
                     try:
                         capture_settings["resolution"] = resolution
                         capture_settings["frame_rate"] = float(fps_str)
@@ -2266,17 +2266,17 @@ class MainWindow(QMainWindow):
                     capture_settings["frame_rate"] = float(self.combo_frame_rate.currentText() or "30")
                 except ValueError:
                     capture_settings["frame_rate"] = 30.0
-                    
+
             capture_settings["pixel_format"] = self.combo_pixel_format.currentText()
-            
+
             # Add the current format to resolution_framerates if not already there
             format_text = self.combo_format.currentText()
             if "resolution_framerates" not in capture_settings:
                 capture_settings["resolution_framerates"] = []
-                
+
             if format_text and format_text not in capture_settings["resolution_framerates"]:
                 capture_settings["resolution_framerates"].append(format_text)
-                
+
             self.options_manager.update_category("capture", capture_settings)
 
             # Paths settings
