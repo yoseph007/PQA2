@@ -1409,6 +1409,36 @@ class CaptureManager(QObject):
         except Exception as e:
             logger.error(f"Error killing FFmpeg processes: {e}")
 
+    def _on_bookend_capture_complete(self):
+        """Handle completion of bookend capture"""
+        output_path = self.current_output_path
+        logger.info(f"Bookend capture completed: {output_path}")
+
+        # Ensure progress shows 100% when complete to fix stuck progress issue
+        self.progress_update.emit(100)
+        
+        # Verify the output file
+        if not os.path.exists(output_path):
+            logger.error(f"Output file doesn't exist: {output_path}")
+            error_msg = f"Capture failed: Output file is missing"
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.capture_finished.emit(False, error_msg)
+            return
+            
+        if os.path.getsize(output_path) == 0:
+            logger.error(f"Output file is empty: {output_path}")
+            error_msg = f"Capture failed: Output file is empty"
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.capture_finished.emit(False, error_msg)
+            return
+            
+        # Move to completed state
+        self.state = CaptureState.COMPLETED
+        self.state_changed.emit(self.state)
+        self.capture_finished.emit(True, output_path)
+
     def start_bookend_capture(self, device_name):
         """
         Start capture of a looped video with white frame bookends
