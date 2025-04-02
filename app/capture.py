@@ -306,7 +306,7 @@ class BookendCaptureManager(QObject):
         logger.info(f"Bookend capture completed: {output_path}")
 
         # Ensure progress shows 100% when complete to fix stuck progress issue
-        self.progress_update.emit(100)
+        self.capture_progress.emit(100)
 
         # Verify the output file
         if not os.path.exists(output_path):
@@ -835,13 +835,13 @@ class BookendCaptureManager(QObject):
             # Calculate percentage (limit to 0-99% until complete)
             if total_expected > 0:
                 percentage = min(99, int((frame_num / total_expected) * 100))
-                self.progress_updated.emit(percentage)
+                self.capture_progress.emit(percentage)
             else:
                 # If we can't calculate, at least show some movement
-                self.progress_updated.emit(min(99, (frame_num % 100)))
+                self.capture_progress.emit(min(99, (frame_num % 100)))
         else:
             # If we don't have duration info, map frame_num to 0-99% range
-            self.progress_updated.emit(min(99, (frame_num % 100)))
+            self.capture_progress.emit(min(99, (frame_num % 100)))
             return
 
         if os.path.getsize(output_path) == 0:
