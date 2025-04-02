@@ -843,7 +843,8 @@ class CaptureManager(QObject):
         time.sleep(2)
 
         # Try multiple connection approaches
-        for attempt in range(1, max_retries + 1):            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
+        for attempt in range(1, max_retries + 1):            
+            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
             self.status_update.emit(f"Connecting to device (attempt {attempt}/{max_retries})...")
 
             # Check device availability
