@@ -180,32 +180,49 @@ class CaptureMonitor(QThread):
             try:
                 logger.info("Sending graceful termination signal to FFmpeg process")
 
-                # Import modules inside the function to avoid scoping issues
-                import signal
-                import ctypes
-
-                # First try to send a SIGINT (Ctrl+C) which allows FFmpeg to finalize the file
-                try:
-                    # Unix-like systems
-                    self.process.send_signal(signal.SIGINT)
-                except (AttributeError, NameError):
+                # For Windows, use a more reliable approach to gracefully terminate FFmpeg
+                if platform.system() == 'Windows':
+                    # Send 'q' key to stdin which signals FFmpeg to stop gracefully
                     try:
-                        # On Windows, try to send Ctrl+C event
-                        kernel32 = ctypes.WinDLL('kernel32')
-                        kernel32.GenerateConsoleCtrlEvent(0, 0)  # 0 is CTRL_C_EVENT
-                    except Exception:
-                        # If all else fails, terminate directly
+                        if hasattr(self.process.stdin, 'write'):
+                            self.process.stdin.write('q\n')
+                            self.process.stdin.flush()
+                            logger.info("Sent 'q' command to FFmpeg")
+                    except Exception as e:
+                        logger.warning(f"Could not send 'q' command: {e}")
+                        
+                    # Give FFmpeg time to finalize the output
+                    logger.info("Waiting for FFmpeg to finalize output file...")
+                    for _ in range(50):  # 5 second timeout
+                        if self.process.poll() is not None:
+                            logger.info("FFmpeg process finalized and terminated")
+                            break
+                        time.sleep(0.1)
+                    
+                    # If still running, try terminate() instead of kill()
+                    if self.process.poll() is None:
+                        logger.info("FFmpeg still running, sending terminate signal")
                         self.process.terminate()
+                        # Wait up to 10 more seconds
+                        for _ in range(100):
+                            if self.process.poll() is not None:
+                                logger.info("FFmpeg process terminated")
+                                break
+                            time.sleep(0.1)
+                else:
+                    # Unix-like systems
+                    import signal
+                    self.process.send_signal(signal.SIGINT)
+                    
+                    # Wait for process to terminate
+                    logger.info("Waiting for FFmpeg to finalize output file...")
+                    for _ in range(100):  # 10 second timeout
+                        if self.process.poll() is not None:
+                            logger.info("FFmpeg process finalized and terminated")
+                            break
+                        time.sleep(0.1)
 
-                # Wait for process to terminate (longer timeout for finalization)
-                logger.info("Waiting for FFmpeg to finalize output file...")
-                for _ in range(100):  # 10 second timeout
-                    if self.process.poll() is not None:
-                        logger.info("FFmpeg process finalized and terminated")
-                        break
-                    time.sleep(0.1)
-
-                # Force kill if still running
+                # Force kill if still running (last resort)
                 if self.process.poll() is None:
                     logger.warning("Process did not terminate gracefully, forcing kill")
                     self.process.kill()
@@ -510,6 +527,7 @@ class CaptureManager(QObject):
             self.capture_monitor.progress_updated.connect(self.progress_update)
             self.capture_monitor.capture_complete.connect(self._on_bookend_capture_complete)
             self.capture_monitor.capture_failed.connect(self._on_capture_failed)
+            self.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
             self.capture_monitor.start()
 
             # Update state
@@ -1043,16 +1061,32 @@ class CaptureManager(QObject):
             # Initialize OpenCV capture
             self.preview_cap = cv2.VideoCapture()
 
-            # For Windows with DirectShow
+            # Try multiple approaches for Windows
             if platform.system() == 'Windows':
-                # Try to open the device
-                self.preview_cap.open(f"video={device_name}", cv2.CAP_DSHOW)
+                # First try with the standard device name for Blackmagic devices
+                # "Decklink Video Capture" is the common name for Blackmagic devices in DirectShow
+                logger.info("Trying to open preview with 'Decklink Video Capture'")
+                self.preview_cap.open("video=Decklink Video Capture", cv2.CAP_DSHOW)
+                
+                # If that didn't work, try with the provided device name
+                if not self.preview_cap.isOpened():
+                    logger.info(f"Trying to open preview with '{device_name}'")
+                    self.preview_cap.open(f"video={device_name}", cv2.CAP_DSHOW)
+                    
+                # As a last resort, try default camera
+                if not self.preview_cap.isOpened():
+                    logger.info("Trying default camera as fallback")
+                    self.preview_cap.open(0, cv2.CAP_DSHOW)
             else:
                 # For Linux/macOS try a different approach
                 self.preview_cap.open(device_name)
 
             if not self.preview_cap.isOpened():
                 logger.warning(f"Could not open preview capture for {device_name}")
+                # Even if we can't open the capture, create a placeholder frame to show
+                placeholder = self._get_preview_frame()
+                if placeholder is not None:
+                    self.frame_available.emit(placeholder)
                 return False
 
             # Set lower resolution for preview to reduce processing load
@@ -1071,6 +1105,10 @@ class CaptureManager(QObject):
         except Exception as e:
             logger.error(f"Error starting preview: {str(e)}")
             self.preview_active = False
+            # Send a placeholder frame to avoid crashes
+            placeholder = self._get_preview_frame()
+            if placeholder is not None:
+                self.frame_available.emit(placeholder)
             return False
 
     def _stop_preview_capture(self):

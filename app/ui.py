@@ -1040,20 +1040,43 @@ class MainWindow(QMainWindow):
                 return
                 
             # Check if frame is valid
-            if frame is None or frame.size == 0:
+            if frame is None:
+                logger.warning("Received None frame for preview")
+                self._show_placeholder_image("No video feed received")
+                return
+            
+            if isinstance(frame, np.ndarray) and frame.size == 0:
                 logger.warning("Received empty frame for preview")
-                self._show_placeholder_image("No valid video frame received")
+                self._show_placeholder_image("Empty video frame received")
                 return
 
             # Convert OpenCV frame to QImage using a more robust method
             try:
+                # Ensure frame is a numpy array with the right format
+                if not isinstance(frame, np.ndarray):
+                    logger.warning(f"Frame is not numpy array but {type(frame)}")
+                    self._show_placeholder_image("Invalid frame format")
+                    return
+                
                 # Convert BGR to RGB
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                height, width, channels = rgb_frame.shape
-                bytes_per_line = channels * width
+                if len(frame.shape) == 3 and frame.shape[2] == 3:
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    height, width, channels = rgb_frame.shape
+                    bytes_per_line = channels * width
+                    img_format = QImage.Format_RGB888
+                elif len(frame.shape) == 2:
+                    # Handle grayscale images
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+                    height, width, channels = rgb_frame.shape
+                    bytes_per_line = channels * width
+                    img_format = QImage.Format_RGB888
+                else:
+                    logger.warning(f"Unsupported frame format: {frame.shape}")
+                    self._show_placeholder_image("Unsupported frame format")
+                    return
                 
                 # Create QImage with correct parameters
-                q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+                q_img = QImage(rgb_frame.data, width, height, bytes_per_line, img_format)
                 
                 # Create pixmap and scale it
                 pixmap = QPixmap.fromImage(q_img)
@@ -1838,28 +1861,39 @@ class MainWindow(QMainWindow):
 
         capture_layout.addRow("Default Capture Device:", device_layout)
 
-        # Resolution selection
-        self.combo_resolution = QComboBox()
-        available_resolutions = capture_settings.get("available_resolutions", ["1080p", "720p", "576p", "480p"])
-        self.combo_resolution.addItems(available_resolutions)
-        current_resolution = capture_settings.get("resolution", "1080p")
-        index = self.combo_resolution.findText(current_resolution)
+        # Combined format selection (resolution and frame rate together)
+        self.combo_format = QComboBox()
+        self.combo_format.setMinimumWidth(300)
+        resolution_framerates = capture_settings.get("resolution_framerates", [])
+        if resolution_framerates:
+            self.combo_format.addItems(resolution_framerates)
+        else:
+            # Create defaults if none available
+            default_formats = []
+            for res in ["1920x1080", "1280x720", "720x576", "720x480"]:
+                for fps in [29.97, 25, 30, 50, 59.94, 60]:
+                    default_formats.append(f"{res} @ {fps}fps")
+            self.combo_format.addItems(default_formats)
+        
+        # Try to set current format from settings
+        current_resolution = capture_settings.get("resolution", "1920x1080")
+        current_rate = capture_settings.get("frame_rate", 30)
+        current_format = f"{current_resolution} @ {current_rate}fps"
+        
+        index = self.combo_format.findText(current_format)
         if index >= 0:
-            self.combo_resolution.setCurrentIndex(index)
-        self.combo_resolution.setToolTip("Default capture resolution")
-        capture_layout.addRow("Default Resolution:", self.combo_resolution)
+            self.combo_format.setCurrentIndex(index)
+        self.combo_format.setToolTip("Combined resolution and frame rate for capture")
+        capture_layout.addRow("Video Format:", self.combo_format)
 
-        # Frame rate selection
+        # Keep these for backwards compatibility, but hide them in the UI
+        self.combo_resolution = QComboBox()
+        self.combo_resolution.setVisible(False)
         self.combo_frame_rate = QComboBox()
-        available_rates = capture_settings.get("available_frame_rates", [23.98, 24, 25, 29.97, 30, 50, 59.94, 60])
-        for rate in available_rates:
-            self.combo_frame_rate.addItem(str(rate))
-        current_rate = str(capture_settings.get("frame_rate", 30))
-        index = self.combo_frame_rate.findText(current_rate)
-        if index >= 0:
-            self.combo_frame_rate.setCurrentIndex(index)
-        self.combo_frame_rate.setToolTip("Default capture frame rate")
-        capture_layout.addRow("Default Frame Rate:", self.combo_frame_rate)
+        self.combo_frame_rate.setVisible(False)
+
+        # When format changes, update the hidden resolution and frame rate fields
+        self.combo_format.currentTextChanged.connect(self._update_resolution_framerate_from_format)
 
         # Pixel format selection
         self.combo_pixel_format = QComboBox()
@@ -1876,12 +1910,44 @@ class MainWindow(QMainWindow):
         self.btn_detect_formats.clicked.connect(self.detect_device_formats)
         capture_layout.addRow("", self.btn_detect_formats)
 
+        # Format info display
+        self.lbl_format_info = QLabel("Select 'Auto-Detect Formats' to see available capture card formats")
+        self.lbl_format_info.setStyleSheet("font-style: italic; color: #666;")
+        self.lbl_format_info.setWordWrap(True)
+        capture_layout.addRow("", self.lbl_format_info)
+
         capture_group.setLayout(capture_layout)
 
         # Populate devices on initialization
         self.refresh_capture_devices()
 
         return capture_group
+        
+    def _update_resolution_framerate_from_format(self, format_text):
+        """Update the hidden resolution and frame rate fields from the format selection"""
+        if not format_text:
+            return
+            
+        # Parse the format text like "1920x1080 @ 30fps"
+        try:
+            parts = format_text.split("@")
+            if len(parts) == 2:
+                resolution = parts[0].strip()
+                fps_part = parts[1].strip()
+                
+                # Remove "fps" suffix
+                fps = fps_part.replace("fps", "").strip()
+                
+                # Update the hidden fields
+                self.combo_resolution.clear()
+                self.combo_resolution.addItem(resolution)
+                
+                self.combo_frame_rate.clear()
+                self.combo_frame_rate.addItem(fps)
+                
+                logger.debug(f"Updated resolution to {resolution} and frame rate to {fps}")
+        except Exception as e:
+            logger.error(f"Error parsing format text '{format_text}': {e}")
 
     def _create_paths_options_group(self, settings):
         """Create the paths options group"""
@@ -2001,6 +2067,7 @@ class MainWindow(QMainWindow):
         # Disable button during detection
         self.btn_detect_formats.setEnabled(False)
         self.btn_detect_formats.setText("Detecting...")
+        self.lbl_format_info.setText("Detecting available formats...")
 
         # Run in timer to avoid blocking UI
         QTimer.singleShot(100, lambda: self._perform_format_detection(device))
@@ -2011,7 +2078,29 @@ class MainWindow(QMainWindow):
             # Get formats from options manager
             format_info = self.options_manager.get_decklink_formats(device)
 
-            # Update UI with detected options
+            # First update the combined format dropdown
+            resolution_framerates = format_info.get("resolution_framerates", [])
+            if resolution_framerates:
+                self.combo_format.clear()
+                for format_name in resolution_framerates:
+                    self.combo_format.addItem(format_name)
+                
+                # Update format info label
+                self.lbl_format_info.setText(f"Detected {len(resolution_framerates)} available video formats")
+            else:
+                # If no formats detected, fall back to defaults
+                self.combo_format.clear()
+                default_formats = []
+                for res in ["1920x1080", "1280x720", "720x576", "720x480"]:
+                    for fps in [29.97, 25, 30, 50, 59.94, 60]:
+                        format_name = f"{res} @ {fps}fps"
+                        default_formats.append(format_name)
+                        self.combo_format.addItem(format_name)
+                
+                format_info["resolution_framerates"] = default_formats
+                self.lbl_format_info.setText("Using default formats (detection failed)")
+
+            # Also update the hidden fields for backward compatibility
             if format_info["resolutions"]:
                 self.combo_resolution.clear()
                 for res in format_info["resolutions"]:
@@ -2040,6 +2129,7 @@ class MainWindow(QMainWindow):
             new_capture_settings = self.options_manager.get_setting("capture")
             new_capture_settings["available_resolutions"] = format_info["resolutions"]
             new_capture_settings["available_frame_rates"] = format_info["frame_rates"]
+            new_capture_settings["resolution_framerates"] = format_info["resolution_framerates"]
             self.options_manager.update_category("capture", new_capture_settings)
 
             # Show success message with number of formats
@@ -2058,6 +2148,10 @@ class MainWindow(QMainWindow):
             # Even on error, ensure we have default values
             default_resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
             default_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+            default_formats = []
+            for res in default_resolutions:
+                for fps in default_rates:
+                    default_formats.append(f"{res} @ {fps}fps")
 
             # Update UI with defaults
             self.combo_resolution.clear()
@@ -2067,12 +2161,19 @@ class MainWindow(QMainWindow):
             self.combo_frame_rate.clear()
             for rate in default_rates:
                 self.combo_frame_rate.addItem(str(rate))
+                
+            self.combo_format.clear()
+            for format_name in default_formats:
+                self.combo_format.addItem(format_name)
 
             # Update settings with defaults
             new_capture_settings = self.options_manager.get_setting("capture")
             new_capture_settings["available_resolutions"] = default_resolutions
             new_capture_settings["available_frame_rates"] = default_rates
+            new_capture_settings["resolution_framerates"] = default_formats
             self.options_manager.update_category("capture", new_capture_settings)
+            
+            self.lbl_format_info.setText("Using default formats (detection failed)")
         finally:
             # Re-enable button
             self.btn_detect_formats.setEnabled(True)
@@ -2141,9 +2242,41 @@ class MainWindow(QMainWindow):
             # Capture settings
             capture_settings = self.options_manager.get_setting("capture")
             capture_settings["default_device"] = self.combo_default_device.currentText()
-            capture_settings["resolution"] = self.combo_resolution.currentText()
-            capture_settings["frame_rate"] = float(self.combo_frame_rate.currentText())
+            
+            # Parse format for resolution and frame rate
+            format_text = self.combo_format.currentText()
+            if format_text and "@" in format_text:
+                parts = format_text.split("@")
+                if len(parts) == 2:
+                    resolution = parts[0].strip()
+                    fps_str = parts[1].strip().replace("fps", "").strip()
+                    
+                    try:
+                        capture_settings["resolution"] = resolution
+                        capture_settings["frame_rate"] = float(fps_str)
+                    except ValueError:
+                        logger.warning(f"Could not parse frame rate from {fps_str}, using fallback")
+                        # Use values from hidden fields as fallback
+                        capture_settings["resolution"] = self.combo_resolution.currentText()
+                        capture_settings["frame_rate"] = float(self.combo_frame_rate.currentText() or "30")
+            else:
+                # Use values from hidden fields as fallback
+                capture_settings["resolution"] = self.combo_resolution.currentText()
+                try:
+                    capture_settings["frame_rate"] = float(self.combo_frame_rate.currentText() or "30")
+                except ValueError:
+                    capture_settings["frame_rate"] = 30.0
+                    
             capture_settings["pixel_format"] = self.combo_pixel_format.currentText()
+            
+            # Add the current format to resolution_framerates if not already there
+            format_text = self.combo_format.currentText()
+            if "resolution_framerates" not in capture_settings:
+                capture_settings["resolution_framerates"] = []
+                
+            if format_text and format_text not in capture_settings["resolution_framerates"]:
+                capture_settings["resolution_framerates"].append(format_text)
+                
             self.options_manager.update_category("capture", capture_settings)
 
             # Paths settings
