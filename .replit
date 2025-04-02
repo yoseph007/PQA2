@@ -26,3 +26,12 @@ args = "python -m pip install -r requirements.txt"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
+
+[[workflows.workflow]]
+name = "Run VMAF Debug"
+author = 40724597
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python vmaf_debug.py -r models/reference_video.mp4 -d models/distorted_video.mp4"
