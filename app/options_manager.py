@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import time
+import platform
 from PyQt5.QtCore import QObject, pyqtSignal
 import subprocess
 

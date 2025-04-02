@@ -25,12 +25,4 @@ args = "python -m pip install -r requirements.txt"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "export QT_QPA_PLATFORM=minimal"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "export QT_DEBUG_PLUGINS=1"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
 args = "python main.py"
