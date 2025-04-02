@@ -1365,7 +1365,9 @@ class MainWindow(QMainWindow):
                 self.lbl_capture_frame_counter.setText(f"Frames: {current_frame:,} / {total_frames:,}")
             else:
                 self.lbl_capture_frame_counter.setText(f"Frames: {current_frame:,}")
-
+        
+        # The following code belongs to handle_vmaf_complete method, not update_frame_counter
+        if ssim_log and os.path.exists(ssim_log):
             item = QListWidgetItem(f"SSIM Log: {os.path.basename(ssim_log)}")
             item.setData(Qt.UserRole, ssim_log)
             self.list_result_files.addItem(item)
