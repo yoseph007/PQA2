@@ -16,22 +16,22 @@ class VMAFAnalyzer(QObject):
     analysis_complete = pyqtSignal(dict)  # VMAF results
     error_occurred = pyqtSignal(str)
     status_update = pyqtSignal(str)
-    
+
     def __init__(self):
         super().__init__()
         self.output_directory = None
         self.test_name = None
-        
+
     def set_output_directory(self, output_dir):
         """Set output directory for results"""
         self.output_directory = output_dir
         logger.info(f"Set output directory to: {output_dir}")
-        
+
     def set_test_name(self, test_name):
         """Set test name for organizing results"""
         self.test_name = test_name
         logger.info(f"Set test name to: {test_name}")
-    
+
     def analyze_videos(self, reference_path, distorted_path, model="vmaf_v0.6.1", duration=None):
         """Run VMAF analysis with the correct command format and properly escaped paths"""
         try:
@@ -58,7 +58,7 @@ class VMAFAnalyzer(QObject):
             output_dir = self.output_directory
             if not output_dir:
                 output_dir = os.path.dirname(reference_path)
-                
+
             # Create the VMAF output directory with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             vmaf_dir = os.path.join(output_dir, f"vmaf_{timestamp}")
@@ -85,7 +85,21 @@ class VMAFAnalyzer(QObject):
             if not model.endswith('.json'):
                 model_name = f"{model}.json"
 
-            # Build FFmpeg command for VMAF - using exact format from working example
+            # Create simpler output paths to avoid Windows path issues
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            vmaf_filename = f"vmaf_{timestamp_str}.json"
+            csv_filename = f"vmaf_{timestamp_str}.csv"
+            psnr_filename = f"psnr_{timestamp_str}.txt"
+            ssim_filename = f"ssim_{timestamp_str}.txt"
+
+            # Create full paths for reporting later
+            json_path = os.path.join(vmaf_dir, vmaf_filename).replace("\\", "/")
+            csv_path = os.path.join(vmaf_dir, csv_filename).replace("\\", "/")
+            psnr_log = os.path.join(vmaf_dir, psnr_filename).replace("\\", "/")
+            ssim_log = os.path.join(vmaf_dir, ssim_filename).replace("\\", "/")
+
+            # Build a more reliable FFmpeg command using separate filters
+            # instead of a complex filter chain that has path escaping issues
             vmaf_cmd = [
                 "ffmpeg", 
                 "-hide_banner",
@@ -97,21 +111,19 @@ class VMAFAnalyzer(QObject):
             if duration_cmd:
                 vmaf_cmd.extend(duration_cmd)
 
-            # Simplify the filter_complex configuration to avoid issues with paths
-            # Use simpler paths that are less likely to cause escaping issues
-            tmp_json = os.path.join(vmaf_dir, "vmaf.json").replace("\\", "/")
-            tmp_csv = os.path.join(vmaf_dir, "vmaf.csv").replace("\\", "/")
-            tmp_psnr = os.path.join(vmaf_dir, "psnr.txt").replace("\\", "/")
-            tmp_ssim = os.path.join(vmaf_dir, "ssim.txt").replace("\\", "/")
+            # Change directory to the vmaf output dir to use relative paths in the command
+            # This avoids Windows path escaping issues with colons
+            current_dir = os.getcwd()
+            os.chdir(vmaf_dir)
 
-            # Use a simpler filter complex that's less likely to break
+            # Now use simple filenames instead of full paths in the filter
             filter_complex = (
                 "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
                 "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
-                f"[ref1][dist1]libvmaf=log_path={tmp_json}:log_fmt=json;"
-                f"[ref2][dist2]libvmaf=log_path={tmp_csv}:log_fmt=csv;"
-                f"[0:v][1:v]psnr=stats_file={tmp_psnr};"
-                f"[0:v][1:v]ssim=stats_file={tmp_ssim}"
+                f"[ref1][dist1]libvmaf=log_path={vmaf_filename}:log_fmt=json;"
+                f"[ref2][dist2]libvmaf=log_path={csv_filename}:log_fmt=csv;"
+                f"[0:v][1:v]psnr=stats_file={psnr_filename};"
+                f"[0:v][1:v]ssim=stats_file={ssim_filename}"
             )
 
             # Use the -filter_complex parameter instead of -lavfi which seems more compatible
@@ -142,6 +154,8 @@ class VMAFAnalyzer(QObject):
                 error_msg = f"Failed to start VMAF subprocess: {str(subprocess_error)}"
                 logger.error(error_msg)
                 self.error_occurred.emit(error_msg)
+                # Restore original directory
+                os.chdir(current_dir)
                 return None
             # Monitor progress
             frame_total = 0
@@ -166,7 +180,7 @@ class VMAFAnalyzer(QObject):
                             if frame_total == 0:
                                 # We don't have total frames yet, just update based on current frame
                                 progress = min(95, max(10, 10 + (frame_count % 100)))
-                                
+
                                 # Only update every second to avoid too many signals
                                 current_time = time.time()
                                 if current_time - last_progress_time >= 1.0:
@@ -220,6 +234,8 @@ class VMAFAnalyzer(QObject):
                 error_msg = f"VMAF analysis failed with code {returncode}: {stderr}"
                 logger.error(error_msg)
                 self.error_occurred.emit(error_msg)
+                # Restore original directory
+                os.chdir(current_dir)
                 return None
 
             # Check if output files exist
@@ -228,6 +244,8 @@ class VMAFAnalyzer(QObject):
                 error_msg = "VMAF analysis completed but JSON output file not found"
                 logger.error(error_msg)
                 self.error_occurred.emit(error_msg)
+                # Restore original directory
+                os.chdir(current_dir)
                 return None
 
             # Parse VMAF results from JSON
@@ -304,6 +322,9 @@ class VMAFAnalyzer(QObject):
                 self.analysis_progress.emit(100)
                 self.status_update.emit(f"VMAF analysis complete! Score: {vmaf_score:.2f}")
 
+                # Restore original directory
+                os.chdir(current_dir)
+
                 # Return results
                 self.analysis_complete.emit(results)
                 return results
@@ -314,6 +335,8 @@ class VMAFAnalyzer(QObject):
                 self.error_occurred.emit(error_msg)
                 import traceback
                 logger.error(traceback.format_exc())
+                # Restore original directory
+                os.chdir(current_dir)
                 return None
 
         except Exception as e:
@@ -322,6 +345,8 @@ class VMAFAnalyzer(QObject):
             self.error_occurred.emit(error_msg)
             import traceback
             logger.error(traceback.format_exc())
+            # Restore original directory
+            os.chdir(current_dir)
             return None
 
     def _get_video_info(self, video_path):
@@ -340,13 +365,13 @@ class VMAFAnalyzer(QObject):
             if result.returncode != 0:
                 logger.error(f"FFprobe failed: {result.stderr}")
                 return None
-                
+
             info = json.loads(result.stdout)
             video_stream = next((s for s in info.get('streams', []) if s.get('codec_type') == 'video'), None)
             if not video_stream:
                 logger.error("No video stream found")
                 return None
-                
+
             format_info = info.get('format', {})
             duration = float(format_info.get('duration', 0))
             fr_str = video_stream.get('avg_frame_rate', '0/0')
@@ -356,7 +381,7 @@ class VMAFAnalyzer(QObject):
             height = int(video_stream.get('height', 0))
             frame_count = int(video_stream.get('nb_frames', 0))
             pix_fmt = video_stream.get('pix_fmt', 'unknown')
-            
+
             return {
                 'path': video_path,
                 'duration': duration,
@@ -391,7 +416,7 @@ class VMAFAnalysisThread(QThread):
         self.analyzer.status_update.connect(self.status_update, Qt.DirectConnection)
         self.analyzer.error_occurred.connect(self.error_occurred, Qt.DirectConnection)
         self.analyzer.analysis_complete.connect(self.analysis_complete, Qt.DirectConnection)
-        
+
         # Output directory will be set from outside if needed
         self.output_directory = None
         self.test_name = None
@@ -401,7 +426,7 @@ class VMAFAnalysisThread(QThread):
         try:
             # Disconnect all signals to prevent issues during thread destruction
             self.disconnect()
-            
+
             # Also disconnect signals from the analyzer if it exists
             if hasattr(self, 'analyzer'):
                 self.analyzer.analysis_progress.disconnect()
@@ -416,7 +441,7 @@ class VMAFAnalysisThread(QThread):
         """Set output directory for results"""
         self.output_directory = output_dir
         self.analyzer.set_output_directory(output_dir)
-        
+
     def set_test_name(self, test_name):
         """Set test name for organizing results"""
         self.test_name = test_name
@@ -457,7 +482,7 @@ class VMAFAnalysisThread(QThread):
             # If output directory was set, pass it to the analyzer
             if self.output_directory:
                 self.analyzer.set_output_directory(self.output_directory)
-                
+
             if self.test_name:
                 self.analyzer.set_test_name(self.test_name)
 
