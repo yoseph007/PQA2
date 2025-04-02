@@ -3,6 +3,7 @@ import os
 import json
 import logging
 import re
+import time
 from PyQt5.QtCore import QObject, pyqtSignal
 import subprocess
 
@@ -97,12 +98,69 @@ class OptionsManager(QObject):
             logger.info("Settings updated with new default values")
             self.save_settings()
     
+    def __init__(self, settings_file="settings.json"):
+        super().__init__()
+        self.settings_file = settings_file
+        self.last_save_time = 0  # Track the last time settings were saved
+        self.save_debounce_ms = 1000  # Minimum time between saves in milliseconds
+        
+        # Default settings
+        self.default_settings = {
+            # Bookend settings
+            "bookend": {
+                "min_loops": 3,
+                "max_capture_time": 120,  # seconds
+                "bookend_duration": 0.5,  # seconds
+                "white_threshold": 240    # 0-255 for white detection
+            },
+            # VMAF settings
+            "vmaf": {
+                "default_model": "vmaf_v0.6.1",
+                "available_models": ["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"],
+                "subsample": 1,  # 1 = analyze every frame
+                "threads": 0,    # 0 = auto
+                "output_format": "json"
+            },
+            # Capture settings
+            "capture": {
+                "default_device": "Intensity Shuttle",
+                "resolution": "1080p",
+                "frame_rate": 30,
+                "pixel_format": "uyvy422",
+                "available_resolutions": ["1080p", "720p", "576p", "480p"],
+                "available_frame_rates": [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+            },
+            # File paths
+            "paths": {
+                "default_output_dir": "",
+                "reference_video_dir": "",
+                "results_dir": "",
+                "temp_dir": ""
+            }
+        }
+        
+        # Current settings (will be loaded from file or defaults)
+        self.settings = {}
+        
+        # Load settings from file or create with defaults
+        self.load_settings()
+        
     def save_settings(self):
-        """Save current settings to file"""
+        """Save current settings to file with debouncing to prevent rapid saves"""
+        current_time = time.time() * 1000  # Current time in milliseconds
+        
+        # Check if enough time has passed since the last save
+        if (current_time - self.last_save_time) < self.save_debounce_ms:
+            logger.debug("Skipping save due to debounce timer")
+            return True
+            
         try:
             with open(self.settings_file, 'w') as f:
                 json.dump(self.settings, f, indent=4)
             logger.info(f"Settings saved to {self.settings_file}")
+            
+            # Update last save time
+            self.last_save_time = current_time
             
             # Emit signal that settings were updated
             self.settings_updated.emit(self.settings)
