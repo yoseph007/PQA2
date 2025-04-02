@@ -150,6 +150,117 @@ class CaptureMonitor(QThread):
                                             elapsed = current_time - self.start_time
                                             progress = min(int((elapsed / self.duration) * 95), 95)
                                         else:
+                                            # Fallback - increment in small steps based on frames
+                                            # Ensure we never report 0% after starting
+                                            progress = max(5, min(int((frame_num % 1000) / 10), 95))
+                                        
+                                        # Only emit if progress changed to avoid flooding UI
+                                        if progress != self.last_progress_value:
+                                            self.progress_updated.emit(progress)
+                                            self.last_progress_value = progress
+                                            
+                                        # Update timestamp
+                                        self.last_progress_time = current_time
+                                        
+                                    # Always emit frame count updates for UI display
+                                    self.frame_count_updated.emit(frame_num, self.total_frames)
+                            except (ValueError, AttributeError) as e:
+                                logger.warning(f"Error parsing frame number: {e}")
+
+                        # Check for common error patterns
+                        if "Error" in line or "Invalid" in line:
+                            logger.warning(f"Potential error in FFmpeg output: {line.strip()}")
+                except Exception as e:
+                    logger.warning(f"Error reading FFmpeg output: {e}")
+
+            # Don't burn CPU with polling
+            time.sleep(0.1)
+            
+            # Update progress based on elapsed time for smoother appearance
+            # Only if no recent frame-based updates
+            current_time = time.time()
+            if self.duration and (current_time - self.last_progress_time) >= 1.0:
+                elapsed = current_time - self.start_time
+                time_progress = min(int((elapsed / self.duration) * 95), 95)
+                
+                # Only emit if progress increased to avoid jumping back
+                if time_progress > self.last_progress_value:
+                    self.progress_updated.emit(time_progress)
+                    self.last_progress_value = time_progress
+                    self.last_progress_time = current_time
+                else:
+                    # Do nothing if progress didn't increase
+                    logger.debug("Skipping progress update as value didn't increase")
+
+    def _terminate_process(self):
+        """Safely terminate the FFmpeg process with proper signal to finalize file"""
+        if self.process and self.process.poll() is None:
+            try:
+                logger.info("Sending graceful termination signal to FFmpeg process")
+
+                # For Windows, use a more reliable approach to gracefully terminate FFmpeg
+                if platform.system() == 'Windows':
+                    # Send 'q' key to stdin which signals FFmpeg to stop gracefully
+                    try:
+                        if hasattr(self.process.stdin, 'write'):
+                            self.process.stdin.write('q\n')
+                            self.process.stdin.flush()
+                            logger.info("Sent 'q' command to FFmpeg")
+                    except Exception as e:
+                        logger.warning(f"Could not send 'q' command: {e}")
+                        
+                    # Give FFmpeg time to finalize the output
+                    logger.info("Waiting for FFmpeg to finalize output file...")
+                    for _ in range(50):  # 5 second timeout
+                        if self.process.poll() is not None:
+                            logger.info("FFmpeg process finalized and terminated")
+                            break
+                        time.sleep(0.1)
+                    
+                    # If still running, try terminate() instead of kill()
+                    if self.process.poll() is None:
+                        logger.info("FFmpeg still running, sending terminate signal")
+                        self.process.terminate()
+                        # Wait up to 10 more seconds
+                        for _ in range(100):
+                            if self.process.poll() is not None:
+                                logger.info("FFmpeg process terminated")
+                                break
+                            time.sleep(0.1)
+                else:
+                    # Unix-like systems
+                    import signal
+                    self.process.send_signal(signal.SIGINT)
+                    
+                    # Wait for process to terminate
+                    logger.info("Waiting for FFmpeg to finalize output file...")
+                    for _ in range(100):  # 10 second timeout
+                        if self.process.poll() is not None:
+                            logger.info("FFmpeg process finalized and terminated")
+                            break
+                        time.sleep(0.1)
+
+                # Force kill if still running (last resort)
+                if self.process.poll() is None:
+                    logger.warning("Process did not terminate gracefully, forcing kill")
+                    self.process.kill()
+                    try:
+                        self.process.wait(timeout=5)  # Wait with timeout
+                    except:
+                        pass
+            except Exception as e:
+                logger.error(f"Error terminating process: {e}")
+                # As a last resort, try to kill it
+                try:
+                    self.process.kill()
+                except:
+                    pass
+
+    def stop(self):
+        """Stop monitoring"""
+        self._running = False
+        self._terminate_process()
+
 
 class BookendCaptureManager(QObject):
     """Manager for capturing bookend videos"""
@@ -188,6 +299,651 @@ class BookendCaptureManager(QObject):
         if self.state != CaptureState.IDLE:
             logger.warning(f"Cannot start capture while in state: {self.state}")
             return False
+            
+    def _on_bookend_capture_complete(self):
+        """Handle completion of bookend capture"""
+        output_path = self.current_output_path
+        logger.info(f"Bookend capture completed: {output_path}")
+
+        # Ensure progress shows 100% when complete to fix stuck progress issue
+        self.progress_update.emit(100)
+
+        # Verify the output file
+        if not os.path.exists(output_path):
+            logger.error(f"Output file doesn't exist: {output_path}")
+            error_msg = f"Capture failed: Output file is missing"
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.capture_finished.emit(False, error_msg)
+            
+    def stop_capture(self, cleanup_temp=False):
+        """Stop any active capture process"""
+        if not self.is_capturing:
+            return
+
+        logger.info("Stopping capture")
+        self.status_update.emit("Stopping capture...")
+
+        # Stop capture monitor if active
+        if self.capture_monitor:
+            self.capture_monitor.stop()
+
+        # Force kill any lingering FFmpeg processes
+        if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
+            try:
+                # Try to terminate gracefully first
+                self.ffmpeg_process.terminate()
+                # Wait a short time for it to terminate
+                for _ in range(10):  # 1 second timeout
+                    if self.ffmpeg_process.poll() is not None:
+                        break
+                    time.sleep(0.1)
+
+                # If still running, force kill
+                if self.ffmpeg_process.poll() is None:
+                    self.ffmpeg_process.kill()
+                    # Make sure it's dead
+                    self.ffmpeg_process.wait()
+            except Exception as e:
+                logger.error(f"Error killing FFmpeg process: {e}")
+
+        # Reset state
+        self.state = CaptureState.IDLE
+        self.state_changed.emit(self.state)
+        self.ffmpeg_process = None
+
+        # Clean up temporary files if requested
+        if cleanup_temp and self.current_output_path and os.path.exists(self.current_output_path):
+            try:
+                logger.info(f"Cleaning up temporary capture file: {self.current_output_path}")
+                os.remove(self.current_output_path)
+                self.current_output_path = None
+
+                # Also clean up any other temp files in the same directory
+                temp_dir = os.path.dirname(self.current_output_path)
+                for file in os.listdir(temp_dir):
+                    if file.startswith("temp_") or file.startswith("tmp_"):
+                        try:
+                            file_path = os.path.join(temp_dir, file)
+                            logger.info(f"Removing additional temp file: {file_path}")
+                            os.remove(file_path)
+                        except Exception as e:
+                            logger.warning(f"Could not remove temp file {file}: {e}")
+            except Exception as e:
+                logger.error(f"Error removing temporary file: {e}")
+
+        # Add delay before allowing another capture
+        time.sleep(1)  # 1 second delay
+
+        self.status_update.emit("Capture stopped by user")
+
+        # If we're cleaning up, don't report success
+        if cleanup_temp:
+            self.capture_finished.emit(False, "Capture cancelled by user")
+        else:
+            self.capture_finished.emit(True, self.current_output_path)
+
+    def _on_capture_failed(self, error_msg):
+        """Handle capture errors"""
+        logger.error(f"Capture failed: {error_msg}")
+
+        # Clean up resources
+        self.ffmpeg_process = None
+        self.capture_monitor = None
+
+        # Update state
+        self.state = CaptureState.ERROR
+        self.state_changed.emit(self.state)
+
+        # Check for device error that might be recoverable
+        device_error = "Cannot access" in error_msg or "Error opening input" in error_msg or "No such device" in error_msg
+
+        if device_error:
+            # Try recovery
+            self.status_update.emit("Device error detected, attempting recovery...")
+            recovered, message = self.recover_from_error("Intensity Shuttle", error_msg)
+
+            if recovered:
+                user_msg = f"Capture failed but device has been recovered. You can try capturing again.\n\nOriginal error: {error_msg}"
+            else:
+                user_msg = "Cannot access the capture device. Please check that:\n\n" \
+                           "1. The device is properly connected\n" \
+                           "2. Blackmagic drivers are installed\n" \
+                           "3. No other application is using the device\n" \
+                           "4. Try restarting the application"
+        else:
+            user_msg = f"Capture failed: {error_msg}"
+
+        self.status_update.emit(f"Error: {user_msg}")
+        self.capture_finished.emit(False, user_msg)
+        
+    def _kill_ffmpeg_processes(self):
+        """Kill any lingering FFmpeg processes that might be using the capture device"""
+        try:
+            logger.info("Attempting to kill lingering FFmpeg processes")
+
+            if platform.system() == 'Windows':
+                # Windows approach
+                subprocess.run(
+                    ["taskkill", "/F", "/IM", "ffmpeg.exe"], 
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+            else:
+                # Unix approach
+                subprocess.run(
+                    ["pkill", "-9", "ffmpeg"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+
+            logger.info("FFmpeg processes terminated")
+            return True
+        except Exception as e:
+            logger.error(f"Error killing FFmpeg processes: {e}")
+            return False
+
+    def _force_reset_device(self, device_name):
+        """More thorough device reset procedure"""
+        logger.info(f"Attempting to force-reset device: {device_name}")
+        self.status_update.emit("Resetting device connection...")
+
+        # First kill any FFmpeg processes
+        self._kill_ffmpeg_processes()
+
+        # On Windows, try additional device resets
+        if platform.system() == 'Windows':
+            try:
+                # Try net stop/start for Blackmagic service
+                logger.info("Attempting to restart Blackmagic services")
+                service_name = "BlackmagicDesktopVideo"
+
+                # Check if service exists
+                service_check = subprocess.run(
+                    ["sc", "query", service_name],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=5
+                )
+
+                if "running" in service_check.stdout.lower():
+                    # Restart the service
+                    try:
+                        subprocess.run(
+                            ["net", "stop", service_name],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=10
+                        )
+                        time.sleep(1)
+                        subprocess.run(
+                            ["net", "start", service_name],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=10
+                        )
+                        logger.info("Blackmagic service restarted")
+                    except:
+                        logger.warning("Failed to restart Blackmagic service - continuing anyway")
+            except Exception as e:
+                logger.warning(f"Service restart attempt failed: {e}")
+
+        # Allow more time for device to reset
+        time.sleep(5)
+
+        # Try a direct simple test (without error messages to user)
+        try:
+            cmd = [
+                self._ffmpeg_path,
+                "-f", "decklink",
+                "-list_formats", "1",
+                "-i", device_name
+            ]
+
+            subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=3
+            )
+        except:
+            pass
+
+        # Wait again
+        time.sleep(2)
+
+        # Do a proper connection test
+        available, message = self._test_device_availability(device_name)
+        if available:
+            logger.info(f"Device {device_name} successfully reset")
+        else:
+            logger.warning(f"Device {device_name} reset attempt completed but status uncertain")
+            # Return true anyway - we want to continue the workflow
+            available = True
+
+        return available, message
+        
+    def _test_device_availability(self, device_name):
+        """More robust test if the device is available for capture"""
+        try:
+            # Try multiple approaches
+
+            # First approach: Use ffmpeg -list_devices
+            devices_cmd = [
+                self._ffmpeg_path,
+                "-f", "decklink",
+                "-list_devices", "1",
+                "-i", "dummy"
+            ]
+
+            try:
+                devices_result = subprocess.run(
+                    devices_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=3
+                )
+
+                # If device name appears in the output, it's likely available
+                if device_name in devices_result.stderr:
+                    logger.info(f"Device {device_name} found in device list")
+                    return True, "Device listed in available devices"
+            except Exception as e:
+                logger.warning(f"Error listing devices: {e}")
+
+            # Second approach: Direct format test
+            format_cmd = [
+                self._ffmpeg_path,
+                "-f", "decklink",
+                "-list_formats", "1",
+                "-i", device_name
+            ]
+
+            try:
+                format_result = subprocess.run(
+                    format_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=3
+                )
+
+                if "Supported formats" in format_result.stderr:
+                    logger.info(f"Device {device_name} reports supported formats")
+                    return True, "Device formats available"
+            except Exception as e:
+                logger.warning(f"Error getting device formats: {e}")
+
+            # Third approach: Try a minimal capture
+            capture_cmd = [
+                self._ffmpeg_path,
+                "-f", "decklink",
+                "-t", "0.1",  # Try for just 0.1seconds
+                "-i", device_name,
+                "-f", "null",
+                "-"
+            ]
+
+            try:
+                capture_result = subprocess.run(
+                    capture_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=5
+                )
+
+                stderr = capture_result.stderr.lower()
+                if "frame=" in stderr or "time=" in stderr:
+                    logger.info(f"Device {device_name} successfully captured frames")
+                    return True, "Device successfully captured frames"
+            except Exception as e:
+                logger.warning(f"Error testing minimal capture: {e}")
+
+            # If all tests failed but device name was found in device list
+            if device_name in devices_result.stderr:
+                logger.warning(f"Device {device_name} exists but may have issues")
+                return True, "Device exists but may have connection issues"
+
+            logger.warning(f"Device {device_name} not detected by any test method")
+            return False, "Device not detected or not responding"
+
+        except Exception as e:
+            logger.error(f"Error in device availability test: {e}")
+            return False, f"Error testing device: {str(e)}"
+            
+    def _try_connect_device(self, device_name, max_retries=3):
+        """Try to connect to a device with retries and improved reliability"""
+
+        # First, proactively kill any FFmpeg processes
+        self._kill_ffmpeg_processes()
+
+        # Force a small delay before first try
+        time.sleep(2)
+
+        # Try multiple connection approaches
+        for attempt in range(1, max_retries + 1):
+            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
+            self.status_update.emit(f"Connecting to device (attempt {attempt}/{max_retries})...")
+
+            # Check device availability
+            available, message = self._test_device_availability(device_name)
+
+            if available:
+                logger.info(f"Successfully connected to {device_name}")
+                self.status_update.emit(f"Connected to {device_name}")
+                return True, "Device connected successfully"
+
+            # If not successful but not last attempt
+            if attempt < max_retries:
+                # More consistent retry delay - 3 seconds between attempts
+                retry_delay = 3
+                logger.info(f"Device busy, waiting {retry_delay}s before retry: {message}")
+
+                # Show countdown to user
+                self.status_update.emit(f"Device busy: {message}. Waiting {retry_delay}s...")
+                time.sleep(retry_delay)
+
+        return False, f"Failed to connect after {max_retries} attempts: {message}"
+
+    def recover_from_error(self, device_name, error_message):
+        """
+        Attempt to recover from a capture error
+        Returns: (success, recovery_message)
+        """
+        logger.info(f"Attempting to recover from error: {error_message}")
+        self.status_update.emit("Attempting recovery after error...")
+
+        # Reset state
+        self.state = CaptureState.IDLE
+        self.state_changed.emit(self.state)
+
+        # Kill any FFmpeg processes
+        self._kill_ffmpeg_processes()
+
+        # Wait a moment for resources to be freed
+        time.sleep(10)
+
+        # Try to connect to verify recovery
+        return self._try_connect_device(device_name, max_retries=1)
+        
+    def _repair_mp4_if_needed(self, mp4_path):
+        """Attempt to repair an MP4 file with missing moov atom"""
+        try:
+            # Create temporary output path
+            output_dir = os.path.dirname(mp4_path)
+            temp_path = os.path.join(output_dir, f"temp_fixed_{os.path.basename(mp4_path)}")
+
+            # Run FFmpeg to copy and potentially fix the file
+            cmd = [
+                self._ffmpeg_path,
+                "-v", "warning",
+                "-i", mp4_path,
+                "-c", "copy",
+                "-movflags", "faststart",  # This helps with fixing moov atom issues
+                temp_path
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True)
+
+            if result.returncode == 0 and os.path.exists(temp_path):
+                # Replace original with fixed version
+                os.replace(temp_path, mp4_path)
+                logger.info(f"Successfully repaired MP4 file: {mp4_path}")
+                return True, mp4_path
+        except Exception as e:
+            logger.warning(f"Error repairing MP4: {e}")
+
+        return False, None
+
+    def _start_preview_capture(self, device_name):
+        """Start a preview capture to show input feed before recording"""
+        try:
+            # Stop any existing preview
+            self._stop_preview_capture()
+
+            # Initialize OpenCV capture
+            self.preview_cap = cv2.VideoCapture()
+
+            # Try multiple approaches for Windows
+            if platform.system() == 'Windows':
+                # First try with the standard device name for Blackmagic devices
+                # "Decklink Video Capture" is the common name for Blackmagic devices in DirectShow
+                logger.info("Trying to open preview with 'Decklink Video Capture'")
+                self.preview_cap.open("video=Decklink Video Capture", cv2.CAP_DSHOW)
+                
+                # If that didn't work, try with the provided device name
+                if not self.preview_cap.isOpened():
+                    logger.info(f"Trying to open preview with '{device_name}'")
+                    self.preview_cap.open(f"video={device_name}", cv2.CAP_DSHOW)
+                    
+                # As a last resort, try default camera
+                if not self.preview_cap.isOpened():
+                    logger.info("Trying default camera as fallback")
+                    self.preview_cap.open(0, cv2.CAP_DSHOW)
+            else:
+                # For Linux/macOS try a different approach
+                self.preview_cap.open(device_name)
+
+            if not self.preview_cap.isOpened():
+                logger.warning(f"Could not open preview capture for {device_name}")
+                # Even if we can't open the capture, create a placeholder frame to show
+                placeholder = self._get_preview_frame()
+                if placeholder is not None:
+                    self.frame_available.emit(placeholder)
+                return False
+
+            # Set lower resolution for preview to reduce processing load
+            self.preview_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.preview_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+
+            # Create preview thread
+            self.preview_active = True
+            self.preview_thread = QThread()
+            self.preview_thread.run = self._update_preview
+            self.preview_thread.start()
+
+            logger.info(f"Preview capture started for {device_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error starting preview: {str(e)}")
+            self.preview_active = False
+            # Send a placeholder frame to avoid crashes
+            placeholder = self._get_preview_frame()
+            if placeholder is not None:
+                self.frame_available.emit(placeholder)
+            return False
+            
+    def _stop_preview_capture(self):
+        """Stop the preview capture"""
+        if hasattr(self, 'preview_active') and self.preview_active:
+            self.preview_active = False
+
+            # Wait for thread to finish
+            if hasattr(self, 'preview_thread') and self.preview_thread:
+                self.preview_thread.quit()
+                self.preview_thread.wait(1000)
+
+            # Release capture
+            if hasattr(self, 'preview_cap') and self.preview_cap:
+                self.preview_cap.release()
+
+            logger.info("Preview capture stopped")
+
+    def _update_preview(self):
+        """Update preview frames in background thread"""
+        while self.preview_active:
+            try:
+                frame = self._get_preview_frame()
+                if frame is not None:
+                    self.frame_available.emit(frame)
+            except Exception as e:
+                logger.error(f"Error updating preview: {str(e)}")
+
+            # Limit to ~15 fps for preview to reduce CPU usage
+            time.sleep(0.067)
+
+    def _get_preview_frame(self):
+        """Get current frame from preview capture"""
+        if not hasattr(self, 'preview_cap') or not self.preview_cap:
+            # Return placeholder frame
+            placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
+            placeholder[:] = (224, 224, 224)  # Light gray background
+            cv2.putText(placeholder, "No video feed", (160, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+            return placeholder
+
+        if not self.preview_cap.isOpened():
+            logger.warning("Preview capture not open")
+            return None
+
+        ret, frame = self.preview_cap.read()
+        if not ret:
+            return None
+
+        return frame
+
+    def update_frame_counter(self, current_frame, total_frames):
+        """Update frame counter display"""
+        # This method is connected to CaptureMonitor signals
+        # It can be overridden by child classes to update UI
+        pass
+
+    def update_capture_progress(self, frame_num):
+        """Handle frame progress update and convert to percentage"""
+        # Calculate progress percentage based on expected total frames
+        # If we have duration and frame rate info from the process, use it
+        if hasattr(self, 'duration') and self.duration:
+            # Get frame rate from process output if available
+            frame_rate = 30  # Default assumption
+            try:
+                if hasattr(self.process, 'stderr') and self.process.stderr:
+                    for line in self.process.stderr:
+                        if "fps" in line:
+                            match = re.search(r'(\d+\.?\d*)\s*fps', line)
+                            if match:
+                                frame_rate = float(match.group(1))
+                                break
+            except:
+                pass  # If any error occurs, just use the default frame rate
+
+            # Calculate expected total frames
+            total_expected = int(self.duration * frame_rate)
+
+            # Calculate percentage (limit to 0-99% until complete)
+            if total_expected > 0:
+                percentage = min(99, int((frame_num / total_expected) * 100))
+                self.progress_updated.emit(percentage)
+            else:
+                # If we can't calculate, at least show some movement
+                self.progress_updated.emit(min(99, (frame_num % 100)))
+        else:
+            # If we don't have duration info, map frame_num to 0-99% range
+            self.progress_updated.emit(min(99, (frame_num % 100)))
+            return
+
+        if os.path.getsize(output_path) == 0:
+            logger.error(f"Output file is empty: {output_path}")
+            error_msg = f"Capture failed: Output file is empty"
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.capture_finished.emit(False, error_msg)
+            return
+
+        # Move to processing state
+        self.state = CaptureState.PROCESSING
+        self.state_changed.emit(self.state)
+        self.status_update.emit("Bookend capture complete, processing video...")
+
+        # Start post-processing
+        QTimer.singleShot(500, lambda: self._post_process_bookend_capture(output_path))
+
+    def _post_process_bookend_capture(self, output_path):
+        """Process captured video with bookends and move to temporary folder"""
+        try:
+            # Verify file integrity
+            logger.info(f"Processing captured bookend video: {output_path}")
+            self.status_update.emit("Processing captured bookend video...")
+
+            # First check if file exists and is valid
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                raise FileNotFoundError(f"Output file missing or empty: {output_path}")
+
+            # Try to repair MP4 if needed
+            repaired, repaired_path = self._repair_mp4_if_needed(output_path)
+            if repaired and repaired_path:
+                logger.info(f"MP4 repair succeeded, using repaired file: {repaired_path}")
+                output_path = repaired_path
+
+            # Verify file using FFprobe
+            cmd = [
+                "ffprobe",
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=codec_type,duration",
+                "-of", "json",
+                output_path
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise ValueError(f"Invalid video file: {result.stderr}")
+
+            # Parse duration from output
+            import json
+            try:
+                info = json.loads(result.stdout)
+                duration = float(info.get('streams', [{}])[0].get('duration', 0))
+
+                if duration < 1.0:
+                    raise ValueError(f"Video too short: {duration:.2f}s")
+
+                logger.info(f"Captured bookend video duration: {duration:.2f}s")
+            except (json.JSONDecodeError, IndexError) as e:
+                logger.warning(f"Could not parse duration: {e}, continuing anyway")
+                
+            # Move to temporary folder if configured in options
+            temp_dir = None
+            if hasattr(self, 'options_manager') and self.options_manager:
+                temp_dir = self.options_manager.get_setting("paths", "temp_dir")
+            
+            # If no temp dir configured or doesn't exist, use system temp
+            if not temp_dir or not os.path.exists(temp_dir):
+                import tempfile
+                temp_dir = tempfile.gettempdir()
+                
+            # Create a new filename in temp dir
+            temp_filename = f"temp_bookend_capture_{int(time.time())}.mp4"
+            temp_path = os.path.join(temp_dir, temp_filename)
+            
+            # Copy the file to temp location
+            import shutil
+            shutil.copy2(output_path, temp_path)
+            logger.info(f"Moved capture file to temporary location: {temp_path}")
+            
+            # Delete the original file to save space
+            try:
+                os.remove(output_path)
+                logger.info(f"Deleted original capture file: {output_path}")
+            except Exception as e:
+                logger.warning(f"Could not delete original capture file: {e}")
+                
+            # Mark as completed
+            self.state = CaptureState.COMPLETED
+            self.state_changed.emit(self.state)
+            self.status_update.emit("Bookend capture and processing complete")
+            # Return the temp path instead of original
+            self.capture_finished.emit(True, temp_path)
+
+        except Exception as e:
+            error_msg = f"Error processing bookend capture: {str(e)}"
+            logger.error(error_msg)
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.status_update.emit(f"Error: {error_msg}")
+            self.capture_finished.emit(False, error_msg)
             
         if not self.test_name:
             self.test_name = f"Test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -496,125 +1252,6 @@ class BookendCaptureManager(QObject):
         finally:
             self.mutex.unlock()
 
-                                            # Fallback - increment in small steps based on frames
-                                            # Ensure we never report 0% after starting
-                                            progress = max(5, min(int((frame_num % 1000) / 10), 95))
-                                        
-                                        # Only emit if progress changed to avoid flooding UI
-                                        if progress != self.last_progress_value:
-                                            self.progress_updated.emit(progress)
-                                            self.last_progress_value = progress
-                                            
-                                        # Update timestamp
-                                        self.last_progress_time = current_time
-                                        
-                                    # Always emit frame count updates for UI display
-                                    self.frame_count_updated.emit(frame_num, self.total_frames)
-                            except (ValueError, AttributeError) as e:
-                                logger.warning(f"Error parsing frame number: {e}")
-
-                        # Check for common error patterns
-                        if "Error" in line or "Invalid" in line:
-                            logger.warning(f"Potential error in FFmpeg output: {line.strip()}")
-                except Exception as e:
-                    logger.warning(f"Error reading FFmpeg output: {e}")
-
-            # Don't burn CPU with polling
-            time.sleep(0.1)
-            
-            # Update progress based on elapsed time for smoother appearance
-            # Only if no recent frame-based updates
-            current_time = time.time()
-            if self.duration and (current_time - self.last_progress_time) >= 1.0:
-                elapsed = current_time - self.start_time
-                time_progress = min(int((elapsed / self.duration) * 95), 95)
-                
-                # Only emit if progress increased to avoid jumping back
-                if time_progress > self.last_progress_value:
-                    self.progress_updated.emit(time_progress)
-                    self.last_progress_value = time_progress
-                    self.last_progress_time = current_time
-                else:
-                    # Do nothing if progress didn't increase
-                    logger.debug("Skipping progress update as value didn't increase")
-
-    def _terminate_process(self):
-        """Safely terminate the FFmpeg process with proper signal to finalize file"""
-        if self.process and self.process.poll() is None:
-            try:
-                logger.info("Sending graceful termination signal to FFmpeg process")
-
-                # For Windows, use a more reliable approach to gracefully terminate FFmpeg
-                if platform.system() == 'Windows':
-                    # Send 'q' key to stdin which signals FFmpeg to stop gracefully
-                    try:
-                        if hasattr(self.process.stdin, 'write'):
-                            self.process.stdin.write('q\n')
-                            self.process.stdin.flush()
-                            logger.info("Sent 'q' command to FFmpeg")
-                    except Exception as e:
-                        logger.warning(f"Could not send 'q' command: {e}")
-                        
-                    # Give FFmpeg time to finalize the output
-                    logger.info("Waiting for FFmpeg to finalize output file...")
-                    for _ in range(50):  # 5 second timeout
-                        if self.process.poll() is not None:
-                            logger.info("FFmpeg process finalized and terminated")
-                            break
-                        time.sleep(0.1)
-                    
-                    # If still running, try terminate() instead of kill()
-                    if self.process.poll() is None:
-                        logger.info("FFmpeg still running, sending terminate signal")
-                        self.process.terminate()
-                        # Wait up to 10 more seconds
-                        for _ in range(100):
-                            if self.process.poll() is not None:
-                                logger.info("FFmpeg process terminated")
-                                break
-                            time.sleep(0.1)
-                else:
-                    # Unix-like systems
-                    import signal
-                    self.process.send_signal(signal.SIGINT)
-                    
-                    # Wait for process to terminate
-                    logger.info("Waiting for FFmpeg to finalize output file...")
-                    for _ in range(100):  # 10 second timeout
-                        if self.process.poll() is not None:
-                            logger.info("FFmpeg process finalized and terminated")
-                            break
-                        time.sleep(0.1)
-
-                # Force kill if still running (last resort)
-                if self.process.poll() is None:
-                    logger.warning("Process did not terminate gracefully, forcing kill")
-                    self.process.kill()
-                    try:
-                        self.process.wait(timeout=5)  # Wait with timeout
-                    except:
-                        pass
-            except Exception as e:
-                logger.error(f"Error terminating process: {e}")
-                # As a last resort, try to kill it
-                try:
-                    self.process.kill()
-                except:
-                    pass
-
-    def stop(self):
-        """Stop monitoring"""
-        self._running = False
-        self._terminate_process()
-
-
-class CaptureState(Enum):
-    """Capture process states"""
-    IDLE = 0
-    CAPTURING = 1
-    PROCESSING = 2
-    COMPLETED = 3
-    ERROR = 4
 
 class CaptureManager(QObject):
     """Main manager for video capture process using bookend method"""
@@ -915,642 +1552,3 @@ class CaptureManager(QObject):
             self.state_changed.emit(self.state)
             self.capture_finished.emit(False, error_msg)
             return False
-
-    def _on_bookend_capture_complete(self):
-        """Handle completion of bookend capture"""
-        output_path = self.current_output_path
-        logger.info(f"Bookend capture completed: {output_path}")
-
-        # Ensure progress shows 100% when complete to fix stuck progress issue
-        self.progress_update.emit(100)
-
-        # Verify the output file
-        if not os.path.exists(output_path):
-            logger.error(f"Output file doesn't exist: {output_path}")
-            error_msg = f"Capture failed: Output file is missing"
-            self.state = CaptureState.ERROR
-            self.state_changed.emit(self.state)
-            self.capture_finished.emit(False, error_msg)
-            return
-
-        if os.path.getsize(output_path) == 0:
-            logger.error(f"Output file is empty: {output_path}")
-            error_msg = f"Capture failed: Output file is empty"
-            self.state = CaptureState.ERROR
-            self.state_changed.emit(self.state)
-            self.capture_finished.emit(False, error_msg)
-            return
-
-        # Move to processing state
-        self.state = CaptureState.PROCESSING
-        self.state_changed.emit(self.state)
-        self.status_update.emit("Bookend capture complete, processing video...")
-
-        # Start post-processing
-        QTimer.singleShot(500, lambda: self._post_process_bookend_capture(output_path))
-
-    def _post_process_bookend_capture(self, output_path):
-        """Process captured video with bookends and move to temporary folder"""
-        try:
-            # Verify file integrity
-            logger.info(f"Processing captured bookend video: {output_path}")
-            self.status_update.emit("Processing captured bookend video...")
-
-            # First check if file exists and is valid
-            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-                raise FileNotFoundError(f"Output file missing or empty: {output_path}")
-
-            # Try to repair MP4 if needed
-            repaired, repaired_path = self._repair_mp4_if_needed(output_path)
-            if repaired and repaired_path:
-                logger.info(f"MP4 repair succeeded, using repaired file: {repaired_path}")
-                output_path = repaired_path
-
-            # Verify file using FFprobe
-            cmd = [
-                "ffprobe",
-                "-v", "error",
-                "-select_streams", "v:0",
-                "-show_entries", "stream=codec_type,duration",
-                "-of", "json",
-                output_path
-            ]
-
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                raise ValueError(f"Invalid video file: {result.stderr}")
-
-            # Parse duration from output
-            import json
-            try:
-                info = json.loads(result.stdout)
-                duration = float(info.get('streams', [{}])[0].get('duration', 0))
-
-                if duration < 1.0:
-                    raise ValueError(f"Video too short: {duration:.2f}s")
-
-                logger.info(f"Captured bookend video duration: {duration:.2f}s")
-            except (json.JSONDecodeError, IndexError) as e:
-                logger.warning(f"Could not parse duration: {e}, continuing anyway")
-                
-            # Move to temporary folder if configured in options
-            temp_dir = None
-            if hasattr(self, 'options_manager') and self.options_manager:
-                temp_dir = self.options_manager.get_setting("paths", "temp_dir")
-            
-            # If no temp dir configured or doesn't exist, use system temp
-            if not temp_dir or not os.path.exists(temp_dir):
-                import tempfile
-                temp_dir = tempfile.gettempdir()
-                
-            # Create a new filename in temp dir
-            temp_filename = f"temp_bookend_capture_{int(time.time())}.mp4"
-            temp_path = os.path.join(temp_dir, temp_filename)
-            
-            # Copy the file to temp location
-            import shutil
-            shutil.copy2(output_path, temp_path)
-            logger.info(f"Moved capture file to temporary location: {temp_path}")
-            
-            # Delete the original file to save space
-            try:
-                os.remove(output_path)
-                logger.info(f"Deleted original capture file: {output_path}")
-            except Exception as e:
-                logger.warning(f"Could not delete original capture file: {e}")
-                
-            # Mark as completed
-            self.state = CaptureState.COMPLETED
-            self.state_changed.emit(self.state)
-            self.status_update.emit("Bookend capture and processing complete")
-            # Return the temp path instead of original
-            self.capture_finished.emit(True, temp_path)
-
-        except Exception as e:
-            error_msg = f"Error processing bookend capture: {str(e)}"
-            logger.error(error_msg)
-            self.state = CaptureState.ERROR
-            self.state_changed.emit(self.state)
-            self.status_update.emit(f"Error: {error_msg}")
-            self.capture_finished.emit(False, error_msg)
-
-    def stop_capture(self, cleanup_temp=False):
-        """Stop any active capture process"""
-        if not self.is_capturing:
-            return
-
-        logger.info("Stopping capture")
-        self.status_update.emit("Stopping capture...")
-
-        # Stop capture monitor if active
-        if self.capture_monitor:
-            self.capture_monitor.stop()
-
-        # Force kill any lingering FFmpeg processes
-        if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
-            try:
-                # Try to terminate gracefully first
-                self.ffmpeg_process.terminate()
-                # Wait a short time for it to terminate
-                for _ in range(10):  # 1 second timeout
-                    if self.ffmpeg_process.poll() is not None:
-                        break
-                    time.sleep(0.1)
-
-                # If still running, force kill
-                if self.ffmpeg_process.poll() is None:
-                    self.ffmpeg_process.kill()
-                    # Make sure it's dead
-                    self.ffmpeg_process.wait()
-            except Exception as e:
-                logger.error(f"Error killing FFmpeg process: {e}")
-
-        # Reset state
-        self.state = CaptureState.IDLE
-        self.state_changed.emit(self.state)
-        self.ffmpeg_process = None
-
-        # Clean up temporary files if requested
-        if cleanup_temp and self.current_output_path and os.path.exists(self.current_output_path):
-            try:
-                logger.info(f"Cleaning up temporary capture file: {self.current_output_path}")
-                os.remove(self.current_output_path)
-                self.current_output_path = None
-
-                # Also clean up any other temp files in the same directory
-                temp_dir = os.path.dirname(self.current_output_path)
-                for file in os.listdir(temp_dir):
-                    if file.startswith("temp_") or file.startswith("tmp_"):
-                        try:
-                            file_path = os.path.join(temp_dir, file)
-                            logger.info(f"Removing additional temp file: {file_path}")
-                            os.remove(file_path)
-                        except Exception as e:
-                            logger.warning(f"Could not remove temp file {file}: {e}")
-            except Exception as e:
-                logger.error(f"Error removing temporary file: {e}")
-
-        # Add delay before allowing another capture
-        time.sleep(1)  # 1 second delay
-
-        self.status_update.emit("Capture stopped by user")
-
-        # If we're cleaning up, don't report success
-        if cleanup_temp:
-            self.capture_finished.emit(False, "Capture cancelled by user")
-        else:
-            self.capture_finished.emit(True, self.current_output_path)
-
-    def _on_capture_failed(self, error_msg):
-        """Handle capture errors"""
-        logger.error(f"Capture failed: {error_msg}")
-
-        # Clean up resources
-        self.ffmpeg_process = None
-        self.capture_monitor = None
-
-        # Update state
-        self.state = CaptureState.ERROR
-        self.state_changed.emit(self.state)
-
-        # Check for device error that might be recoverable
-        device_error = "Cannot access" in error_msg or "Error opening input" in error_msg or "No such device" in error_msg
-
-        if device_error:
-            # Try recovery
-            self.status_update.emit("Device error detected, attempting recovery...")
-            recovered, message = self.recover_from_error("Intensity Shuttle", error_msg)
-
-            if recovered:
-                user_msg = f"Capture failed but device has been recovered. You can try capturing again.\n\nOriginal error: {error_msg}"
-            else:
-                user_msg = "Cannot access the capture device. Please check that:\n\n" \
-                           "1. The device is properly connected\n" \
-                           "2. Blackmagic drivers are installed\n" \
-                           "3. No other application is using the device\n" \
-                           "4. Try restarting the application"
-        else:
-            user_msg = f"Capture failed: {error_msg}"
-
-        self.status_update.emit(f"Error: {user_msg}")
-        self.capture_finished.emit(False, user_msg)
-
-    def _kill_ffmpeg_processes(self):
-        """Kill any lingering FFmpeg processes that might be using the capture device"""
-        try:
-            logger.info("Attempting to kill lingering FFmpeg processes")
-
-            if platform.system() == 'Windows':
-                # Windows approach
-                subprocess.run(
-                    ["taskkill", "/F", "/IM", "ffmpeg.exe"], 
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
-            else:
-                # Unix approach
-                subprocess.run(
-                    ["pkill", "-9", "ffmpeg"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
-
-            logger.info("FFmpeg processes terminated")
-            return True
-        except Exception as e:
-            logger.error(f"Error killing FFmpeg processes: {e}")
-            return False
-
-    def _force_reset_device(self, device_name):
-        """More thorough device reset procedure"""
-        logger.info(f"Attempting to force-reset device: {device_name}")
-        self.status_update.emit("Resetting device connection...")
-
-        # First kill any FFmpeg processes
-        self._kill_ffmpeg_processes()
-
-        # On Windows, try additional device resets
-        if platform.system() == 'Windows':
-            try:
-                # Try net stop/start for Blackmagic service
-                logger.info("Attempting to restart Blackmagic services")
-                service_name = "BlackmagicDesktopVideo"
-
-                # Check if service exists
-                service_check = subprocess.run(
-                    ["sc", "query", service_name],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=5
-                )
-
-                if "running" in service_check.stdout.lower():
-                    # Restart the service
-                    try:
-                        subprocess.run(
-                            ["net", "stop", service_name],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            timeout=10
-                        )
-                        time.sleep(1)
-                        subprocess.run(
-                            ["net", "start", service_name],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            timeout=10
-                        )
-                        logger.info("Blackmagic service restarted")
-                    except:
-                        logger.warning("Failed to restart Blackmagic service - continuing anyway")
-            except Exception as e:
-                logger.warning(f"Service restart attempt failed: {e}")
-
-        # Allow more time for device to reset
-        time.sleep(5)
-
-        # Try a direct simple test (without error messages to user)
-        try:
-            cmd = [
-                self._ffmpeg_path,
-                "-f", "decklink",
-                "-list_formats", "1",
-                "-i", device_name
-            ]
-
-            subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=3
-            )
-        except:
-            pass
-
-        # Wait again
-        time.sleep(2)
-
-        # Do a proper connection test
-        available, message = self._test_device_availability(device_name)
-        if available:
-            logger.info(f"Device {device_name} successfully reset")
-        else:
-            logger.warning(f"Device {device_name} reset attempt completed but status uncertain")
-            # Return true anyway - we want to continue the workflow
-            available = True
-
-        return available, message
-
-    def _test_device_availability(self, device_name):
-        """More robust test if the device is available for capture"""
-        try:
-            # Try multiple approaches
-
-            # First approach: Use ffmpeg -list_devices
-            devices_cmd = [
-                self._ffmpeg_path,
-                "-f", "decklink",
-                "-list_devices", "1",
-                "-i", "dummy"
-            ]
-
-            try:
-                devices_result = subprocess.run(
-                    devices_cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=3
-                )
-
-                # If device name appears in the output, it's likely available
-                if device_name in devices_result.stderr:
-                    logger.info(f"Device {device_name} found in device list")
-                    return True, "Device listed in available devices"
-            except Exception as e:
-                logger.warning(f"Error listing devices: {e}")
-
-            # Second approach: Direct format test
-            format_cmd = [
-                self._ffmpeg_path,
-                "-f", "decklink",
-                "-list_formats", "1",
-                "-i", device_name
-            ]
-
-            try:
-                format_result = subprocess.run(
-                    format_cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=3
-                )
-
-                if "Supported formats" in format_result.stderr:
-                    logger.info(f"Device {device_name} reports supported formats")
-                    return True, "Device formats available"
-            except Exception as e:
-                logger.warning(f"Error getting device formats: {e}")
-
-            # Third approach: Try a minimal capture
-            capture_cmd = [
-                self._ffmpeg_path,
-                "-f", "decklink",
-                "-t", "0.1",  # Try for just 0.1seconds
-                "-i", device_name,
-                "-f", "null",
-                "-"
-            ]
-
-            try:
-                capture_result = subprocess.run(
-                    capture_cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=5
-                )
-
-                stderr = capture_result.stderr.lower()
-                if "frame=" in stderr or "time=" in stderr:
-                    logger.info(f"Device {device_name} successfully captured frames")
-                    return True, "Device successfully captured frames"
-            except Exception as e:
-                logger.warning(f"Error testing minimal capture: {e}")
-
-            # If all tests failed but device name was found in device list
-            if device_name in devices_result.stderr:
-                logger.warning(f"Device {device_name} exists but may have issues")
-                return True, "Device exists but may have connection issues"
-
-            logger.warning(f"Device {device_name} not detected by any test method")
-            return False, "Device not detected or not responding"
-
-        except Exception as e:
-            logger.error(f"Error in device availability test: {e}")
-            return False, f"Error testing device: {str(e)}"
-
-    def _try_connect_device(self, device_name, max_retries=3):
-        """Try to connect to a device with retries and improved reliability"""
-
-        # First, proactively kill any FFmpeg processes
-        self._kill_ffmpeg_processes()
-
-        # Force a small delay before first try
-        time.sleep(2)
-
-        # Try multiple connection approaches
-        for attempt in range(1, max_retries + 1):
-            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
-            self.status_update.emit(f"Connecting to device (attempt {attempt}/{max_retries})...")
-
-            # Check device availability
-            available, message = self._test_device_availability(device_name)
-
-            if available:
-                logger.info(f"Successfully connected to {device_name}")
-                self.status_update.emit(f"Connected to {device_name}")
-                return True, "Device connected successfully"
-
-            # If not successful but not last attempt
-            if attempt < max_retries:
-                # More consistent retry delay - 3 seconds between attempts
-                retry_delay = 3
-                logger.info(f"Device busy, waiting {retry_delay}s before retry: {message}")
-
-                # Show countdown to user
-                self.status_update.emit(f"Device busy: {message}. Waiting {retry_delay}s...")
-                time.sleep(retry_delay)
-
-        return False, f"Failed to connect after {max_retries} attempts: {message}"
-
-    def recover_from_error(self, device_name, error_message):
-        """
-        Attempt to recover from a capture error
-        Returns: (success, recovery_message)
-        """
-        logger.info(f"Attempting to recover from error: {error_message}")
-        self.status_update.emit("Attempting recovery after error...")
-
-        # Reset state
-        self.state = CaptureState.IDLE
-        self.state_changed.emit(self.state)
-
-        # Kill any FFmpeg processes
-        self._kill_ffmpeg_processes()
-
-        # Wait a moment for resources to be freed
-        time.sleep(10)
-
-        # Try to connect to verify recovery
-        return self._try_connect_device(device_name, max_retries=1)
-
-    def _repair_mp4_if_needed(self, mp4_path):
-        """Attempt to repair an MP4 file with missing moov atom"""
-        try:
-            # Create temporary output path
-            output_dir = os.path.dirname(mp4_path)
-            temp_path = os.path.join(output_dir, f"temp_fixed_{os.path.basename(mp4_path)}")
-
-            # Run FFmpeg to copy and potentially fix the file
-            cmd = [
-                self._ffmpeg_path,
-                "-v", "warning",
-                "-i", mp4_path,
-                "-c", "copy",
-                "-movflags", "faststart",  # This helps with fixing moov atom issues
-                temp_path
-            ]
-
-            result = subprocess.run(cmd, capture_output=True, text=True)
-
-            if result.returncode == 0 and os.path.exists(temp_path):
-                # Replace original with fixed version
-                os.replace(temp_path, mp4_path)
-                logger.info(f"Successfully repaired MP4 file: {mp4_path}")
-                return True, mp4_path
-        except Exception as e:
-            logger.warning(f"Error repairing MP4: {e}")
-
-        return False, None
-
-    def _start_preview_capture(self, device_name):
-        """Start a preview capture to show input feed before recording"""
-        try:
-            # Stop any existing preview
-            self._stop_preview_capture()
-
-            # Initialize OpenCV capture
-            self.preview_cap = cv2.VideoCapture()
-
-            # Try multiple approaches for Windows
-            if platform.system() == 'Windows':
-                # First try with the standard device name for Blackmagic devices
-                # "Decklink Video Capture" is the common name for Blackmagic devices in DirectShow
-                logger.info("Trying to open preview with 'Decklink Video Capture'")
-                self.preview_cap.open("video=Decklink Video Capture", cv2.CAP_DSHOW)
-                
-                # If that didn't work, try with the provided device name
-                if not self.preview_cap.isOpened():
-                    logger.info(f"Trying to open preview with '{device_name}'")
-                    self.preview_cap.open(f"video={device_name}", cv2.CAP_DSHOW)
-                    
-                # As a last resort, try default camera
-                if not self.preview_cap.isOpened():
-                    logger.info("Trying default camera as fallback")
-                    self.preview_cap.open(0, cv2.CAP_DSHOW)
-            else:
-                # For Linux/macOS try a different approach
-                self.preview_cap.open(device_name)
-
-            if not self.preview_cap.isOpened():
-                logger.warning(f"Could not open preview capture for {device_name}")
-                # Even if we can't open the capture, create a placeholder frame to show
-                placeholder = self._get_preview_frame()
-                if placeholder is not None:
-                    self.frame_available.emit(placeholder)
-                return False
-
-            # Set lower resolution for preview to reduce processing load
-            self.preview_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            self.preview_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
-
-            # Create preview thread
-            self.preview_active = True
-            self.preview_thread = QThread()
-            self.preview_thread.run = self._update_preview
-            self.preview_thread.start()
-
-            logger.info(f"Preview capture started for {device_name}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error starting preview: {str(e)}")
-            self.preview_active = False
-            # Send a placeholder frame to avoid crashes
-            placeholder = self._get_preview_frame()
-            if placeholder is not None:
-                self.frame_available.emit(placeholder)
-            return False
-
-    def _stop_preview_capture(self):
-        """Stop the preview capture"""
-        if hasattr(self, 'preview_active') and self.preview_active:
-            self.preview_active = False
-
-            # Wait for thread to finish
-            if hasattr(self, 'preview_thread') and self.preview_thread:
-                self.preview_thread.quit()
-                self.preview_thread.wait(1000)
-
-            # Release capture
-            if hasattr(self, 'preview_cap') and self.preview_cap:
-                self.preview_cap.release()
-
-            logger.info("Preview capture stopped")
-
-    def _update_preview(self):
-        """Update preview frames in background thread"""
-        while self.preview_active:
-            try:
-                frame = self._get_preview_frame()
-                if frame is not None:
-                    self.frame_available.emit(frame)
-            except Exception as e:
-                logger.error(f"Error updating preview: {str(e)}")
-
-            # Limit to ~15 fps for preview to reduce CPU usage
-            time.sleep(0.067)
-
-    def _get_preview_frame(self):
-        """Get current frame from preview capture"""
-        if not hasattr(self, 'preview_cap') or not self.preview_cap:
-            # Return placeholder frame
-            placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
-            placeholder[:] = (224, 224, 224)  # Light gray background
-            cv2.putText(placeholder, "No video feed", (160, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-            return placeholder
-
-        if not self.preview_cap.isOpened():
-            logger.warning("Preview capture not open")
-            return None
-
-        ret, frame = self.preview_cap.read()
-        if not ret:
-            return None
-
-        return frame
-
-    def update_capture_progress(self, frame_num):
-        """Handle frame progress update and convert to percentage"""
-        # Calculate progress percentage based on expected total frames
-        # If we have duration and frame rate info from the process, use it
-        if hasattr(self, 'duration') and self.duration:
-            # Get frame rate from process output if available
-            frame_rate = 30  # Default assumption
-            try:
-                if hasattr(self.process, 'stderr') and self.process.stderr:
-                    for line in self.process.stderr:
-                        if "fps" in line:
-                            match = re.search(r'(\d+\.?\d*)\s*fps', line)
-                            if match:
-                                frame_rate = float(match.group(1))
-                                break
-            except:
-                pass  # If any error occurs, just use the default frame rate
-
-            # Calculate expected total frames
-            total_expected = int(self.duration * frame_rate)
-
-            # Calculate percentage (limit to 0-99% until complete)
-            if total_expected > 0:
-                percentage = min(99, int((frame_num / total_expected) * 100))
-                self.progress_updated.emit(percentage)
-            else:
-                # If we can't calculate, at least show some movement
-                self.progress_updated.emit(min(99, (frame_num % 100)))
-        else:
-            # If we don't have duration info, map frame_num to 0-99% range
-            self.progress_updated.emit(min(99, (frame_num % 100)))
