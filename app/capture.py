@@ -8,6 +8,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 import psutil
+import threading
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, pyqtSlot, QTimer, QMutex
 from PyQt5.QtGui import QImage, QPixmap
 from enum import Enum
@@ -1570,12 +1571,35 @@ class CaptureManager(QObject):
 
         # Initialize preview capture to show input feed
         try:
-            # Create a placeholder frame instead since preview capture is not implemented
+            # Create initial preview frame
             placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
             placeholder[:] = (224, 224, 224)  # Light gray background
-            cv2.putText(placeholder, "Preview not available", (120, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+            cv2.putText(placeholder, "Starting capture...", (120, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
             self.frame_available.emit(placeholder)
-            self.status_update.emit("Video preview not available - continuing with capture")
+            self.status_update.emit("Starting capture - preview will update during recording")
+            
+            # Set up timer to update preview during capture
+            self.capture_start_time = time.time()
+            self.last_frame_count = 0
+            
+            # Create a QTimer for updating the preview if not running in a QApplication
+            if hasattr(self, '_update_preview_timer'):
+                self._update_preview_timer.stop()
+            
+            # Use regular timer as fallback
+            def update_preview():
+                if self.state == CaptureState.CAPTURING:
+                    self._update_preview_during_capture()
+                    # Schedule next update
+                    timer = threading.Timer(0.5, update_preview)
+                    timer.daemon = True
+                    timer.start()
+            
+            # Start the timer
+            timer = threading.Timer(0.5, update_preview)
+            timer.daemon = True
+            timer.start()
+            
         except Exception as preview_error:
             logger.warning(f"Could not create preview placeholder: {preview_error}")
             # Continue with capture even if preview fails
@@ -1597,12 +1621,33 @@ class CaptureManager(QObject):
         min_loops = 3           # Default minimum loops
         max_capture_time = 120  # Default maximum capture time in seconds
 
-        if settings and 'bookend' in settings:
+        # Make sure we use the proper instance of options_manager
+        options_manager = getattr(self, 'options_manager', None)
+        
+        if options_manager:
+            # Directly use options_manager to ensure we're getting current settings
+            try:
+                bookend_settings = options_manager.get_setting("bookend")
+                bookend_duration = bookend_settings.get('bookend_duration', 0.5)
+                min_loops = bookend_settings.get('min_loops', 3)
+                max_capture_time = bookend_settings.get('max_capture_time', 120)
+                logger.info(f"Using options_manager settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
+            except Exception as e:
+                logger.error(f"Error getting settings from options_manager: {e}")
+                # Fall back to settings from parameters
+                if settings and 'bookend' in settings:
+                    bookend_settings = settings.get('bookend', {})
+                    bookend_duration = bookend_settings.get('bookend_duration', 0.5)
+                    min_loops = bookend_settings.get('min_loops', 3)
+                    max_capture_time = bookend_settings.get('max_capture_time', 120)
+                    logger.info(f"Using fallback settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
+        elif settings and 'bookend' in settings:
+            # Use settings passed to the method if options_manager not available
             bookend_settings = settings.get('bookend', {})
             bookend_duration = bookend_settings.get('bookend_duration', 0.5)
             min_loops = bookend_settings.get('min_loops', 3)
             max_capture_time = bookend_settings.get('max_capture_time', 120)
-            logger.info(f"Using bookend settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
+            logger.info(f"Using provided settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
 
         loop_duration = ref_duration + (2 * bookend_duration)  # Account for start and end bookends
 
@@ -1616,6 +1661,8 @@ class CaptureManager(QObject):
 
         # Round up to nearest 10 seconds for good measure
         capture_duration = math.ceil(capture_duration / 10) * 10
+        
+        logger.info(f"Final capture duration: {capture_duration}s (max allowed: {max_duration}s)")
 
         logger.info(f"Capture duration set to {capture_duration}s (loop={loop_duration:.2f}s, min_loops={min_loops})")
 
@@ -1739,13 +1786,81 @@ class CaptureManager(QObject):
                 elapsed = time.time() - self.capture_start_time
                 self.status_update.emit(f"Capturing for {elapsed:.1f}s")
 
-            # Update placeholder frame with current frame info
-            if hasattr(self, 'last_frame_count') and self.last_frame_count > 0:
+                # Get frame count from capture monitor if available
+                current_frame = 0
+                if hasattr(self, 'capture_monitor') and self.capture_monitor:
+                    current_frame = getattr(self.capture_monitor, 'last_frame_count', 0)
+                    self.last_frame_count = current_frame
+                else:
+                    # Use internal counter if no capture monitor
+                    self.last_frame_count = getattr(self, 'last_frame_count', 0) + 1
+
+                # Get total frame estimate from capture monitor if available
+                total_frames = 0
+                if hasattr(self, 'capture_monitor') and self.capture_monitor:
+                    total_frames = getattr(self.capture_monitor, 'total_frames', 0)
+
+                # Create preview frame
                 placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
                 placeholder[:] = (224, 224, 224)  # Light gray background
-                cv2.putText(placeholder, "Capture in progress", (120, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-                cv2.putText(placeholder, f"Frame: {self.last_frame_count}", (160, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-                cv2.putText(placeholder, f"Time: {elapsed:.1f}s", (160, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+                
+                # Add colorful recording indicator (red circle)
+                cv2.circle(placeholder, (30, 30), 10, (0, 0, 255), -1)  # Red filled circle
+                
+                # Add text with more visually appealing formatting
+                cv2.putText(placeholder, "RECORDING IN PROGRESS", (60, 35), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 200), 2)
+                
+                # Add frame info
+                frame_text = f"Frame: {self.last_frame_count}"
+                if total_frames > 0:
+                    frame_text += f" / ~{total_frames}"
+                cv2.putText(placeholder, frame_text, (30, 120), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+                
+                # Add time info
+                time_text = f"Time: {elapsed:.1f}s"
+                
+                # Get max capture time from options if available
+                if hasattr(self, 'options_manager') and self.options_manager:
+                    try:
+                        max_time = self.options_manager.get_setting("bookend", "max_capture_time")
+                        time_text += f" / {max_time}s max"
+                    except:
+                        pass
+                        
+                cv2.putText(placeholder, time_text, (30, 150), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+                
+                # Add progress bar
+                progress = min(1.0, elapsed / 120)  # Default to 120s if max_time not available
+                if hasattr(self, 'options_manager') and self.options_manager:
+                    try:
+                        max_time = self.options_manager.get_setting("bookend", "max_capture_time")
+                        progress = min(1.0, elapsed / max_time)
+                    except:
+                        pass
+                
+                bar_width = 400
+                bar_height = 20
+                bar_x = 40
+                bar_y = 180
+                # Draw background
+                cv2.rectangle(placeholder, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), 
+                            (200, 200, 200), -1)
+                # Draw progress
+                progress_width = int(bar_width * progress)
+                cv2.rectangle(placeholder, (bar_x, bar_y), (bar_x + progress_width, bar_y + bar_height), 
+                            (0, 128, 255), -1)
+                # Draw border
+                cv2.rectangle(placeholder, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), 
+                            (100, 100, 100), 1)
+                
+                # Emit the frame
                 self.frame_available.emit(placeholder)
+                
+                # Log occasional updates
+                if int(elapsed) % 10 == 0 and int(elapsed) > 0:
+                    logger.debug(f"Capture progress: {elapsed:.1f}s elapsed, frame {self.last_frame_count}")
         except Exception as e:
             logger.error(f"Error in preview update: {e}")
