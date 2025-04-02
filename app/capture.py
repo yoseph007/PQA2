@@ -307,7 +307,11 @@ class BookendCaptureManager(QObject):
 
         # Ensure progress shows 100% when complete to fix stuck progress issue
         self.capture_progress.emit(100)
-
+        
+        # Notify other components about completion
+        if hasattr(self, 'capture_finished'):
+            self.capture_finished.emit(True, output_path)
+        
         # Verify the output file
         if not os.path.exists(output_path):
             logger.error(f"Output file doesn't exist: {output_path}")
