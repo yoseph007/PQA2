@@ -17,6 +17,9 @@ import signal
 
 logger = logging.getLogger(__name__)
 
+# Constants
+MAX_REPAIR_ATTEMPTS = 3  # Maximum number of attempts to repair a video file
+
 # Set pytesseract path if it's needed for bookend detection
 try:
     import pytesseract
@@ -533,7 +536,7 @@ class BookendCaptureManager(QObject):
                     self.last_progress_time = current_time
                 else:
                     # Do nothing if progress didn't increase
-                    pass
+                    logger.debug("Skipping progress update as value didn't increase")
 
     def _terminate_process(self):
         """Safely terminate the FFmpeg process with proper signal to finalize file"""
