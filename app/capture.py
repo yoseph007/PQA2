@@ -1107,7 +1107,7 @@ class BookendCaptureManager(QObject):
                 return
 
             # Validate the captured file
-            from app.bookend_alignment import validate_video_file, repair_video_file
+            from app.bookend_alignment import validate_video_file, repair_video_file, MAX_REPAIR_ATTEMPTS
 
             if not validate_video_file(captured_file):
                 logger.warning(f"Captured file is not valid, attempting repair: {captured_file}")
