@@ -213,58 +213,18 @@ class VMafTestApp(QMainWindow):
         device_group.setLayout(device_layout)
         left_layout.addWidget(device_group)
 
-        # Capture method selection
-        method_group = QGroupBox("Capture Method")
+        # Bookend capture method information
+        method_group = QGroupBox("Capture Method: White Bookend Frames")
         method_layout = QVBoxLayout()
 
-        method_select_layout = QHBoxLayout()
-        method_select_layout.addWidget(QLabel("Method:"))
-        self.capture_method_combo = QComboBox()
-        self.capture_method_combo.addItem("Trigger Detection", "trigger")
-        self.capture_method_combo.addItem("White Bookend Frames", "bookend")
-        self.capture_method_combo.currentIndexChanged.connect(self.on_capture_method_changed)
-        method_select_layout.addWidget(self.capture_method_combo)
-        method_layout.addLayout(method_select_layout)
-
-        # Stacked widget to show different settings based on capture method
-        self.capture_settings_stack = QStackedWidget()
-
-        # 1. Trigger detection settings
-        trigger_widget = QWidget()
-        trigger_layout = QVBoxLayout(trigger_widget)
-
-        self.cb_use_trigger = QCheckBox("Wait for 'STARTING' trigger frame")
-        self.cb_use_trigger.setChecked(True)
-        trigger_layout.addWidget(self.cb_use_trigger)
-
-        trigger_settings = QHBoxLayout()
-        trigger_settings.addWidget(QLabel("Threshold:"))
-        self.sb_trigger_threshold = QSpinBox()
-        self.sb_trigger_threshold.setRange(50, 95)
-        self.sb_trigger_threshold.setValue(85)
-        self.sb_trigger_threshold.setSuffix("%")
-        trigger_settings.addWidget(self.sb_trigger_threshold)
-
-        trigger_settings.addWidget(QLabel("Consecutive frames:"))
-        self.sb_trigger_frames = QSpinBox()
-        self.sb_trigger_frames.setRange(1, 10)
-        self.sb_trigger_frames.setValue(2)  # Changed default to 2
-        trigger_settings.addWidget(self.sb_trigger_frames)
-
-        trigger_layout.addLayout(trigger_settings)
-        self.capture_settings_stack.addWidget(trigger_widget)
-
-        # 2. Bookend method settings
-        bookend_widget = QWidget()
-        bookend_layout = QVBoxLayout(bookend_widget)
-
         bookend_info = QLabel(
-            "This method captures a looped video with white bookend frames.\n"
+            "This application uses the white bookend frames method for video capture.\n"
             "The player should loop the video with 0.5s white frames at the end.\n"
-            "Capture will continue until at least two white frame sections are detected."
+            "Capture will record for 3x the reference video length to ensure complete coverage.\n"
+            "The system will automatically detect white frames and extract the video content."
         )
         bookend_info.setWordWrap(True)
-        bookend_layout.addWidget(bookend_info)
+        method_layout.addWidget(bookend_info)
 
         bookend_settings = QHBoxLayout()
         bookend_settings.addWidget(QLabel("White threshold:"))
@@ -274,12 +234,7 @@ class VMafTestApp(QMainWindow):
         bookend_settings.addWidget(self.sb_bookend_threshold)
 
         bookend_settings.addStretch()
-        bookend_layout.addLayout(bookend_settings)
-
-        self.capture_settings_stack.addWidget(bookend_widget)
-
-        # Add the stacked widget to the method layout
-        method_layout.addWidget(self.capture_settings_stack)
+        method_layout.addLayout(bookend_settings)
 
         method_group.setLayout(method_layout)
         left_layout.addWidget(method_group)
@@ -822,6 +777,10 @@ class VMafTestApp(QMainWindow):
         self.capture_manager.capture_started.connect(self.handle_capture_started)
         self.capture_manager.capture_finished.connect(self.handle_capture_finished)
         self.capture_manager.trigger_frame_available.connect(self.update_preview)
+        
+        # Set capture method to bookend by default
+        if hasattr(self, 'capture_manager'):
+            self.capture_manager.set_capture_method("bookend")
 
     def browse_reference(self):
         """Browse for reference video file from the read-only reference folder"""
@@ -974,7 +933,7 @@ class VMafTestApp(QMainWindow):
 
 
     def start_capture(self):
-        """Start the capture process"""
+        """Start the bookend capture process"""
         if not self.reference_info:
             QMessageBox.warning(self, "Warning", "Please select a reference video first")
             return
@@ -992,7 +951,7 @@ class VMafTestApp(QMainWindow):
 
         # Clear logs
         self.txt_capture_log.clear()
-        self.log_to_capture("Starting capture process...")
+        self.log_to_capture("Starting bookend capture process...")
 
         # Get output directory and test name
         output_dir = self.lbl_output_dir.text()
@@ -1015,26 +974,10 @@ class VMafTestApp(QMainWindow):
 
         # Set reference info
         self.capture_manager.set_reference_video(self.reference_info)
-
-        # Check if we should use trigger detection
-        if self.cb_use_trigger.isChecked():
-            self.log_to_capture("Waiting for trigger frame...")
-
-            # Get trigger settings from UI
-            threshold = self.sb_trigger_threshold.value() / 100.0  # Convert percentage to decimal
-            consecutive_frames = self.sb_trigger_frames.value()
-
-            # Start trigger detection with settings
-            self.capture_manager.start_trigger_detection(
-                device_name,
-                threshold=threshold,
-                consecutive_frames=consecutive_frames
-            )
-        else:
-            self.log_to_capture("Starting direct capture...")
-
-            # Start capture directly
-            self.capture_manager.start_capture(device_name)
+        
+        # Start bookend capture
+        self.log_to_capture("Starting bookend frame capture...")
+        self.capture_manager.start_bookend_capture(device_name)
 
     def stop_capture(self):
         """Stop the capture process"""
@@ -1083,15 +1026,7 @@ class VMafTestApp(QMainWindow):
                             f"Ready for alignment and VMAF analysis")
 
 
-    def on_capture_method_changed(self, index):
-        """Handle change in capture method selection"""
-        method = self.capture_method_combo.currentData()
-        self.capture_settings_stack.setCurrentIndex(index)
-
-        if hasattr(self, 'capture_manager'):
-            self.capture_manager.set_capture_method(method)
-
-        self.log_to_capture(f"Capture method changed to: {method}")
+    # Method removed as part of simplification to use only bookend capture
 
     def handle_capture_finished(self, success, result):
         """Handle capture completion with better button management"""

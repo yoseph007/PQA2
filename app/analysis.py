@@ -4,6 +4,7 @@ import json
 import subprocess
 import re
 import tempfile
+import platform
 from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
 import shutil
@@ -79,12 +80,21 @@ class VMAFAnalyzer(QObject):
                 vmaf_cmd.extend(duration_cmd)
 
             # Add complex filter with exact format from working example
-            filter_complex = (
-                f"libvmaf=log_path={json_path}:log_fmt=json:model={model}:psnr=1:ssim=1" #Simplified filter
-            )
+            # Use the working command format from the user's example, but with simpler filter to avoid path issues
+            if platform.system() == 'Windows':
+                # Escape the path for Windows - replace colons in drive letters with escaped version
+                json_path_escaped = json_path.replace(':', '\\:')
+                filter_complex = (
+                    f"libvmaf=log_path={json_path_escaped}:log_fmt=json:model={model}:psnr=1:ssim=1"
+                )
+            else:
+                filter_complex = (
+                    f"libvmaf=log_path={json_path}:log_fmt=json:model={model}:psnr=1:ssim=1"
+                )
 
+            # Use the -filter_complex parameter instead of -lavfi which seems more compatible
             vmaf_cmd.extend([
-                "-lavfi", filter_complex, #Corrected filter application
+                "-filter_complex", filter_complex,
                 "-f", "null", "-"
             ])
 
