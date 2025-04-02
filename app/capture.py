@@ -1294,12 +1294,17 @@ class CaptureManager(QObject):
             else:
                 frame_msg = f"Capturing: Frame {current_frame}"
                 
-            # Update status
+            # Update status with frame info
             self.status_update.emit(frame_msg)
             
             # Log every 100 frames to avoid excessive logging
             if current_frame % 100 == 0:
-                logger.debug(f"Capture progress: Frame {current_frame}")
+                logger.info(f"Capture progress: Frame {current_frame}")
+                
+            # Make sure this is logged to console for visibility
+            if current_frame % 10 == 0:  # Log every 10 frames to console
+                print(f"Capture progress: Frame {current_frame}/{total_frames if total_frames > 0 else '?'}")
+                
         except Exception as e:
             logger.error(f"Error updating frame counter: {e}")
 
@@ -1473,6 +1478,54 @@ class CaptureManager(QObject):
         self.state_changed.emit(self.state)
         self.capture_finished.emit(True, output_path)
         
+    def _update_preview_during_capture(self):
+        """Update the preview and status during capture"""
+        if not self.is_capturing:
+            # Stop timer if not capturing
+            if hasattr(self, 'timer') and self.timer.isActive():
+                self.timer.stop()
+            return
+            
+        try:
+            # Update with a dynamic frame showing capture is in progress
+            if hasattr(self, 'capture_monitor') and self.capture_monitor:
+                frame_count = getattr(self.capture_monitor, 'last_frame_count', 0)
+                total_frames = getattr(self.capture_monitor, 'total_frames', 0)
+                
+                # Create a dynamic preview frame
+                preview = np.zeros((270, 480, 3), dtype=np.uint8)
+                preview[:] = (224, 224, 224)  # Light gray background
+                
+                # Add current time
+                current_time = datetime.now().strftime("%H:%M:%S")
+                cv2.putText(preview, f"Current time: {current_time}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                
+                # Add frame counter
+                if total_frames > 0:
+                    progress = min(100, int((frame_count / total_frames) * 100))
+                    cv2.putText(preview, f"Frames: {frame_count}/{total_frames} ({progress}%)", 
+                                (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                else:
+                    cv2.putText(preview, f"Frames: {frame_count}", 
+                                (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                
+                # Add elapsed time
+                elapsed = time.time() - self.capture_start_time
+                cv2.putText(preview, f"Elapsed: {int(elapsed)}s", 
+                            (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                
+                # Add capture status text
+                cv2.putText(preview, "Capture in progress", (150, 150), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 200), 2)
+                
+                # Emit the frame to update preview
+                self.frame_available.emit(preview)
+                
+                # Ensure frame counter is updated in UI too
+                self.update_frame_counter(frame_count, total_frames)
+        except Exception as e:
+            logger.error(f"Error updating preview during capture: {e}")
+    
     def _on_capture_failed(self, error_msg):
         """Handle capture failure"""
         logger.error(f"Capture failed: {error_msg}")
@@ -1480,6 +1533,10 @@ class CaptureManager(QObject):
         # Update state
         self.state = CaptureState.ERROR
         self.state_changed.emit(self.state)
+        
+        # Stop preview timer
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
         
         # Emit failure signal
         self.status_update.emit(f"Error: {error_msg}")
@@ -1506,9 +1563,16 @@ class CaptureManager(QObject):
         logger.info("Stopping capture")
         self.status_update.emit("Stopping capture...")
 
+        # Stop preview timer if active
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
+
         # Stop capture monitor if active
         if hasattr(self, 'capture_monitor') and self.capture_monitor:
-            self.capture_monitor.stop()
+            try:
+                self.capture_monitor.stop()
+            except Exception as e:
+                logger.error(f"Error stopping capture monitor: {e}")
 
         # Force kill any lingering FFmpeg processes
         if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
@@ -1533,6 +1597,7 @@ class CaptureManager(QObject):
         self.state = CaptureState.IDLE
         self.state_changed.emit(self.state)
         self.ffmpeg_process = None
+        self.capture_monitor = None
 
         # Clean up temporary files if requested
         if cleanup_temp and self.current_output_path and os.path.exists(self.current_output_path):
@@ -1543,10 +1608,21 @@ class CaptureManager(QObject):
             except Exception as e:
                 logger.error(f"Error removing temporary file: {e}")
 
-        # Add delay before allowing another capture
-        time.sleep(1)  # 1 second delay
-
+        # Send final status update to UI
         self.status_update.emit("Capture stopped by user")
+        
+        # Send one more frame to preview to show stopped status
+        try:
+            # Create a "capture stopped" frame
+            stopped_frame = np.zeros((270, 480, 3), dtype=np.uint8)
+            stopped_frame[:] = (224, 224, 224)  # Light gray background
+            cv2.putText(stopped_frame, "Capture stopped", (150, 135), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 0, 0), 2)
+            self.frame_available.emit(stopped_frame)
+        except Exception as e:
+            logger.error(f"Error creating stopped frame: {e}")
+        
+        # Notify that capture is finished
         self.capture_finished.emit(False, "Capture cancelled by user")
 
     def start_bookend_capture(self, device_name):
@@ -1570,12 +1646,16 @@ class CaptureManager(QObject):
 
         # Initialize preview capture to show input feed
         try:
-            # Create a placeholder frame instead since preview capture is not implemented
+            # Create a placeholder frame for preview
             placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
             placeholder[:] = (224, 224, 224)  # Light gray background
-            cv2.putText(placeholder, "Preview not available", (120, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+            cv2.putText(placeholder, "Preview window", (120, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+            cv2.putText(placeholder, "Capture in progress...", (105, 160), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
             self.frame_available.emit(placeholder)
-            self.status_update.emit("Video preview not available - continuing with capture")
+            # Try to update UI every second with frame updates during capture
+            self.timer = QTimer()
+            self.timer.timeout.connect(self._update_preview_during_capture)
+            self.timer.start(1000)  # Update every second
         except Exception as preview_error:
             logger.warning(f"Could not create preview placeholder: {preview_error}")
             # Continue with capture even if preview fails
@@ -1679,23 +1759,17 @@ class CaptureManager(QObject):
                 self.capture_monitor.capture_complete.connect(self._on_bookend_capture_complete)
                 self.capture_monitor.capture_failed.connect(self._on_capture_failed)
                 
-                # Ensure this method exists in this class before connecting
-                if hasattr(self, 'update_frame_counter'):
-                    self.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
-                else:
-                    # Add a fallback implementation if the method doesn't exist
-                    logger.warning("update_frame_counter method not found, using fallback implementation")
-                    def fallback_frame_counter(current_frame, total_frames):
-                        percentage = 0
-                        if total_frames > 0:
-                            percentage = min(100, int((current_frame / total_frames) * 100))
-                        self.status_update.emit(f"Frame: {current_frame}/{total_frames if total_frames > 0 else '?'} ({percentage}%)")
-                    
-                    # Add the method to the instance
-                    self.update_frame_counter = fallback_frame_counter
-                    self.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
+                # Always connect frame counter updates to UI
+                self.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
                 
+                # Store initial time for accurate progress updates
+                self.capture_start_time = time.time()
+                
+                # Start the monitor
                 self.capture_monitor.start()
+                
+                # Log that connections are established
+                logger.info("Capture monitor connections established successfully")
             except Exception as e:
                 error_msg = f"Error connecting capture monitor signals: {str(e)}"
                 logger.error(error_msg)
