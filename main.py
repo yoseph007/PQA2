@@ -36,8 +36,8 @@ def main():
         # Configure environment for Qt
         if 'REPL_ID' in os.environ:
             # Running in Replit environment
-            os.environ['QT_QPA_PLATFORM'] = 'xcb'  # Use X11 platform in Replit
-            logger.info("Running in Replit environment, set QT_QPA_PLATFORM to xcb")
+            os.environ['QT_QPA_PLATFORM'] = 'offscreen'  # Use offscreen platform in Replit
+            logger.info("Running in Replit environment, set QT_QPA_PLATFORM to offscreen")
         else:
             # Running in other environments (Windows, macOS, etc.)
             # Handle font issues on Windows

@@ -1689,6 +1689,7 @@ class MainWindow(QMainWindow):
             if index >= 0:
                 self.combo_vmaf_model.setCurrentIndex(index)
 
+            item = QListWidgetItem(f"Captured: {os.path.basename(dist_path)}")
             item.setData(Qt.UserRole, dist_path)
             self.list_result_files.addItem(item)
             
@@ -1701,8 +1702,12 @@ class MainWindow(QMainWindow):
                     self.list_result_files.addItem(item)
 
         # Show message with VMAF score
-        QMessageBox.information(self, "Analysis Complete", 
-                              f"VMAF analysis complete!\n\nVMAF Score: {vmaf_score:.2f}")
+        if vmaf_score is not None:
+            QMessageBox.information(self, "Analysis Complete", 
+                                f"VMAF analysis complete!\n\nVMAF Score: {vmaf_score:.2f}")
+        else:
+            QMessageBox.information(self, "Analysis Complete", 
+                                "VMAF analysis complete!")
 
         # Switch to results tab
         self.tabs.setCurrentIndex(3)
