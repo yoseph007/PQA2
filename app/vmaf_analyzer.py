@@ -59,18 +59,35 @@ class VMAFAnalyzer(QObject):
             if not output_dir:
                 output_dir = os.path.dirname(reference_path)
 
-            # Create the VMAF output directory with timestamp
+            # Create a consistent timestamp for all files
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            vmaf_dir = os.path.join(output_dir, f"vmaf_{timestamp}")
-            os.makedirs(vmaf_dir, exist_ok=True)
+            
+            # Get test name or use "Test" as default
+            test_name = self.test_name or "Test"
+            
+            # Create test directory with timestamp appended to test name
+            test_dir_name = f"{test_name}_{timestamp}"
+            test_dir = os.path.join(output_dir, test_dir_name)
+            os.makedirs(test_dir, exist_ok=True)
+            
+            logger.info(f"Created test results directory: {test_dir}")
 
-            # Output filenames - Convert paths to use forward slashes and escape any spaces
-            json_path = os.path.join(vmaf_dir, "vmaf_log.json").replace("\\", "/")
-            csv_path = os.path.join(vmaf_dir, "vmaf_log.csv").replace("\\", "/")
-            psnr_log = os.path.join(vmaf_dir, "psnr_log.txt").replace("\\", "/")
-            ssim_log = os.path.join(vmaf_dir, "ssim_log.txt").replace("\\", "/")
+            # Create consistent filenames with test name and timestamp
+            vmaf_filename = f"{test_name}_{timestamp}_vmaf.json"
+            csv_filename = f"{test_name}_{timestamp}_vmaf.csv"
+            psnr_filename = f"{test_name}_{timestamp}_psnr.txt"
+            ssim_filename = f"{test_name}_{timestamp}_ssim.txt"
 
-            # Convert input paths to forward slashes too
+            # Create full paths
+            json_path = os.path.join(test_dir, vmaf_filename).replace("\\", "/")
+            csv_path = os.path.join(test_dir, csv_filename).replace("\\", "/")
+            psnr_log = os.path.join(test_dir, psnr_filename).replace("\\", "/")
+            ssim_log = os.path.join(test_dir, ssim_filename).replace("\\", "/")
+            
+            # For command line logging, save a copy
+            vmaf_cmd_log = os.path.join(test_dir, f"{test_name}_{timestamp}_vmaf_command.txt").replace("\\", "/")
+
+            # Convert input paths to forward slashes
             reference_path_unix = reference_path.replace("\\", "/")
             distorted_path_unix = distorted_path.replace("\\", "/")
 
@@ -84,19 +101,6 @@ class VMAFAnalyzer(QObject):
             model_name = model
             if not model.endswith('.json'):
                 model_name = f"{model}.json"
-
-            # Create simpler output paths to avoid Windows path issues
-            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            vmaf_filename = f"vmaf_{timestamp_str}.json"
-            csv_filename = f"vmaf_{timestamp_str}.csv"
-            psnr_filename = f"psnr_{timestamp_str}.txt"
-            ssim_filename = f"ssim_{timestamp_str}.txt"
-
-            # Create full paths for reporting later
-            json_path = os.path.join(vmaf_dir, vmaf_filename).replace("\\", "/")
-            csv_path = os.path.join(vmaf_dir, csv_filename).replace("\\", "/")
-            psnr_log = os.path.join(vmaf_dir, psnr_filename).replace("\\", "/")
-            ssim_log = os.path.join(vmaf_dir, ssim_filename).replace("\\", "/")
 
             # Build a more reliable FFmpeg command using separate filters
             # instead of a complex filter chain that has path escaping issues
@@ -137,7 +141,7 @@ class VMAFAnalyzer(QObject):
             logger.info(f"VMAF command: {cmd_str}")
 
             # Save the command to a file for reference/debugging
-            with open(os.path.join(vmaf_dir, "vmaf_command.txt"), "w") as f:
+            with open(vmaf_cmd_log, "w") as f:
                 f.write(cmd_str)
 
             # Execute VMAF command with extra error handling
@@ -269,7 +273,32 @@ class VMAFAnalyzer(QObject):
                         if "ssim" in pool:
                             ssim_score = pool["ssim"]["mean"]
                     except Exception as e:
-                        logger.error(f"Error parsing VMAF metrics: {str(e)}")
+                        logger.error(f"Error parsing VMAF metrics from pooled_metrics: {str(e)}")
+                
+                # If PSNR/SSIM are still None, try to parse from the log files
+                if psnr_score is None and os.path.exists(psnr_log.replace("/", "\\")):
+                    try:
+                        with open(psnr_log.replace("/", "\\"), 'r') as f:
+                            psnr_content = f.read()
+                            # Try to find the average PSNR value
+                            psnr_match = re.search(r'average:([0-9.]+)', psnr_content)
+                            if psnr_match:
+                                psnr_score = float(psnr_match.group(1))
+                                logger.info(f"Parsed PSNR from log file: {psnr_score}")
+                    except Exception as e:
+                        logger.error(f"Error parsing PSNR log: {str(e)}")
+                
+                if ssim_score is None and os.path.exists(ssim_log.replace("/", "\\")):
+                    try:
+                        with open(ssim_log.replace("/", "\\"), 'r') as f:
+                            ssim_content = f.read()
+                            # Try to find the average SSIM value
+                            ssim_match = re.search(r'All:([0-9.]+)', ssim_content)
+                            if ssim_match:
+                                ssim_score = float(ssim_match.group(1))
+                                logger.info(f"Parsed SSIM from log file: {ssim_score}")
+                    except Exception as e:
+                        logger.error(f"Error parsing SSIM log: {str(e)}")
                 elif "frames" in vmaf_data:
                     # Extract scores from frames
                     frames = vmaf_data["frames"]

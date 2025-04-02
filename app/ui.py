@@ -1434,6 +1434,18 @@ class MainWindow(QMainWindow):
         results_layout.addWidget(results_browse)
         paths_layout.addRow("Results Directory:", results_layout)
         
+        # Temporary files directory
+        self.txt_temp_dir = QLineEdit()
+        self.txt_temp_dir.setText(paths_settings.get("temp_dir", ""))
+        self.txt_temp_dir.setPlaceholderText("Leave empty to use system temp directory")
+        temp_browse = QPushButton("Browse...")
+        temp_browse.clicked.connect(self.browse_temp_dir)
+        
+        temp_layout = QHBoxLayout()
+        temp_layout.addWidget(self.txt_temp_dir)
+        temp_layout.addWidget(temp_browse)
+        paths_layout.addRow("Temporary Files Directory:", temp_layout)
+        
         paths_group.setLayout(paths_layout)
         return paths_group
     
@@ -1607,6 +1619,14 @@ class MainWindow(QMainWindow):
         )
         if directory:
             self.txt_results_dir.setText(directory)
+            
+    def browse_temp_dir(self):
+        """Browse for temporary files directory"""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Temporary Files Directory", self.txt_temp_dir.text()
+        )
+        if directory:
+            self.txt_temp_dir.setText(directory)
     
     def save_all_options(self):
         """Save all options from the UI to settings"""
@@ -1641,6 +1661,7 @@ class MainWindow(QMainWindow):
             paths_settings["default_output_dir"] = self.txt_default_output.text()
             paths_settings["reference_video_dir"] = self.txt_reference_dir.text()
             paths_settings["results_dir"] = self.txt_results_dir.text()
+            paths_settings["temp_dir"] = self.txt_temp_dir.text()
             self.options_manager.update_category("paths", paths_settings)
             
             # Apply settings to other components

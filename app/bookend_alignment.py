@@ -180,11 +180,32 @@ class BookendAligner(QObject):
             return None
 
     def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration):
-        """Create aligned videos based on bookend content timing"""
+        """Create aligned videos based on bookend content timing with improved naming"""
         try:
+            # Get the test directory from captured_path
+            output_dir = os.path.dirname(captured_path)
+            
+            # Get the timestamp from the directory name if possible
+            dir_name = os.path.basename(output_dir)
+            timestamp = ""
+            if "_" in dir_name:
+                parts = dir_name.split("_")
+                if len(parts) >= 2 and parts[-1].isdigit():
+                    timestamp = parts[-1]
+                else:
+                    # Use current timestamp if we can't extract it
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            else:
+                # Use current timestamp if there's no underscore
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Get base name parts
+            ref_base = os.path.splitext(os.path.basename(reference_path))[0]
+            cap_base = os.path.splitext(os.path.basename(captured_path))[0]
+            
             # Create output paths
-            aligned_reference = os.path.splitext(reference_path)[0] + "_aligned.mp4"
-            aligned_captured = os.path.splitext(captured_path)[0] + "_aligned.mp4"
+            aligned_reference = os.path.join(output_dir, f"{ref_base}_{timestamp}_aligned.mp4")
+            aligned_captured = os.path.join(output_dir, f"{cap_base}_{timestamp}_aligned.mp4")
             
             # Trim reference video - use the whole reference
             ref_cmd = [
@@ -329,11 +350,6 @@ class BookendAligner(QObject):
             # Try multiple thresholds - from strict to lenient
             thresholds = [230, 200, 180, 160]
             
-            # Create diagnostic frame samples
-            diagnostic_dir = os.path.dirname(video_path)
-            diagnostic_path = os.path.join(diagnostic_dir, "bookend_diagnostic")
-            os.makedirs(diagnostic_path, exist_ok=True)
-            
             # Sample brightness values across the video
             brightness_samples = []
             sample_points = 20
@@ -346,12 +362,7 @@ class BookendAligner(QObject):
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                     brightness = np.mean(gray)
                     brightness_samples.append((i, brightness))
-                    
-                    # Save sample frames for diagnostic purposes
-                    timestamp = i / fps
-                    cv2.imwrite(os.path.join(diagnostic_path, f"frame_{i}_time_{timestamp:.2f}_brightness_{brightness:.1f}.jpg"), frame)
-                    
-                    logger.info(f"Frame {i} (t={timestamp:.2f}s) brightness: {brightness:.1f}")
+                    logger.info(f"Frame {i} (t={i/fps:.2f}s) brightness: {brightness:.1f}")
             
             # Calculate stats
             if brightness_samples:
@@ -430,9 +441,7 @@ class BookendAligner(QObject):
                                 'std_dev': std_dev
                             }
                             
-                            # Save this white frame for diagnostic purposes
-                            if frame_idx % 30 == 0:  # Save every 30th detected white frame to avoid too many files
-                                cv2.imwrite(os.path.join(diagnostic_path, f"white_frame_{frame_idx}_time_{frame_time:.2f}_brightness_{avg_brightness:.1f}.jpg"), frame)
+                            # Skip saving frames for diagnostic purposes
                     else:
                         # Check if we just finished a bookend
                         if current_bookend is not None:
@@ -474,7 +483,7 @@ class BookendAligner(QObject):
             
             # Final check and summary
             if len(bookends) < 2:
-                logger.warning(f"Failed to detect white bookends with any threshold. Diagnostic images saved to {diagnostic_path}")
+                logger.warning(f"Failed to detect white bookends with any threshold.")
                 logger.warning("Make sure your video has clear white frames at the beginning and end of each loop")
             else:
                 logger.info(f"Successfully detected {len(bookends)} white bookend sections")

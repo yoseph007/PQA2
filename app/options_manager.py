@@ -2,6 +2,7 @@
 import os
 import json
 import logging
+import re
 from PyQt5.QtCore import QObject, pyqtSignal
 import subprocess
 
@@ -47,7 +48,8 @@ class OptionsManager(QObject):
             "paths": {
                 "default_output_dir": "",
                 "reference_video_dir": "",
-                "results_dir": ""
+                "results_dir": "",
+                "temp_dir": ""
             }
         }
         
@@ -183,7 +185,7 @@ class OptionsManager(QObject):
         return devices
     
     def get_decklink_formats(self, device_name):
-        """Query available formats for a DeckLink device"""
+        """Query available formats for a DeckLink device with improved parsing"""
         formats = []
         resolutions = []
         frame_rates = []
@@ -197,30 +199,56 @@ class OptionsManager(QObject):
             output = result.stderr
             lines = output.split('\n')
             
-            # Extract format information
+            logger.info(f"Parsing format output for {device_name}:")
             for line in lines:
-                if "fps" in line and "format" in line:
+                logger.info(f"Format line: {line}")
+            
+            # Extract format information with more robust parsing
+            for line in lines:
+                if ("fps" in line or "hz" in line.lower()) and ("format" in line.lower() or "mode" in line.lower()):
                     formats.append(line.strip())
                     
-                    # Try to extract resolution
-                    if "x" in line:
-                        parts = line.split()
-                        for part in parts:
-                            if "x" in part and part[0].isdigit():
-                                resolutions.append(part)
-                                break
+                    # Try to extract resolution with different patterns
+                    resolution_patterns = [
+                        # Pattern for "1920x1080"
+                        r'(\d+)x(\d+)',
+                        # Pattern for resolution like "1920 x 1080"
+                        r'(\d+)\s*x\s*(\d+)'
+                    ]
                     
-                    # Try to extract frame rate
-                    if "fps" in line:
-                        parts = line.split()
-                        for i, part in enumerate(parts):
-                            if part == "fps" and i > 0:
-                                try:
-                                    rate = float(parts[i-1])
-                                    if rate not in frame_rates:
-                                        frame_rates.append(rate)
-                                except:
-                                    pass
+                    for pattern in resolution_patterns:
+                        resolution_match = re.search(pattern, line)
+                        if resolution_match:
+                            width = int(resolution_match.group(1))
+                            height = int(resolution_match.group(2))
+                            resolution = f"{width}x{height}"
+                            if resolution not in resolutions:
+                                resolutions.append(resolution)
+                            break
+                    
+                    # Try to extract common frame rates with regex
+                    rate_patterns = [
+                        # Pattern for "29.97 fps" or "29.97fps"
+                        r'(\d+\.\d+)\s*fps',
+                        # Pattern for "30 fps" or "30fps"
+                        r'(\d+)\s*fps',
+                        # Pattern for "30p" (common in video formats)
+                        r'(\d+)[pi]',
+                        # Pattern for "29.97 hz" or similar
+                        r'(\d+\.\d+)\s*hz',
+                        r'(\d+)\s*hz'
+                    ]
+                    
+                    for pattern in rate_patterns:
+                        rate_match = re.search(pattern, line.lower())
+                        if rate_match:
+                            try:
+                                rate = float(rate_match.group(1))
+                                if rate not in frame_rates:
+                                    frame_rates.append(rate)
+                                break
+                            except ValueError:
+                                pass
             
             # Deduplicate and sort
             resolutions = sorted(list(set(resolutions)))
