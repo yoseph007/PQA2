@@ -32,10 +32,9 @@ def main():
     
     try:
         # Configure environment for Qt
-        # Set QT_QPA_PLATFORM to offscreen if running in a headless environment
-        if not os.environ.get('DISPLAY') and not os.environ.get('QT_QPA_PLATFORM'):
-            os.environ['QT_QPA_PLATFORM'] = 'offscreen'
-            logger.info("Set QT_QPA_PLATFORM to offscreen for headless environment")
+        # Set QT_QPA_PLATFORM to offscreen in Replit environment
+        os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+        logger.info("Set QT_QPA_PLATFORM to offscreen for Replit environment")
         
         # Use software rendering for better compatibility
         os.environ['QT_QUICK_BACKEND'] = 'software'
