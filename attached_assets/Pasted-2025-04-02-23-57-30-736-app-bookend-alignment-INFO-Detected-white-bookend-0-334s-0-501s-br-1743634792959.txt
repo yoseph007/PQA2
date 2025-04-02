@@ -1,0 +1,41 @@
+2025-04-02 23:57:30,736 - app.bookend_alignment - INFO - Detected white bookend: 0.334s - 0.501s (brightness: 213.0, frames: 2)
+2025-04-02 23:57:34,270 - app.bookend_alignment - INFO - Detected white bookend: 7.841s - 7.841s (brightness: 213.0, frames: 1)
+2025-04-02 23:57:37,761 - app.bookend_alignment - INFO - Detected white bookend: 15.182s - 15.349s (brightness: 213.0, frames: 2)
+2025-04-02 23:57:41,221 - app.bookend_alignment - INFO - Detected white bookend: 22.689s - 22.856s (brightness: 213.0, frames: 2)
+2025-04-02 23:57:42,026 - app.bookend_alignment - INFO - Found 4 white bookend sections with threshold 200
+2025-04-02 23:57:42,035 - app.bookend_alignment - INFO - Successfully detected 4 white bookend sections
+2025-04-02 23:57:42,036 - app.bookend_alignment - INFO - Detected first white bookend at: 0.334s - 0.501s
+2025-04-02 23:57:42,036 - app.bookend_alignment - INFO - Detected last white bookend at: 22.689s - 22.856s
+2025-04-02 23:57:42,036 - app.bookend_alignment - INFO - Content duration between bookends: 22.123s
+2025-04-02 23:57:42,036 - app.bookend_alignment - WARNING - Reference duration (7.290s) differs from content duration (22.123s)
+2025-04-02 23:57:42,037 - app.bookend_alignment - INFO - Detected multiple loops in captured video, looking for individual loops
+2025-04-02 23:57:42,037 - app.bookend_alignment - INFO - Loop 1: 0.534s - 7.808s = 7.275s (diff: 0.015s)
+2025-04-02 23:57:42,037 - app.bookend_alignment - INFO - Loop 2: 7.874s - 15.149s = 7.275s (diff: 0.015s)
+2025-04-02 23:57:42,037 - app.bookend_alignment - INFO - Loop 3: 15.382s - 22.656s = 7.275s (diff: 0.015s)
+2025-04-02 23:57:42,037 - app.bookend_alignment - INFO - Selected loop 1: 0.534s - 7.808s = 7.275s
+2025-04-02 23:57:42,037 - app.bookend_alignment - INFO - Creating aligned reference video: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_235651\REF03_235651_aligned.mp4
+2025-04-02 23:57:47,293 - app.bookend_alignment - INFO - Creating aligned captured video from 0.534s to 7.808s
+2025-04-02 23:57:52,728 - app.bookend_alignment - INFO - Created aligned videos: 7.27s / 7.29s
+2025-04-02 23:57:52,731 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 23:57:52,732 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 23:57:52,732 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 23:57:52,733 - app.vmaf_analyzer - INFO - VMAF Reference: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_235651\REF03_235651_aligned.mp4
+2025-04-02 23:57:52,733 - app.vmaf_analyzer - INFO - Set test name to: Test_01
+2025-04-02 23:57:52,734 - app.vmaf_analyzer - INFO - VMAF Distorted: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_235651\REF03_capture_235651_aligned.mp4
+2025-04-02 23:57:52,735 - app.vmaf_analyzer - INFO - VMAF Reference: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_235651\REF03_235651_aligned.mp4
+2025-04-02 23:57:52,735 - app.vmaf_analyzer - INFO - Using existing test directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_235651
+2025-04-02 23:57:52,735 - app.vmaf_analyzer - INFO - VMAF Distorted: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_235651\REF03_capture_235651_aligned.mp4
+2025-04-02 23:57:52,736 - app.vmaf_analyzer - INFO - VMAF command: ffmpeg -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_235651/REF03_capture_235651_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_235651/REF03_235651_aligned.mp4 -filter_complex [0:v]setpts=PTS-STARTPTS[dist];[1:v]setpts=PTS-STARTPTS[ref];[dist][ref]libvmaf=model_path=vmaf_v0.6.1.json:log_path='Test_01_20250402_235752_vmaf.json':log_fmt=json:psnr=1:ssim=1 -f null -
+2025-04-02 23:57:52,736 - app.vmaf_analyzer - INFO - Using existing test directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250402_235651
+2025-04-02 23:57:52,737 - app.vmaf_analyzer - INFO - VMAF command: ffmpeg -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_235651/REF03_capture_235651_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250402_235651/REF03_235651_aligned.mp4 -filter_complex [0:v]setpts=PTS-STARTPTS[dist];[1:v]setpts=PTS-STARTPTS[ref];[dist][ref]libvmaf=model_path=vmaf_v0.6.1.json:log_path='Test_01_20250402_235752_vmaf.json':log_fmt=json:psnr=1:ssim=1 -f null -
+2025-04-02 23:57:52,743 - app.vmaf_analyzer - INFO - VMAF subprocess started successfully
+2025-04-02 23:57:52,744 - app.vmaf_analyzer - INFO - VMAF subprocess started successfully
+2025-04-02 23:57:52,766 - app.vmaf_analyzer - ERROR - VMAF error: Error applying option 'model_path' to filter 'libvmaf': Option not found
+2025-04-02 23:57:52,768 - app.vmaf_analyzer - ERROR - VMAF error: Error parsing global options: Option not found
+2025-04-02 23:57:52,768 - app.vmaf_analyzer - ERROR - VMAF error: Error applying option 'model_path' to filter 'libvmaf': Option not found
+2025-04-02 23:57:52,769 - app.vmaf_analyzer - ERROR - VMAF error: Error parsing global options: Option not found
+2025-04-02 23:57:52,829 - app.vmaf_analyzer - ERROR - VMAF analysis failed with code 2880417800: 
+2025-04-02 23:57:52,852 - app.vmaf_analyzer - ERROR - VMAF analysis failed with code 2880417800: 
+QThread::wait: Thread tried to wait on itself
+2025-04-02 23:58:08,263 - app.ui - INFO - Application closing - cleaning up resources
+2025-04-02 23:58:08,264 - app.ui - INFO - Cleanup complete, proceeding with application close
