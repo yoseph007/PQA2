@@ -1692,7 +1692,7 @@ class CaptureManager(QObject):
                 "-c:v", "libx264",        # Video codec
                 "-preset", "superfast",   # Faster preset to reduce processing lag
                 "-crf", "23",             # Slightly lower quality for better performance
-                "-g", str(frame_rate),    # Fix keyframe interval to match frame rate
+                "-g", str(int(frame_rate)),    # Fix keyframe interval to match frame rate
                 "-keyint_min", str(int(frame_rate)), # Minimum keyframe interval
                 "-movflags", "+faststart", # Optimize for web streaming
                 "-fflags", "+genpts+igndts", # More resilient timestamp handling

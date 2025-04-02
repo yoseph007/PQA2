@@ -134,7 +134,7 @@ class VMAFAnalyzer(QObject):
             filter_complex = (
                 "[0:v]setpts=PTS-STARTPTS[dist];"
                 "[1:v]setpts=PTS-STARTPTS[ref];"
-                f"[dist][ref]libvmaf=model_path='vmaf_v0.6.1.json':log_path='{vmaf_filename}':log_fmt=json:psnr=1:ssim=1"
+                f"[dist][ref]libvmaf=model_path={model_name}:log_path='{vmaf_filename}':log_fmt=json:psnr=1:ssim=1"
             )
 
             # Use the -filter_complex parameter instead of -lavfi which seems more compatible
