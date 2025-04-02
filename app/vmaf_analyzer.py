@@ -129,15 +129,12 @@ class VMAFAnalyzer(QObject):
             current_dir = os.getcwd()
             os.chdir(test_dir) # Changed to use test_dir
 
-            # Use a more complex filter graph with multiple outputs
-            # This correctly handles VMAF, PSNR, and SSIM analyses
+            # Use a simplified filter graph with just VMAF analysis
+            # This avoids path formatting issues with PSNR and SSIM filters
             filter_complex = (
-                "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
-                "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
-                f"[ref1][dist1]libvmaf=log_path='{vmaf_filename}':log_fmt=json;"
-                f"[ref2][dist2]libvmaf=log_path='{csv_filename}':log_fmt=csv;"
-                f"[0:v][1:v]psnr=stats_file='{psnr_log}';"
-                f"[0:v][1:v]ssim=stats_file='{ssim_log}'"
+                "[0:v]setpts=PTS-STARTPTS[dist];"
+                "[1:v]setpts=PTS-STARTPTS[ref];"
+                f"[dist][ref]libvmaf=log_path='{vmaf_filename}':log_fmt=json:psnr=true:ssim=true"
             )
 
             # Use the -filter_complex parameter instead of -lavfi which seems more compatible
