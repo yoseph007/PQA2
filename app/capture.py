@@ -14,6 +14,7 @@ from .trigger_detector import TriggerDetectorThread
 import pytesseract
 from .alignment import VideoAligner
 from .video_normalizer import normalize_videos_for_comparison
+import math
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Adjust path as needed
 
@@ -40,6 +41,9 @@ class CaptureMonitor(QThread):
         """Monitor process output and emit signals"""
         logger.debug("Starting capture monitor")
 
+        # For bookend captures, allow much longer durations
+        is_bookend = hasattr(self, 'is_bookend_capture') and self.is_bookend_capture
+        
         while self._running:
             # Check for process completion
             if self.process.poll() is not None:
@@ -59,6 +63,13 @@ class CaptureMonitor(QThread):
 
                     logger.error(f"Capture failed with code {self.process.returncode}: {error}")
                     self.capture_failed.emit(error)
+                break
+
+            # Check for duration timeout - be more lenient with bookend captures
+            if self.duration and (time.time() - self.start_time) > self.duration * (2.0 if is_bookend else 1.5):
+                logger.warning(f"Capture exceeded expected duration ({self.duration}s), terminating")
+                self._terminate_process()
+                self.capture_complete.emit()
                 break
 
             # Check for duration timeout
@@ -195,7 +206,7 @@ class CaptureManager(QObject):
         # Output settings
         self.output_directory = None
         self.test_name = None
-        self.capture_method = "trigger"  # Default to trigger method, alternative is "bookend"
+        self.capture_method = "bookend"  # Default to trigger method, alternative is "bookend"
 
         # Path manager (will be set by main app)
         self.path_manager = None
@@ -399,6 +410,7 @@ class CaptureManager(QObject):
         except Exception as e:
             logger.error(f"Error killing FFmpeg processes: {e}")
 
+
     def _start_capture_after_trigger(self):
         """Start the actual FFmpeg capture process after trigger"""
         # Reset state from WAITING_FOR_TRIGGER to IDLE before starting capture
@@ -419,30 +431,48 @@ class CaptureManager(QObject):
         # Kill any lingering FFmpeg processes before starting new capture
         self._kill_all_ffmpeg()
 
-        # Calculate duration based on reference, subtracting time for trigger frame
-        duration = self.reference_info['duration']
-        frame_rate = self.reference_info.get('frame_rate', 25)
-
-        # Subtract one frame worth of time if using trigger
-        if frame_rate > 0:
-            frame_duration = 1.0 / frame_rate
-            adjusted_duration = duration - frame_duration
+        # Calculate duration based on capture method
+        if self.capture_method == "bookend":
+            # For bookend method, we need a much longer duration
+            ref_duration = self.reference_info['duration']
+            frame_rate = self.reference_info.get('frame_rate', 30)
+            
+            # Calculate bookend capture duration (at least 3 complete loops)
+            bookend_duration = 1.0  # White frame duration in seconds
+            loop_duration = ref_duration + (2 * bookend_duration)
+            
+            # Capture at least 3 loops with extra margin
+            duration = max(20, loop_duration * 3.5)  # At least 20 seconds or 3.5x loop duration
+            
+            # Round up to nearest 5 seconds
+            import math
+            duration = math.ceil(duration / 5) * 5
+            
+            logger.info(f"Using extended bookend capture duration: {duration:.2f}s")
+            self.status_update.emit(f"Starting bookend capture for ~{duration:.0f} seconds...")
         else:
-            adjusted_duration = duration
+            # Trigger method - calculate duration based on reference, subtracting time for trigger frame
+            duration = self.reference_info['duration']
+            frame_rate = self.reference_info.get('frame_rate', 25)
 
-        logger.info(f"Adjusting capture duration from {duration}s to {adjusted_duration}s to account for trigger frame")
-
-        # Start capture process
+            # Subtract one frame worth of time if using trigger
+            if frame_rate > 0:
+                frame_duration = 1.0 / frame_rate
+                duration = duration - frame_duration
+            
+            logger.info(f"Adjusting capture duration from {self.reference_info['duration']}s to {duration}s to account for trigger frame")
+        
+        # Start capture process with calculated duration
         self.start_capture(
             "Intensity Shuttle",  # Hardcoded for now, should match trigger device
             self.current_output_path,
-            duration=adjusted_duration
+            duration=duration
         )
 
-
-
     def start_capture(self, device_name, output_path=None, duration=None):
-        """Start capture process directly (without trigger detection)"""
+        self.capture_monitor = CaptureMonitor(self.ffmpeg_process, duration)
+        self.capture_monitor.is_bookend_capture = (self.capture_method == "bookend")
+        """Start capture process directly with improved robustness and duration calculation"""
         if self.is_capturing:
             logger.warning("Capture already in progress")
             return False
@@ -456,129 +486,162 @@ class CaptureManager(QObject):
 
         # Kill any lingering FFmpeg processes before starting new capture
         self._kill_all_ffmpeg()
+        time.sleep(2)  # Ensure processes are fully terminated
 
-        # Try to connect to the device with retries
-        connected, message = self._try_connect_device(device_name, max_retries=3)
-        if not connected:
-            # Try force-reset as last resort
-            logger.warning("Initial connection attempts failed, trying force reset...")
-            self.status_update.emit("Connection attempts failed, trying device reset...")
-            reset_success, reset_msg = self._force_reset_device(device_name)
-
-            if not reset_success:
-                error_msg = f"Cannot access capture device after reset: {reset_msg}"
-                logger.error(error_msg)
-                self.status_update.emit(error_msg)
-                self.state = CaptureState.ERROR
-                self.state_changed.emit(self.state)
-                self.capture_finished.emit(False, error_msg)
-                return False
-
-            # Try one more connection after reset
+        # Allow up to 3 automatic retries for starting capture
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            logger.info(f"Capture attempt {attempt}/{max_retries}")
+            self.status_update.emit(f"Starting capture (attempt {attempt}/{max_retries})...")
+            
+            # Force device reset on second and third attempts
+            if attempt > 1:
+                logger.info("Performing device reset before retry")
+                self.status_update.emit("Resetting device for retry...")
+                self._force_reset_device(device_name)
+                time.sleep(3)  # Allow device to stabilize after reset
+                
+            # Try to connect to the device
             connected, message = self._try_connect_device(device_name, max_retries=1)
-            if not connected:
-                error_msg = f"Cannot access capture device even after reset: {message}"
-                logger.error(error_msg)
-                self.status_update.emit(error_msg)
-                self.state = CaptureState.ERROR
-                self.state_changed.emit(self.state)
-                self.capture_finished.emit(False, error_msg)
-                return False
+            
+            # Continue with capture even if connection check failed (it often works anyway)
+            if attempt == max_retries or connected:
+                # Set output path if not specified
+                if output_path:
+                    self.current_output_path = output_path
+                else:
+                    self._prepare_output_path()
 
-        # Calculate duration from reference if not specified
-        if not duration and self.reference_info:
-            duration = self.reference_info['duration']
+                # Create output directory if needed
+                output_dir = os.path.dirname(os.path.abspath(self.current_output_path))
+                os.makedirs(output_dir, exist_ok=True)
 
-        # Set output path if not specified
-        if output_path:
-            self.current_output_path = output_path
-        else:
-            self._prepare_output_path()
+                # Test directory write permissions
+                test_file_path = os.path.join(output_dir, "test_write.tmp")
+                try:
+                    with open(test_file_path, 'w') as f:
+                        f.write("test")
+                    os.remove(test_file_path)
+                except Exception as e:
+                    error_msg = f"Cannot write to output directory: {e}"
+                    logger.error(error_msg)
+                    self.status_update.emit(error_msg)
+                    self.state = CaptureState.ERROR
+                    self.state_changed.emit(self.state)
+                    self.capture_finished.emit(False, error_msg)
+                    return False
 
-        # Create output directory if needed
-        output_dir = os.path.dirname(os.path.abspath(self.current_output_path))
-        os.makedirs(output_dir, exist_ok=True)
+                try:
+                    # Calculate duration based on capture method
+                    if self.capture_method == "bookend" and not duration:
+                        # For bookend method, capture much longer (at least 3 loops)
+                        ref_duration = self.reference_info['duration']
+                        frame_rate = self.reference_info.get('frame_rate', 30)  # Default to 30fps if unknown
+                        
+                        # Assume each white bookend is 1 second
+                        bookend_duration = 1.0  # White frame duration in seconds
+                        loop_duration = ref_duration + (2 * bookend_duration)
+                        
+                        # Capture at least 3 loops with extra margin
+                        bookend_duration = max(20, loop_duration * 3.5)  # At least 20 seconds or 3.5x loop duration
+                        
+                        # Round up to nearest 5 seconds for good measure
+                        import math
+                        bookend_duration = math.ceil(bookend_duration / 5) * 5
+                        
+                        logger.info(f"Using extended duration for bookend capture: {bookend_duration:.2f}s")
+                        self.status_update.emit(f"Capturing video for {bookend_duration:.1f}s to ensure multiple white bookend frames...")
+                        
+                        duration = bookend_duration
+                    elif not duration and self.reference_info:
+                        # Standard trigger method with normal reference duration
+                        duration = self.reference_info['duration']
 
-        # Test directory write permissions
-        test_file_path = os.path.join(output_dir, "test_write.tmp")
-        try:
-            with open(test_file_path, 'w') as f:
-                f.write("test")
-            os.remove(test_file_path)
-        except Exception as e:
-            error_msg = f"Cannot write to output directory: {e}"
-            logger.error(error_msg)
-            self.status_update.emit(error_msg)
-            self.state = CaptureState.ERROR
-            self.state_changed.emit(self.state)
-            self.capture_finished.emit(False, error_msg)
-            return False
+                    logger.info(f"Starting capture from {device_name} to {self.current_output_path}")
+                    self.status_update.emit(f"Starting capture for {duration:.1f} seconds...")
 
-        try:
-            logger.info(f"Starting capture from {device_name} to {self.current_output_path}")
-            self.status_update.emit(f"Starting capture for {duration:.1f} seconds...")
+                    # Build FFmpeg command
+                    cmd = [
+                        self._ffmpeg_path,
+                        "-y",  # Overwrite output
+                        "-f", "decklink",
+                        "-i", device_name,  # Use the actual device name, not @device_id
+                        "-c:v", "libx264",
+                        "-preset", "fast",
+                        "-crf", "18",  # Better quality than 23
+                        # Add options to help with file finalization
+                        "-movflags", "+faststart",  # Write moov atom at the beginning
+                        "-fflags", "+genpts",       # Generate PTS if missing
+                        "-avoid_negative_ts", "1"   # Handle negative timestamps
+                    ]
 
-            # Build FFmpeg command
-            cmd = [
-                self._ffmpeg_path,
-                "-y",  # Overwrite output
-                "-f", "decklink",
-                "-i", device_name,  # No @ symbol
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "18",  # Better quality
-                # Add options to help with file finalization
-                "-movflags", "+faststart",  # Write moov atom at the beginning
-                "-fflags", "+genpts",       # Generate PTS if missing
-                "-avoid_negative_ts", "1"   # Handle negative timestamps
-            ]
+                    # Add duration limit (add 50% margin to ensure we get enough)
+                    if duration:
+                        cmd.extend(["-t", str(duration * 1.5)])
 
-            # Add duration limit
-            if duration:
-                cmd.extend(["-t", str(duration*1.5)])
+                    # Use forward slashes for FFmpeg
+                    ffmpeg_output_path = self.current_output_path.replace('\\', '/')
 
-            # Use forward slashes for FFmpeg
-            ffmpeg_output_path = self.current_output_path.replace('\\', '/')
+                    # Add output path
+                    cmd.append(ffmpeg_output_path)
 
-            # Add output path
-            cmd.append(ffmpeg_output_path)
+                    # Log command
+                    logger.info(f"FFmpeg capture command: {' '.join(cmd)}")
 
-            # Log command
-            logger.info(f"FFmpeg capture command: {' '.join(cmd)}")
+                    # Start FFmpeg process
+                    self.ffmpeg_process = subprocess.Popen(
+                        cmd,
+                        stderr=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stdin=subprocess.PIPE,
+                        universal_newlines=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                    )
 
-            # Start FFmpeg process
-            self.ffmpeg_process = subprocess.Popen(
-                cmd,
-                stderr=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-                universal_newlines=True
-            )
+                    # Start monitoring with the duration
+                    self.capture_monitor = CaptureMonitor(self.ffmpeg_process, duration * 1.5 if duration else None)
+                    
+                    self.capture_monitor.progress_updated.connect(self.progress_update)
+                    self.capture_monitor.capture_complete.connect(self._on_capture_complete)
+                    self.capture_monitor.capture_failed.connect(self._on_capture_failed)
+                    self.capture_monitor.start()
 
-            # Start monitoring
-            self.capture_monitor = CaptureMonitor(self.ffmpeg_process, duration)
-            self.capture_monitor.progress_updated.connect(self.progress_update)
-            self.capture_monitor.capture_complete.connect(self._on_capture_complete)
-            self.capture_monitor.capture_failed.connect(self._on_capture_failed)
-            self.capture_monitor.start()
+                    # Update state
+                    self.state = CaptureState.CAPTURING
+                    self.state_changed.emit(self.state)
+                    self.capture_started.emit()
 
-            # Update state
-            self.state = CaptureState.CAPTURING
-            self.state_changed.emit(self.state)
-            self.capture_started.emit()
+                    return True
 
-            return True
-
-        except Exception as e:
-            error_msg = f"Failed to start capture: {str(e)}"
-            logger.error(error_msg)
-            self.status_update.emit(error_msg)
-            self.state = CaptureState.ERROR
-            self.state_changed.emit(self.state)
-            self.capture_finished.emit(False, error_msg)
-            return False
-
-
+                except Exception as e:
+                    error_msg = f"Failed to start capture: {str(e)}"
+                    logger.error(error_msg)
+                    
+                    # Only show error if this is the last attempt
+                    if attempt == max_retries:
+                        self.status_update.emit(error_msg)
+                        self.state = CaptureState.ERROR
+                        self.state_changed.emit(self.state)
+                        self.capture_finished.emit(False, error_msg)
+                    else:
+                        logger.info(f"Capture attempt {attempt} failed, will retry...")
+                        self.status_update.emit(f"Capture attempt {attempt} failed, retrying...")
+                        time.sleep(2)  # Wait before next attempt
+            else:
+                logger.warning(f"Device connection failed on attempt {attempt}: {message}")
+                if attempt < max_retries:
+                    self.status_update.emit(f"Device connection failed, will retry in 3 seconds...")
+                    time.sleep(3)  # Wait before next attempt
+                else:
+                    error_msg = f"Cannot connect to capture device after {max_retries} attempts: {message}"
+                    logger.error(error_msg)
+                    self.status_update.emit(error_msg)
+                    self.state = CaptureState.ERROR
+                    self.state_changed.emit(self.state)
+                    self.capture_finished.emit(False, error_msg)
+        
+        # If we get here, all attempts failed
+        return False
 
 
 
@@ -1102,72 +1165,94 @@ class CaptureManager(QObject):
 
 
     def _test_device_availability(self, device_name):
-        """Quick test if the device is available for capture"""
+        """More robust test if the device is available for capture"""
         try:
-            # Use a simpler and faster test command
-            cmd = [
+            # Try multiple approaches
+            
+            # First approach: Use ffmpeg -list_devices
+            devices_cmd = [
                 self._ffmpeg_path,
                 "-f", "decklink",
-                "-list_formats", "1",  # Just list formats
+                "-list_devices", "1",
+                "-i", "dummy"
+            ]
+            
+            try:
+                devices_result = subprocess.run(
+                    devices_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=3
+                )
+                
+                # If device name appears in the output, it's likely available
+                if device_name in devices_result.stderr:
+                    logger.info(f"Device {device_name} found in device list")
+                    return True, "Device listed in available devices"
+            except Exception as e:
+                logger.warning(f"Error listing devices: {e}")
+            
+            # Second approach: Direct format test
+            format_cmd = [
+                self._ffmpeg_path,
+                "-f", "decklink",
+                "-list_formats", "1",
                 "-i", device_name
             ]
-
-            # Run with short timeout
-            result = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=3  # 3 second timeout
-            )
-
-            # If we get format info, that's success
-            if "Supported formats" in result.stderr:
-                logger.info(f"Device {device_name} is available")
-                return True, "Device available"
-
-            # Even if command failed, check for signs the device exists
-            if device_name in result.stderr:
-                # Device exists but might have issues
-                logger.info(f"Device {device_name} exists but may have issues")
+            
+            try:
+                format_result = subprocess.run(
+                    format_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=3
+                )
+                
+                if "Supported formats" in format_result.stderr:
+                    logger.info(f"Device {device_name} reports supported formats")
+                    return True, "Device formats available"
+            except Exception as e:
+                logger.warning(f"Error getting device formats: {e}")
+            
+            # Third approach: Try a minimal capture
+            capture_cmd = [
+                self._ffmpeg_path,
+                "-f", "decklink",
+                "-t", "0.1",  # Try for just 0.1 seconds
+                "-i", device_name,
+                "-f", "null",
+                "-"
+            ]
+            
+            try:
+                capture_result = subprocess.run(
+                    capture_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=5
+                )
+                
+                stderr = capture_result.stderr.lower()
+                if "frame=" in stderr or "time=" in stderr:
+                    logger.info(f"Device {device_name} successfully captured frames")
+                    return True, "Device successfully captured frames"
+            except Exception as e:
+                logger.warning(f"Error testing minimal capture: {e}")
+            
+            # If all tests failed but device name was found in device list
+            if device_name in devices_result.stderr:
+                logger.warning(f"Device {device_name} exists but may have issues")
                 return True, "Device exists but may have connection issues"
-
-            # Check for specific error patterns
-            stderr = result.stderr.lower()
-
-            if "cannot autodetect" in stderr or "no signal" in stderr:
-                # This is often a non-fatal error - device exists but no signal
-                logger.warning(f"Device {device_name} reports no signal")
-                return True, "Device found but no signal detected"
-
-            if "error opening input" in stderr:
-                logger.warning(f"Device {device_name} reports opening error")
-                return False, "Error opening device. It may be in use."
-
-            if "device or resource busy" in stderr:
-                logger.warning(f"Device {device_name} is busy")
-                return False, "Device is currently in use by another application."
-
-            if "permission denied" in stderr:
-                logger.warning(f"Permission denied for device {device_name}")
-                return False, "Permission denied. Try running as administrator."
-
-            if "not found" in stderr:
-                logger.warning(f"Device {device_name} not found")
-                return False, "Device not found. Check connections and drivers."
-
-            # If we can't determine status clearly, lean toward available
-            logger.warning(f"Uncertain device status: {stderr[:100]}...")
-            return True, "Device status uncertain but proceeding"
-
-        except subprocess.TimeoutExpired:
-            # Timeout often means the device is there but busy/responsive
-            logger.warning(f"Timeout testing device {device_name}")
-            return True, "Device test timed out but proceeding anyway"
+            
+            logger.warning(f"Device {device_name} not detected by any test method")
+            return False, "Device not detected or not responding"
+            
         except Exception as e:
-            logger.error(f"Error testing device {device_name}: {e}")
+            logger.error(f"Error in device availability test: {e}")
             return False, f"Error testing device: {str(e)}"
-
 
     def _force_reset_device(self, device_name):
         """More thorough device reset procedure"""
@@ -1382,7 +1467,7 @@ class CaptureManager(QObject):
         # IMPROVED: Capture for a much longer time to ensure at least 3 complete loops
         # This gives much more margin for detection
         min_loops = 3
-        min_duration = max(20, ref_duration * 3)  # At least 20 seconds or 3x reference
+        min_duration = max(20, ref_duration * 3.5)  # At least 20 seconds or 3x reference
         
         # Calculate capture duration with extra margin
         capture_duration = max((loop_duration * min_loops * 1.5), min_duration)
