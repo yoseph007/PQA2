@@ -1438,6 +1438,31 @@ class CaptureManager(QObject):
         self.state = CaptureState.COMPLETED
         self.state_changed.emit(self.state)
         self.capture_finished.emit(True, output_path)
+        
+    def _on_capture_failed(self, error_msg):
+        """Handle capture failure"""
+        logger.error(f"Capture failed: {error_msg}")
+        
+        # Update state
+        self.state = CaptureState.ERROR
+        self.state_changed.emit(self.state)
+        
+        # Emit failure signal
+        self.status_update.emit(f"Error: {error_msg}")
+        self.capture_finished.emit(False, error_msg)
+        
+        # Clean up resources
+        if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
+            try:
+                self.ffmpeg_process.terminate()
+                time.sleep(0.5)
+                if self.ffmpeg_process.poll() is None:
+                    self.ffmpeg_process.kill()
+            except Exception as e:
+                logger.error(f"Error terminating FFmpeg process: {e}")
+        
+        # Reset capture monitor
+        self.capture_monitor = None
 
     def start_bookend_capture(self, device_name):
         """
