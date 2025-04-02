@@ -2132,7 +2132,8 @@ class MainWindow(QMainWindow):
             # Update settings
             new_capture_settings = self.options_manager.get_setting("capture")
             new_capture_settings["available_resolutions"] = format_info["resolutions"]
-            new_capture_settings["available_frame_rates"]= format_info["frame_rates"]new_capture_settings["resolution_framerates"] = format_info["resolution_framerates"]
+            new_capture_settings["available_frame_rates"] = format_info["frame_rates"]
+            new_capture_settings["resolution_framerates"] = format_info["resolution_framerates"]
             self.options_manager.update_category("capture", new_capture_settings)
 
             # Show success message with number of formats
