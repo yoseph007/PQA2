@@ -103,7 +103,7 @@ class CaptureMonitor(QThread):
                 # Import modules inside the function to avoid scoping issues
                 import signal
                 import ctypes
-                
+
                 # First try to send a SIGINT (Ctrl+C) which allows FFmpeg to finalize the file
                 try:
                     # Unix-like systems
@@ -154,7 +154,7 @@ class CaptureState(Enum):
     PROCESSING = 2
     COMPLETED = 3
     ERROR = 4
-    
+
 class CaptureManager(QObject):
     """Main manager for video capture process using bookend method"""
     # Status signals
@@ -329,27 +329,42 @@ class CaptureManager(QObject):
         # Prepare output path
         self._prepare_output_path()
 
-        # Calculate capture duration based on reference
+        # Get settings from options manager if available through main app
+        settings = None
+        if hasattr(self, 'options_manager') and self.options_manager:
+            settings = self.options_manager.settings
+
+        # Calculate capture duration based on reference and settings
         ref_duration = self.reference_info['duration']
         frame_rate = self.reference_info.get('frame_rate', 30)  # Default to 30fps if unknown
-        
-        # Assume each white bookend is at least 1 second
-        bookend_duration = 1.0  # White frame duration in seconds
+
+        # Get bookend settings from options or use defaults
+        bookend_duration = 0.5  # Default white frame duration in seconds
+        min_loops = 3           # Default minimum loops
+        max_capture_time = 120  # Default maximum capture time in seconds
+
+        if settings and 'bookend' in settings:
+            bookend_settings = settings.get('bookend', {})
+            bookend_duration = bookend_settings.get('bookend_duration', 0.5)
+            min_loops = bookend_settings.get('min_loops', 3)
+            max_capture_time = bookend_settings.get('max_capture_time', 120)
+            logger.info(f"Using bookend settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
+
         loop_duration = ref_duration + (2 * bookend_duration)  # Account for start and end bookends
 
-        # Capture for a much longer time to ensure at least 3 complete loops
-        min_loops = 3
-        min_duration = max(20, ref_duration * 3)  # At least 20 seconds or 3x reference
-        
+        # Capture for a much longer time to ensure at least the configured number of loops
+        min_duration = max(20, ref_duration * min_loops)  # At least 20 seconds or min_loops * reference
+        # Apply max capture time from settings
+        max_duration = max_capture_time
+
         # Calculate capture duration with extra margin
-        capture_duration = max((loop_duration * min_loops * 1.5), min_duration)
-        
+        capture_duration = min(max((loop_duration * min_loops * 1.5), min_duration), max_duration)
+
         # Round up to nearest 10 seconds for good measure
         capture_duration = math.ceil(capture_duration / 10) * 10
 
-        logger.info(f"Estimated single loop duration: {loop_duration:.2f}s")
-        logger.info(f"Setting capture duration for at least {min_loops} loops: {capture_duration:.2f}s")
-        
+        logger.info(f"Capture duration set to {capture_duration}s (loop={loop_duration:.2f}s, min_loops={min_loops})")
+
         # Inform the user
         self.status_update.emit(f"Capturing video with bookend frames for approximately {capture_duration:.0f} seconds...\n")
         self.status_update.emit("Please ensure the video plays in a loop with white frames between repetitions")
@@ -360,7 +375,7 @@ class CaptureManager(QObject):
 
         # Try to connect with minimal retries - don't reset the device
         connected, message = self._try_connect_device(device_name, max_retries=1)
-        
+
         # Proceed even if connection reports issues
         logger.info(f"Proceeding with bookend capture (connected status={connected})")
 
@@ -732,7 +747,7 @@ class CaptureManager(QObject):
         """More robust test if the device is available for capture"""
         try:
             # Try multiple approaches
-            
+
             # First approach: Use ffmpeg -list_devices
             devices_cmd = [
                 self._ffmpeg_path,
@@ -740,7 +755,7 @@ class CaptureManager(QObject):
                 "-list_devices", "1",
                 "-i", "dummy"
             ]
-            
+
             try:
                 devices_result = subprocess.run(
                     devices_cmd,
@@ -749,14 +764,14 @@ class CaptureManager(QObject):
                     text=True,
                     timeout=3
                 )
-                
+
                 # If device name appears in the output, it's likely available
                 if device_name in devices_result.stderr:
                     logger.info(f"Device {device_name} found in device list")
                     return True, "Device listed in available devices"
             except Exception as e:
                 logger.warning(f"Error listing devices: {e}")
-            
+
             # Second approach: Direct format test
             format_cmd = [
                 self._ffmpeg_path,
@@ -764,7 +779,7 @@ class CaptureManager(QObject):
                 "-list_formats", "1",
                 "-i", device_name
             ]
-            
+
             try:
                 format_result = subprocess.run(
                     format_cmd,
@@ -773,13 +788,13 @@ class CaptureManager(QObject):
                     text=True,
                     timeout=3
                 )
-                
+
                 if "Supported formats" in format_result.stderr:
                     logger.info(f"Device {device_name} reports supported formats")
                     return True, "Device formats available"
             except Exception as e:
                 logger.warning(f"Error getting device formats: {e}")
-            
+
             # Third approach: Try a minimal capture
             capture_cmd = [
                 self._ffmpeg_path,
@@ -789,7 +804,7 @@ class CaptureManager(QObject):
                 "-f", "null",
                 "-"
             ]
-            
+
             try:
                 capture_result = subprocess.run(
                     capture_cmd,
@@ -798,22 +813,22 @@ class CaptureManager(QObject):
                     text=True,
                     timeout=5
                 )
-                
+
                 stderr = capture_result.stderr.lower()
                 if "frame=" in stderr or "time=" in stderr:
                     logger.info(f"Device {device_name} successfully captured frames")
                     return True, "Device successfully captured frames"
             except Exception as e:
                 logger.warning(f"Error testing minimal capture: {e}")
-            
+
             # If all tests failed but device name was found in device list
             if device_name in devices_result.stderr:
                 logger.warning(f"Device {device_name} exists but may have issues")
                 return True, "Device exists but may have connection issues"
-            
+
             logger.warning(f"Device {device_name} not detected by any test method")
             return False, "Device not detected or not responding"
-            
+
         except Exception as e:
             logger.error(f"Error in device availability test: {e}")
             return False, f"Error testing device: {str(e)}"
@@ -828,8 +843,7 @@ class CaptureManager(QObject):
         time.sleep(2)
 
         # Try multiple connection approaches
-        for attempt in range(1, max_retries + 1):
-            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
+        for attempt in range(1, max_retries + 1):            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
             self.status_update.emit(f"Connecting to device (attempt {attempt}/{max_retries})...")
 
             # Check device availability
@@ -901,10 +915,3 @@ class CaptureManager(QObject):
             logger.warning(f"Error repairing MP4: {e}")
 
         return False, None
-    
-    
-    
-    
-    
-    
-    

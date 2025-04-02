@@ -34,7 +34,7 @@ class MainWindow(QMainWindow):
         self.capture_mgr = capture_mgr or CaptureManager()
         self.file_manager = file_manager or FileManager()
         self.options_manager = options_manager or OptionsManager()
-        
+
         # Set up UI
         self._setup_ui()
         self._connect_signals()
@@ -179,14 +179,14 @@ class MainWindow(QMainWindow):
         self.device_combo = QComboBox()
         self.device_combo.addItem("Intensity Shuttle", "Intensity Shuttle")
         device_select_layout.addWidget(self.device_combo)
-        
+
         # Round status indicator between dropdown and refresh button
         self.device_status_indicator = QLabel()
         self.device_status_indicator.setFixedSize(16, 16)
         self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")  # Grey for inactive
         self.device_status_indicator.setToolTip("Capture card status: not connected")
         device_select_layout.addWidget(self.device_status_indicator)
-        
+
         self.btn_refresh_devices = QPushButton("Refresh")
         self.btn_refresh_devices.clicked.connect(self.refresh_devices)
         device_select_layout.addWidget(self.btn_refresh_devices)
@@ -250,7 +250,7 @@ class MainWindow(QMainWindow):
         preview_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
         preview_frame.setLineWidth(1)
         preview_inner_layout = QVBoxLayout(preview_frame)
-        
+
         # Preview label with enhanced styling and initial placeholder
         self.lbl_preview = QLabel("No video feed")
         self.lbl_preview.setAlignment(Qt.AlignCenter)
@@ -258,23 +258,23 @@ class MainWindow(QMainWindow):
         self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black; border-radius: 4px;")
         preview_inner_layout.addWidget(self.lbl_preview)
         preview_inner_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Add status indicator for preview
         preview_status_layout = QHBoxLayout()
         self.lbl_preview_status = QLabel("Status: No video feed")
         self.lbl_preview_status.setStyleSheet("color: #666; font-size: 9pt;")
-        
+
         # Frame counter
         self.lbl_frame_counter = QLabel("Frame: 0")
         self.lbl_frame_counter.setStyleSheet("color: #666; font-size: 9pt;")
-        
+
         preview_status_layout.addWidget(self.lbl_preview_status)
         preview_status_layout.addStretch()
         preview_status_layout.addWidget(self.lbl_frame_counter)
-        
+
         # Show a placeholder image initially
         self._show_placeholder_image("Waiting for video capture to start...")
-        
+
         # Add components to layouts
         preview_layout.addWidget(preview_frame)
         preview_layout.addLayout(preview_status_layout)
@@ -284,7 +284,7 @@ class MainWindow(QMainWindow):
         # Enhanced capture log with better error visibility and auto-scrolling
         log_group = QGroupBox("Capture Log")
         log_layout = QVBoxLayout()
-        
+
         # Create log text area with enhanced styling and error highlighting
         self.txt_capture_log = QTextEdit()
         self.txt_capture_log.setReadOnly(True)
@@ -292,7 +292,7 @@ class MainWindow(QMainWindow):
         self.txt_capture_log.setMinimumHeight(150)
         self.txt_capture_log.setMaximumHeight(200)  # Fix height to prevent stretching
         self.txt_capture_log.setFixedWidth(550)  # Fixed width to avoid UI stretching with long messages
-        
+
         # Set custom stylesheet for better readability
         self.txt_capture_log.setStyleSheet("""
             QTextEdit {
@@ -303,7 +303,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #ddd;
             }
         """)
-        
+
         # Add clear log button
         log_controls = QHBoxLayout()
         self.btn_clear_capture_log = QPushButton("Clear Log")
@@ -311,7 +311,7 @@ class MainWindow(QMainWindow):
         self.btn_clear_capture_log.clicked.connect(self.txt_capture_log.clear)
         log_controls.addStretch()
         log_controls.addWidget(self.btn_clear_capture_log)
-        
+
         # Add components to layouts
         log_layout.addWidget(self.txt_capture_log)
         log_layout.addLayout(log_controls)
@@ -543,15 +543,15 @@ class MainWindow(QMainWindow):
             self.capture_mgr.capture_started.connect(self.handle_capture_started)
             self.capture_mgr.capture_finished.connect(self.handle_capture_finished)
             self.capture_mgr.frame_available.connect(self.update_preview)
-            
+
         # Connect options manager signals
         if hasattr(self, 'options_manager') and self.options_manager:
             self.options_manager.settings_updated.connect(self.handle_settings_updated)
-            
+
     def handle_settings_updated(self, settings):
         """Handle when settings are updated"""
         logger.info("Settings updated, applying changes to UI")
-        
+
         # Update device status indicator in capture tab if device settings changed
         if hasattr(self, 'device_status_indicator'):
             self._populate_devices_and_check_status()
@@ -561,11 +561,11 @@ class MainWindow(QMainWindow):
         # Use the tests/test_data folder for reference videos if it exists
         script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         reference_folder = os.path.join(script_dir, "tests", "test_data")
-        
+
         # If folder doesn't exist, use home directory
         if not os.path.exists(reference_folder):
             reference_folder = os.path.expanduser("~")
-        
+
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select Reference Video", reference_folder, "Video Files (*.mp4 *.mov *.avi *.mkv)"
         )        
@@ -649,7 +649,7 @@ class MainWindow(QMainWindow):
         """Browse for output directory"""
         # Use standard test_results directory as base
         default_dir = self.file_manager.get_default_base_dir() if hasattr(self, 'file_manager') else None
-        
+
         if not default_dir:
             script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             default_dir = os.path.join(script_dir, "tests", "test_results")
@@ -664,10 +664,10 @@ class MainWindow(QMainWindow):
             # Set output directory in UI and managers
             self.lbl_output_dir.setText(directory)
             self.lbl_output_dir.setToolTip(directory)
-            
+
             if hasattr(self, 'file_manager'):
                 self.file_manager.base_dir = directory
-                
+
             if hasattr(self, 'capture_mgr'):
                 self.capture_mgr.set_output_directory(directory)
 
@@ -691,19 +691,19 @@ class MainWindow(QMainWindow):
         else:
             # Fallback to hardcoded device
             devices = ["Intensity Shuttle"]
-            
+
         # Update dropdown
         self.device_combo.clear()
         for device in devices:
             self.device_combo.addItem(device, device)
-        
+
         # Set current device from settings
         if hasattr(self, 'options_manager'):
             current_device = self.options_manager.get_setting("capture", "default_device")
             index = self.device_combo.findText(current_device)
             if index >= 0:
                 self.device_combo.setCurrentIndex(index)
-        
+
         # Check if device is available
         if hasattr(self, 'capture_mgr'):
             try:
@@ -714,6 +714,29 @@ class MainWindow(QMainWindow):
                         # Green for connected device
                         self.device_status_indicator.setStyleSheet("background-color: #00AA00; border-radius: 8px;")
                         self.device_status_indicator.setToolTip("Capture card status: connected")
+
+                        # Also attempt to get formats for the device to populate the settings
+                        if hasattr(self, 'options_manager'):
+                            try:
+                                # Get the formats
+                                format_info = self.options_manager.get_decklink_formats(devices[0])
+
+                                # Update settings with detected resolutions and frame rates
+                                if format_info["resolutions"] or format_info["frame_rates"]:
+                                    capture_settings = self.options_manager.get_setting("capture")
+
+                                    if format_info["resolutions"]:
+                                        capture_settings["available_resolutions"] = format_info["resolutions"]
+                                        logger.info(f"Detected resolutions: {format_info['resolutions']}")
+
+                                    if format_info["frame_rates"]:
+                                        capture_settings["available_frame_rates"] = format_info["frame_rates"]
+                                        logger.info(f"Detected frame rates: {format_info['frame_rates']}")
+
+                                    # Update settings
+                                    self.options_manager.update_category(""capture", capture_settings)
+                            except Exception as e:
+                                logger.warning(f"Error getting device formats: {str(e)}")
                     else:
                         # Red for unavailable device
                         self.device_status_indicator.setStyleSheet("background-color: #AA0000; border-radius: 8px;")
@@ -730,11 +753,27 @@ class MainWindow(QMainWindow):
             # Grey for initialization not complete
             self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
             self.device_status_indicator.setToolTip("Capture card status: not initialized")
-        
+
         # Update the options tab indicator if it exists
         if hasattr(self, 'options_device_indicator'):
             self.options_device_indicator.setStyleSheet(self.device_status_indicator.styleSheet())
             self.options_device_indicator.setToolTip(self.device_status_indicator.toolTip())
+
+        # Make sure the capture options tab is updated with any detected formats
+        if hasattr(self, 'options_manager') and hasattr(self, 'combo_resolution') and hasattr(self, 'combo_frame_rate'):
+            capture_settings = self.options_manager.get_setting("capture")
+
+            # Update resolution dropdown
+            if capture_settings.get("available_resolutions"):
+                self.combo_resolution.clear()
+                for res in capture_settings["available_resolutions"]:
+                    self.combo_resolution.addItem(res)
+
+            # Update frame rate dropdown
+            if capture_settings.get("available_frame_rates"):
+                self.combo_frame_rate.clear()
+                for rate in capture_settings["available_frame_rates"]:
+                    self.combo_frame_rate.addItem(str(rate))
 
     def start_capture(self):
         """Start the bookend capture process"""
@@ -777,7 +816,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'capture_mgr'):
             self.capture_mgr.set_output_directory(output_dir)
             self.capture_mgr.set_test_name(test_name)
-            
+
             # Start bookend capture
             self.log_to_capture("Starting bookend frame capture...")
             self.capture_mgr.start_bookend_capture(device_name)
@@ -796,7 +835,7 @@ class MainWindow(QMainWindow):
 
         # Reset progress bar to avoid stuck state
         self.pb_capture_progress.setValue(0)
-        
+
         # Update UI
         self.btn_start_capture.setEnabled(True)
         self.btn_stop_capture.setEnabled(False)
@@ -874,7 +913,7 @@ class MainWindow(QMainWindow):
                 logger.warning("Received empty frame for preview")
                 self._show_placeholder_image("No valid video frame received")
                 return
-                
+
             # Convert OpenCV frame to QImage
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
@@ -895,32 +934,32 @@ class MainWindow(QMainWindow):
 
             # Update label
             self.lbl_preview.setPixmap(scaled_pixmap)
-            
+
         except Exception as e:
             logger.error(f"Error updating preview: {str(e)}")
             self._show_placeholder_image(f"Preview error: {str(e)}")
-            
+
     def _show_placeholder_image(self, message="No video feed"):
         """Show a placeholder image with text when no video is available"""
         try:
             # Create a blank image
             placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
             placeholder[:] = (224, 224, 224)  # Light gray background
-            
+
             # Add text
             font = cv2.FONT_HERSHEY_SIMPLEX
             text_size = cv2.getTextSize(message, font, 0.7, 2)[0]
             text_x = (placeholder.shape[1] - text_size[0]) // 2
             text_y = (placeholder.shape[0] + text_size[1]) // 2
             cv2.putText(placeholder, message, (text_x, text_y), font, 0.7, (0, 0, 0), 2)
-            
+
             # Convert to QImage and display
             rgb_image = cv2.cvtColor(placeholder, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
             q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
             self.lbl_preview.setPixmap(QPixmap.fromImage(q_img))
-            
+
         except Exception as e:
             logger.error(f"Error creating placeholder: {str(e)}")
             # Fallback to text-only label
@@ -1067,7 +1106,7 @@ class MainWindow(QMainWindow):
         self.lbl_alignment_status.setText(f"Alignment failed")
         self.log_to_analysis(f"Error: {error_msg}")
         QMessageBox.critical(self, "Alignment Error", error_msg)
-        
+
         # Re-enable button
         self.btn_run_combined_analysis.setEnabled(True)
 
@@ -1165,594 +1204,9 @@ class MainWindow(QMainWindow):
         dist_path = results.get('distorted_path')
         if dist_path and os.path.exists(dist_path):
             item = QListWidgetItem(f"Captured: {os.path.basename(dist_path)}")
-
-    def _setup_options_tab(self):
-        """Set up the Options tab with all configurable settings"""
-        layout = QVBoxLayout(self.options_tab)
-        
-        # Create a scrollable area for many options
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setSpacing(10)
-        
-        # Load current settings
-        settings = self.options_manager.settings
-        
-        # Create section groupboxes
-        bookend_group = self._create_bookend_options_group(settings)
-        vmaf_group = self._create_vmaf_options_group(settings)
-        capture_group = self._create_capture_options_group(settings)
-        paths_group = self._create_paths_options_group(settings)
-        
-        # Add sections to layout
-        scroll_layout.addWidget(bookend_group)
-        scroll_layout.addWidget(vmaf_group)
-        scroll_layout.addWidget(capture_group)
-        scroll_layout.addWidget(paths_group)
-        
-        # Add spacer at the end to push everything up
-        scroll_layout.addStretch()
-        
-        # Add content to scroll area
-        scroll_area.setWidget(scroll_content)
-        layout.addWidget(scroll_area)
-        
-        # Add save/reset buttons at the bottom
-        button_layout = QHBoxLayout()
-        self.btn_save_options = QPushButton("Save Options")
-        self.btn_save_options.clicked.connect(self.save_all_options)
-        self.btn_reset_options = QPushButton("Reset to Defaults")
-        self.btn_reset_options.clicked.connect(self.reset_options_to_defaults)
-        
-        button_layout.addStretch()
-        button_layout.addWidget(self.btn_reset_options)
-        button_layout.addWidget(self.btn_save_options)
-        layout.addLayout(button_layout)
-    
-    def _create_bookend_options_group(self, settings):
-        """Create the bookend options group"""
-        bookend_group = QGroupBox("Bookend Capture Settings")
-        bookend_layout = QFormLayout()
-        
-        # Get current bookend settings
-        bookend_settings = settings.get("bookend", self.options_manager.default_settings["bookend"])
-        
-        # Min loops spinner
-        self.spinbox_min_loops = QSpinBox()
-        self.spinbox_min_loops.setRange(1, 10)
-        self.spinbox_min_loops.setValue(bookend_settings.get("min_loops", 3))
-        self.spinbox_min_loops.setToolTip("Minimum number of video loops to capture")
-        bookend_layout.addRow("Minimum Loops:", self.spinbox_min_loops)
-        
-        # Max capture time spinner (seconds)
-        self.spinbox_max_capture = QSpinBox()
-        self.spinbox_max_capture.setRange(10, 600)
-        self.spinbox_max_capture.setSuffix(" seconds")
-        self.spinbox_max_capture.setValue(bookend_settings.get("max_capture_time", 120))
-        self.spinbox_max_capture.setToolTip("Maximum capture duration in seconds")
-        bookend_layout.addRow("Maximum Capture Time:", self.spinbox_max_capture)
-        
-        # Bookend duration spinner (seconds)
-        self.spinbox_bookend_duration = QDoubleSpinBox()
-        self.spinbox_bookend_duration.setRange(0.1, 5.0)
-        self.spinbox_bookend_duration.setSingleStep(0.1)
-        self.spinbox_bookend_duration.setSuffix(" seconds")
-        self.spinbox_bookend_duration.setValue(bookend_settings.get("bookend_duration", 0.5))
-        self.spinbox_bookend_duration.setToolTip("Duration of white bookend frames in seconds")
-        bookend_layout.addRow("Bookend Duration:", self.spinbox_bookend_duration)
-        
-        # White threshold slider (0-255)
-        self.slider_white_threshold = QSlider(Qt.Horizontal)
-        self.slider_white_threshold.setRange(200, 255)
-        self.slider_white_threshold.setValue(bookend_settings.get("white_threshold", 240))
-        self.lbl_white_threshold = QLabel(str(self.slider_white_threshold.value()))
-        self.slider_white_threshold.valueChanged.connect(lambda v: self.lbl_white_threshold.setText(str(v)))
-        self.slider_white_threshold.setToolTip("Brightness threshold for detecting white frames (0-255)")
-        
-        threshold_layout = QHBoxLayout()
-        threshold_layout.addWidget(self.slider_white_threshold)
-        threshold_layout.addWidget(self.lbl_white_threshold)
-        bookend_layout.addRow("White Threshold:", threshold_layout)
-        
-        bookend_group.setLayout(bookend_layout)
-        return bookend_group
-    
-    def _create_vmaf_options_group(self, settings):
-        """Create the VMAF options group"""
-        vmaf_group = QGroupBox("VMAF Analysis Settings")
-        vmaf_layout = QFormLayout()
-        
-        # Get current VMAF settings
-        vmaf_settings = settings.get("vmaf", self.options_manager.default_settings["vmaf"])
-        
-        # Default VMAF model selection
-        self.combo_default_vmaf_model = QComboBox()
-        available_models = vmaf_settings.get("available_models", ["vmaf_v0.6.1", "vmaf_4k_v0.6.1"])
-        for model in available_models:
-            self.combo_default_vmaf_model.addItem(model)
-        
-        # Set current model
-        current_model = vmaf_settings.get("default_model", "vmaf_v0.6.1")
-        index = self.combo_default_vmaf_model.findText(current_model)
-        if index >= 0:
-            self.combo_default_vmaf_model.setCurrentIndex(index)
-        
-        self.combo_default_vmaf_model.setToolTip("Default VMAF model to use for analysis")
-        vmaf_layout.addRow("Default VMAF Model:", self.combo_default_vmaf_model)
-        
-        # Subsample (analyze every Nth frame)
-        self.spinbox_subsample = QSpinBox()
-        self.spinbox_subsample.setRange(1, 10)
-        self.spinbox_subsample.setValue(vmaf_settings.get("subsample", 1))
-        self.spinbox_subsample.setToolTip("Analyze every Nth frame (1 = all frames)")
-        vmaf_layout.addRow("Subsample Rate:", self.spinbox_subsample)
-        
-        # Threads
-        self.spinbox_threads = QSpinBox()
-        self.spinbox_threads.setRange(0, 16)
-        self.spinbox_threads.setValue(vmaf_settings.get("threads", 0))
-        self.spinbox_threads.setToolTip("Number of threads for VMAF analysis (0 = auto)")
-        self.spinbox_threads.setSpecialValueText("Auto")
-        vmaf_layout.addRow("Threads:", self.spinbox_threads)
-        
-        # Output format
-        self.combo_output_format = QComboBox()
-        self.combo_output_format.addItems(["json", "xml", "csv"])
-        current_format = vmaf_settings.get("output_format", "json")
-        index = self.combo_output_format.findText(current_format)
-        if index >= 0:
-            self.combo_output_format.setCurrentIndex(index)
-        self.combo_output_format.setToolTip("Output format for VMAF results")
-        vmaf_layout.addRow("Output Format:", self.combo_output_format)
-        
-        # Custom model path
-        self.txt_custom_model = QLineEdit()
-        self.txt_custom_model.setText(vmaf_settings.get("custom_model_path", ""))
-        self.txt_custom_model.setToolTip("Path to custom VMAF model (leave empty to use built-in models)")
-        browse_button = QPushButton("Browse...")
-        browse_button.clicked.connect(self.browse_custom_model)
-        
-        custom_model_layout = QHBoxLayout()
-        custom_model_layout.addWidget(self.txt_custom_model)
-        custom_model_layout.addWidget(browse_button)
-        vmaf_layout.addRow("Custom Model Path:", custom_model_layout)
-        
-        vmaf_group.setLayout(vmaf_layout)
-        return vmaf_group
-    
-    def _create_capture_options_group(self, settings):
-        """Create the capture options group"""
-        capture_group = QGroupBox("Capture Card Settings")
-        capture_layout = QFormLayout()
-        
-        # Get current capture settings
-        capture_settings = settings.get("capture", self.options_manager.default_settings["capture"])
-        
-        # Default device selection
-        self.combo_default_device = QComboBox()
-        device_layout = QHBoxLayout()
-        device_layout.addWidget(self.combo_default_device)
-        
-        # Status indicator for device
-        self.options_device_indicator = QLabel()
-        self.options_device_indicator.setFixedSize(16, 16)
-        self.options_device_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")  # Grey by default
-        device_layout.addWidget(self.options_device_indicator)
-        
-        # Refresh button
-        self.btn_refresh_options_devices = QPushButton("Refresh Devices")
-        self.btn_refresh_options_devices.clicked.connect(self.refresh_capture_devices)
-        device_layout.addWidget(self.btn_refresh_options_devices)
-        
-        capture_layout.addRow("Default Capture Device:", device_layout)
-        
-        # Resolution selection
-        self.combo_resolution = QComboBox()
-        available_resolutions = capture_settings.get("available_resolutions", ["1080p", "720p", "576p", "480p"])
-        self.combo_resolution.addItems(available_resolutions)
-        current_resolution = capture_settings.get("resolution", "1080p")
-        index = self.combo_resolution.findText(current_resolution)
-        if index >= 0:
-            self.combo_resolution.setCurrentIndex(index)
-        self.combo_resolution.setToolTip("Default capture resolution")
-        capture_layout.addRow("Default Resolution:", self.combo_resolution)
-        
-        # Frame rate selection
-        self.combo_frame_rate = QComboBox()
-        available_rates = capture_settings.get("available_frame_rates", [23.98, 24, 25, 29.97, 30, 50, 59.94, 60])
-        for rate in available_rates:
-            self.combo_frame_rate.addItem(str(rate))
-        current_rate = str(capture_settings.get("frame_rate", 30))
-        index = self.combo_frame_rate.findText(current_rate)
-        if index >= 0:
-            self.combo_frame_rate.setCurrentIndex(index)
-        self.combo_frame_rate.setToolTip("Default capture frame rate")
-        capture_layout.addRow("Default Frame Rate:", self.combo_frame_rate)
-        
-        # Pixel format selection
-        self.combo_pixel_format = QComboBox()
-        self.combo_pixel_format.addItems(["uyvy422", "yuyv422", "nv12", "rgb24"])
-        current_format = capture_settings.get("pixel_format", "uyvy422")
-        index = self.combo_pixel_format.findText(current_format)
-        if index >= 0:
-            self.combo_pixel_format.setCurrentIndex(index)
-        self.combo_pixel_format.setToolTip("Pixel format for capture")
-        capture_layout.addRow("Pixel Format:", self.combo_pixel_format)
-        
-        # Auto detect formats button
-        self.btn_detect_formats = QPushButton("Auto-Detect Formats")
-        self.btn_detect_formats.clicked.connect(self.detect_device_formats)
-        capture_layout.addRow("", self.btn_detect_formats)
-        
-        capture_group.setLayout(capture_layout)
-        
-        # Populate devices on initialization
-        self.refresh_capture_devices()
-        
-        return capture_group
-    
-    def _create_paths_options_group(self, settings):
-        """Create the paths options group"""
-        paths_group = QGroupBox("File Paths Settings")
-        paths_layout = QFormLayout()
-        
-        # Get current paths settings
-        paths_settings = settings.get("paths", self.options_manager.default_settings["paths"])
-        
-        # Default output directory
-        self.txt_default_output = QLineEdit()
-        self.txt_default_output.setText(paths_settings.get("default_output_dir", ""))
-        output_browse = QPushButton("Browse...")
-        output_browse.clicked.connect(self.browse_default_output)
-        
-        output_layout = QHBoxLayout()
-        output_layout.addWidget(self.txt_default_output)
-        output_layout.addWidget(output_browse)
-        paths_layout.addRow("Default Output Directory:", output_layout)
-        
-        # Reference video directory
-        self.txt_reference_dir = QLineEdit()
-        self.txt_reference_dir.setText(paths_settings.get("reference_video_dir", ""))
-        ref_browse = QPushButton("Browse...")
-        ref_browse.clicked.connect(self.browse_reference_dir)
-        
-        ref_layout = QHBoxLayout()
-        ref_layout.addWidget(self.txt_reference_dir)
-        ref_layout.addWidget(ref_browse)
-        paths_layout.addRow("Reference Videos Directory:", ref_layout)
-        
-        # Results directory
-        self.txt_results_dir = QLineEdit()
-        self.txt_results_dir.setText(paths_settings.get("results_dir", ""))
-        results_browse = QPushButton("Browse...")
-        results_browse.clicked.connect(self.browse_results_dir)
-        
-        results_layout = QHBoxLayout()
-        results_layout.addWidget(self.txt_results_dir)
-        results_layout.addWidget(results_browse)
-        paths_layout.addRow("Results Directory:", results_layout)
-        
-        # Temporary files directory
-        self.txt_temp_dir = QLineEdit()
-        self.txt_temp_dir.setText(paths_settings.get("temp_dir", ""))
-        self.txt_temp_dir.setPlaceholderText("Leave empty to use system temp directory")
-        temp_browse = QPushButton("Browse...")
-        temp_browse.clicked.connect(self.browse_temp_dir)
-        
-        temp_layout = QHBoxLayout()
-        temp_layout.addWidget(self.txt_temp_dir)
-        temp_layout.addWidget(temp_browse)
-        paths_layout.addRow("Temporary Files Directory:", temp_layout)
-        
-        paths_group.setLayout(paths_layout)
-        return paths_group
-    
-    def refresh_capture_devices(self):
-        """Refresh the list of capture devices and update the dropdown"""
-        self.combo_default_device.clear()
-        self.combo_default_device.addItem("Detecting devices...")
-        self.options_device_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")  # Grey while checking
-        
-        # Run in timer to avoid blocking UI
-        QTimer.singleShot(100, self._populate_capture_devices)
-    
-    def _populate_capture_devices(self):
-        """Populate the device dropdown with detected devices"""
-        # Get devices from options manager
-        devices = self.options_manager.get_decklink_devices()
-        
-        # Update dropdown
-        self.combo_default_device.clear()
-        for device in devices:
-            self.combo_default_device.addItem(device, device)
-        
-        # Set current device from settings
-        current_device = self.options_manager.get_setting("capture", "default_device")
-        index = self.combo_default_device.findText(current_device)
-        if index >= 0:
-            self.combo_default_device.setCurrentIndex(index)
-        
-        # Check if main device is available
-        if hasattr(self, 'capture_mgr'):
-            try:
-                # Use first device for check
-                if devices:
-                    available, _ = self.capture_mgr._test_device_availability(devices[0])
-                    if available:
-                        # Green for connected device
-                        self.options_device_indicator.setStyleSheet("background-color: #00AA00; border-radius: 8px;")
-                        self.options_device_indicator.setToolTip("Capture card status: connected")
-                    else:
-                        # Red for unavailable device
-                        self.options_device_indicator.setStyleSheet("background-color: #AA0000; border-radius: 8px;")
-                        self.options_device_indicator.setToolTip("Capture card status: not connected")
-                else:
-                    # Grey for no devices
-                    self.options_device_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
-                    self.options_device_indicator.setToolTip("No capture devices found")
-            except:
-                # Grey for error
-                self.options_device_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
-                self.options_device_indicator.setToolTip("Error checking device status")
-        
-        # Also update the device status in the capture tab if it exists
-        if hasattr(self, 'device_status_indicator'):
-            self.device_status_indicator.setStyleSheet(self.options_device_indicator.styleSheet())
-            self.device_status_indicator.setToolTip(self.options_device_indicator.toolTip())
-    
-    def detect_device_formats(self):
-        """Auto-detect formats supported by the selected device"""
-        device = self.combo_default_device.currentData()
-        if not device:
-            return
-        
-        # Disable button during detection
-        self.btn_detect_formats.setEnabled(False)
-        self.btn_detect_formats.setText("Detecting...")
-        
-        # Run in timer to avoid blocking UI
-        QTimer.singleShot(100, lambda: self._perform_format_detection(device))
-    
-    def _perform_format_detection(self, device):
-        """Perform the actual format detection"""
-        try:
-            # Get formats from options manager
-            format_info = self.options_manager.get_decklink_formats(device)
-            
-            # Update UI with detected options
-            if format_info["resolutions"]:
-                self.combo_resolution.clear()
-                for res in format_info["resolutions"]:
-                    self.combo_resolution.addItem(res)
-            else:
-                # If no resolutions detected, fall back to defaults
-                default_resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
-                self.combo_resolution.clear()
-                for res in default_resolutions:
-                    self.combo_resolution.addItem(res)
-                format_info["resolutions"] = default_resolutions
-            
-            if format_info["frame_rates"]:
-                self.combo_frame_rate.clear()
-                for rate in format_info["frame_rates"]:
-                    self.combo_frame_rate.addItem(str(rate))
-            else:
-                # If no frame rates detected, fall back to defaults
-                default_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
-                self.combo_frame_rate.clear()
-                for rate in default_rates:
-                    self.combo_frame_rate.addItem(str(rate))
-                format_info["frame_rates"] = default_rates
-            
-            # Update settings
-            new_capture_settings = self.options_manager.get_setting("capture")
-            new_capture_settings["available_resolutions"] = format_info["resolutions"]
-            new_capture_settings["available_frame_rates"] = format_info["frame_rates"]
-            self.options_manager.update_category("capture", new_capture_settings)
-            
-            # Show success message with number of formats
-            num_formats = len(format_info['formats']) if format_info['formats'] else 0
-            if num_formats > 0:
-                QMessageBox.information(self, "Format Detection Complete", 
-                                      f"Detected {num_formats} formats for {device}")
-            else:
-                QMessageBox.information(self, "Format Detection Complete", 
-                                      f"Using default formats for {device}")
-        except Exception as e:
-            logger.error(f"Error detecting formats: {str(e)}")
-            QMessageBox.warning(self, "Format Detection Error", 
-                               f"Could not detect formats: {str(e)}")
-            
-            # Even on error, ensure we have default values
-            default_resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
-            default_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
-            
-            # Update UI with defaults
-            self.combo_resolution.clear()
-            for res in default_resolutions:
-                self.combo_resolution.addItem(res)
-                
-            self.combo_frame_rate.clear()
-            for rate in default_rates:
-                self.combo_frame_rate.addItem(str(rate))
-            
-            # Update settings with defaults
-            new_capture_settings = self.options_manager.get_setting("capture")
-            new_capture_settings["available_resolutions"] = default_resolutions
-            new_capture_settings["available_frame_rates"] = default_rates
-            self.options_manager.update_category("capture", new_capture_settings)
-        finally:
-            # Re-enable button
-            self.btn_detect_formats.setEnabled(True)
-            self.btn_detect_formats.setText("Auto-Detect Formats")
-    
-    def browse_custom_model(self):
-        """Browse for custom VMAF model file"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Custom VMAF Model", "", "VMAF Models (*.json)"
-        )
-        if file_path:
-            self.txt_custom_model.setText(file_path)
-    
-    def browse_default_output(self):
-        """Browse for default output directory"""
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Default Output Directory", self.txt_default_output.text()
-        )
-        if directory:
-            self.txt_default_output.setText(directory)
-    
-    def browse_reference_dir(self):
-        """Browse for reference videos directory"""
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Reference Videos Directory", self.txt_reference_dir.text()
-        )
-        if directory:
-            self.txt_reference_dir.setText(directory)
-    
-    def browse_results_dir(self):
-        """Browse for results directory"""
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Results Directory", self.txt_results_dir.text()
-        )
-        if directory:
-            self.txt_results_dir.setText(directory)
-            
-    def browse_temp_dir(self):
-        """Browse for temporary files directory"""
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Temporary Files Directory", self.txt_temp_dir.text()
-        )
-        if directory:
-            self.txt_temp_dir.setText(directory)
-    
-    def save_all_options(self):
-        """Save all options from the UI to settings"""
-        try:
-            # Bookend settings
-            bookend_settings = self.options_manager.get_setting("bookend")
-            bookend_settings["min_loops"] = self.spinbox_min_loops.value()
-            bookend_settings["max_capture_time"] = self.spinbox_max_capture.value()
-            bookend_settings["bookend_duration"] = self.spinbox_bookend_duration.value()
-            bookend_settings["white_threshold"] = self.slider_white_threshold.value()
-            self.options_manager.update_category("bookend", bookend_settings)
-            
-            # VMAF settings
-            vmaf_settings = self.options_manager.get_setting("vmaf")
-            vmaf_settings["default_model"] = self.combo_default_vmaf_model.currentText()
-            vmaf_settings["subsample"] = self.spinbox_subsample.value()
-            vmaf_settings["threads"] = self.spinbox_threads.value()
-            vmaf_settings["output_format"] = self.combo_output_format.currentText()
-            vmaf_settings["custom_model_path"] = self.txt_custom_model.text()
-            self.options_manager.update_category("vmaf", vmaf_settings)
-            
-            # Capture settings
-            capture_settings = self.options_manager.get_setting("capture")
-            capture_settings["default_device"] = self.combo_default_device.currentText()
-            capture_settings["resolution"] = self.combo_resolution.currentText()
-            capture_settings["frame_rate"] = float(self.combo_frame_rate.currentText())
-            capture_settings["pixel_format"] = self.combo_pixel_format.currentText()
-            self.options_manager.update_category("capture", capture_settings)
-            
-            # Paths settings
-            paths_settings = self.options_manager.get_setting("paths")
-            paths_settings["default_output_dir"] = self.txt_default_output.text()
-            paths_settings["reference_video_dir"] = self.txt_reference_dir.text()
-            paths_settings["results_dir"] = self.txt_results_dir.text()
-            paths_settings["temp_dir"] = self.txt_temp_dir.text()
-            self.options_manager.update_category("paths", paths_settings)
-            
-            # Apply settings to other components
-            self._apply_settings_to_components()
-            
-            # Show confirmation
-            QMessageBox.information(self, "Settings Saved", "All options have been saved successfully")
-            
-        except Exception as e:
-            logger.error(f"Error saving options: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Failed to save options: {str(e)}")
-    
-    def reset_options_to_defaults(self):
-        """Reset all options to default values"""
-        if QMessageBox.question(self, "Confirm Reset", 
-                              "Are you sure you want to reset all options to defaults?",
-                              QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
-            # Reset to defaults
-            self.options_manager.reset_to_defaults()
-            
-            # Reload UI with defaults
-            self._reload_options_from_settings()
-            
-            # Apply settings to other components
-            self._apply_settings_to_components()
-            
-            QMessageBox.information(self, "Reset Complete", "All options have been reset to defaults")
-    
-    def _reload_options_from_settings(self):
-        """Reload all UI elements with current settings"""
-        # Get current settings
-        settings = self.options_manager.settings
-        
-        # Bookend settings
-        bookend_settings = settings.get("bookend", {})
-        self.spinbox_min_loops.setValue(bookend_settings.get("min_loops", 3))
-        self.spinbox_max_capture.setValue(bookend_settings.get("max_capture_time", 120))
-        self.spinbox_bookend_duration.setValue(bookend_settings.get("bookend_duration", 0.5))
-        self.slider_white_threshold.setValue(bookend_settings.get("white_threshold", 240))
-        
-        # VMAF settings
-        vmaf_settings = settings.get("vmaf", {})
-        index = self.combo_default_vmaf_model.findText(vmaf_settings.get("default_model", "vmaf_v0.6.1"))
-        if index >= 0:
-            self.combo_default_vmaf_model.setCurrentIndex(index)
-        self.spinbox_subsample.setValue(vmaf_settings.get("subsample", 1))
-        self.spinbox_threads.setValue(vmaf_settings.get("threads", 0))
-        index = self.combo_output_format.findText(vmaf_settings.get("output_format", "json"))
-        if index >= 0:
-            self.combo_output_format.setCurrentIndex(index)
-        self.txt_custom_model.setText(vmaf_settings.get("custom_model_path", ""))
-        
-        # Capture settings - refresh devices to update
-        self.refresh_capture_devices()
-        
-        # Paths settings
-        paths_settings = settings.get("paths", {})
-        self.txt_default_output.setText(paths_settings.get("default_output_dir", ""))
-        self.txt_reference_dir.setText(paths_settings.get("reference_video_dir", ""))
-        self.txt_results_dir.setText(paths_settings.get("results_dir", ""))
-    
-    def _apply_settings_to_components(self):
-        """Apply current settings to other components of the application"""
-        # Update capture manager if it exists
-        if hasattr(self, 'capture_mgr') and self.capture_mgr:
-            # Apply device and output directory settings
-            device = self.options_manager.get_setting("capture", "default_device")
-            if device and self.device_combo:
-                index = self.device_combo.findText(device) 
-                if index >= 0:
-                    self.device_combo.setCurrentIndex(index)
-            
-            # Apply output directory settings
-            output_dir = self.options_manager.get_setting("paths", "default_output_dir")
-            if output_dir and os.path.exists(output_dir):
-                self.capture_mgr.set_output_directory(output_dir)
-                if hasattr(self, 'lbl_output_dir'):
-                    self.lbl_output_dir.setText(output_dir)
-                    self.lbl_output_dir.setToolTip(output_dir)
-        
-        # Update VMAF model in analysis tab if it exists
-        vmaf_model = self.options_manager.get_setting("vmaf", "default_model")
-        if vmaf_model and hasattr(self, 'combo_vmaf_model'):
-            index = self.combo_vmaf_model.findText(vmaf_model)
-            if index >= 0:
-                self.combo_vmaf_model.setCurrentIndex(index)
-
-            item = QListWidgetItem(f"Captured: {os.path.basename(dist_path)}")
             item.setData(Qt.UserRole, dist_path)
             self.list_result_files.addItem(item)
-            
+
         # Add aligned videos
         if self.aligned_paths:
             for key, path in self.aligned_paths.items():
@@ -1777,7 +1231,7 @@ class MainWindow(QMainWindow):
         self.lbl_vmaf_status.setText(f"VMAF analysis failed")
         self.log_to_analysis(f"Error: {error_msg}")
         QMessageBox.critical(self, "VMAF Analysis Error", error_msg)
-        
+
         # Re-enable analysis button
         self.btn_run_combined_analysis.setEnabled(True)
 
@@ -1820,7 +1274,7 @@ class MainWindow(QMainWindow):
         # Clear logs
         self.txt_capture_log.clear()
         self.txt_analysis_log.clear()
-        
+
         # Reset progress bars
         self.pb_capture_progress.setValue(0)
         self.pb_alignment_progress.setValue(0)
@@ -1830,20 +1284,20 @@ class MainWindow(QMainWindow):
         self.lbl_capture_status.setText("Ready to capture")
         self.lbl_alignment_status.setText("Not aligned")
         self.lbl_vmaf_status.setText("Not analyzed")
-        
+
         # Disable buttons
         self.btn_next_to_analysis.setEnabled(False)
         self.btn_next_to_results.setEnabled(False)
         self.btn_run_combined_analysis.setEnabled(False)
         self.btn_export_pdf.setEnabled(False)
         self.btn_export_csv.setEnabled(False)
-        
+
         # Reset results
         self.lbl_vmaf_score.setText("VMAF Score: --")
         self.lbl_psnr_score.setText("PSNR: --")
         self.lbl_ssim_score.setText("SSIM: --")
         self.list_result_files.clear()
-        
+
         # Update summaries
         if self.reference_info:
             capture_text = f"Reference: {os.path.basename(self.reference_info['path'])}\nNo capture yet"
@@ -1852,7 +1306,7 @@ class MainWindow(QMainWindow):
         else:
             self.lbl_capture_summary.setText("No reference video selected")
             self.lbl_analysis_summary.setText("No videos ready for analysis")
-        
+
         self.lbl_results_summary.setText("No VMAF analysis results yet")
 
         # Increment test number
@@ -1875,7 +1329,7 @@ class MainWindow(QMainWindow):
         # Apply HTML formatting for different message types
         formatted_message = message
         timestamp = datetime.now().strftime("%H:%M:%S")
-        
+
         # Format errors in red
         if "error" in message.lower() or "failed" in message.lower() or "exception" in message.lower():
             formatted_message = f'<span style="color: #D32F2F; font-weight: bold;">[{timestamp}] {message}</span>'
@@ -1888,18 +1342,18 @@ class MainWindow(QMainWindow):
         # Regular messages with timestamp
         else:
             formatted_message = f'[{timestamp}] {message}'
-            
+
         # Append to log
         self.txt_capture_log.append(formatted_message)
-        
+
         # Auto-scroll to bottom
         self.txt_capture_log.verticalScrollBar().setValue(
             self.txt_capture_log.verticalScrollBar().maximum()
         )
-        
+
         # Update status bar (without HTML formatting)
         self.statusBar().showMessage(message)
-        
+
         # If error message, flash status bar to draw attention
         if "error" in message.lower():
             current_style = self.statusBar().styleSheet()
@@ -1914,28 +1368,28 @@ class MainWindow(QMainWindow):
             self.txt_analysis_log.verticalScrollBar().maximum()
         )
         self.statusBar().showMessage(message)
- 
+
     def closeEvent(self, event):
         """Handle application close event"""
         logger.info("Application closing - cleaning up resources")
-        
+
         # Stop any active capture process first
         if hasattr(self, 'capture_mgr') and self.capture_mgr and self.capture_mgr.is_capturing:
             logger.info("Stopping active capture process before closing")
             self.capture_mgr.stop_capture(cleanup_temp=True)
-        
+
         # Ensure all threads are properly terminated
         self.ensure_threads_finished()
-        
+
         # Clean up temporary files if file manager exists
         if hasattr(self, 'file_manager') and self.file_manager:
             logger.info("Cleaning up temporary files")
             self.file_manager.cleanup_temp_files()
-        
+
         # Call parent close event
         logger.info("Cleanup complete, proceeding with application close")
         super().closeEvent(event)
-  
+
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated before proceeding"""
         # Check for vmaf_thread specifically since that's causing the issue
@@ -1943,18 +1397,18 @@ class MainWindow(QMainWindow):
             logger.info("VMAF thread is still running - attempting clean shutdown")
             # Try to quit gracefully first
             self.vmaf_thread.quit()
-            
+
             # Give it a reasonable timeout
             if not self.vmaf_thread.wait(5000):  # 5 seconds
                 logger.warning("VMAF thread didn't respond to quit - forcing termination")
                 # Force termination if it doesn't respond
                 self.vmaf_thread.terminate()
                 self.vmaf_thread.wait(2000)  # Give it 2 more seconds to terminate
-                
+
                 # If it's still running, we're in trouble but we've tried our best
                 if self.vmaf_thread.isRunning():
                     logger.error("VMAF thread couldn't be terminated - possible resource leak")
-        
+
         # Do the same for other threads
         for thread_attr, thread_name in [
             ('alignment_thread', 'Alignment'), 
@@ -1968,5 +1422,784 @@ class MainWindow(QMainWindow):
                     logger.warning(f"{thread_name} thread didn't respond to quit - forcing termination")
                     thread.terminate()
                     thread.wait(1000)
- 
- 
+
+
+    def _setup_options_tab(self):
+        """Set up the Options tab with all configurable settings"""
+        layout = QVBoxLayout(self.options_tab)
+
+        # Create a scrollable area for many options
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setSpacing(10)
+
+        # Load current settings
+        settings = self.options_manager.settings
+
+        # Create section groupboxes
+        bookend_group = self._create_bookend_options_group(settings)
+        vmaf_group = self._create_vmaf_options_group(settings)
+        capture_group = self._create_capture_options_group(settings)
+        paths_group = self._create_paths_options_group(settings)
+
+        # Add sections to layout
+        scroll_layout.addWidget(bookend_group)
+        scroll_layout.addWidget(vmaf_group)
+        scroll_layout.addWidget(capture_group)
+        scroll_layout.addWidget(paths_group)
+
+        # Add spacer at the end to push everything up
+        scroll_layout.addStretch()
+
+        # Add content to scroll area
+        scroll_area.setWidget(scroll_content)
+        layout.addWidget(scroll_area)
+
+        # Add save/reset buttons at the bottom
+        button_layout = QHBoxLayout()
+        self.btn_save_options = QPushButton("Save Options")
+        self.btn_save_options.clicked.connect(self.save_all_options)
+        self.btn_reset_options = QPushButton("Reset to Defaults")
+        self.btn_reset_options.clicked.connect(self.reset_options_to_defaults)
+
+        button_layout.addStretch()
+        button_layout.addWidget(self.btn_reset_options)
+        button_layout.addWidget(self.btn_save_options)
+        layout.addLayout(button_layout)
+
+    def _create_bookend_options_group(self, settings):
+        """Create the bookend options group"""
+        bookend_group = QGroupBox("Bookend Capture Settings")
+        bookend_layout = QFormLayout()
+
+        # Get current bookend settings
+        bookend_settings = settings.get("bookend", self.options_manager.default_settings["bookend"])
+
+        # Min loops spinner
+        self.spinbox_min_loops = QSpinBox()
+        self.spinbox_min_loops.setRange(1, 10)
+        self.spinbox_min_loops.setValue(bookend_settings.get("min_loops", 3))
+        self.spinbox_min_loops.setToolTip("Minimum number of video loops to capture")
+        bookend_layout.addRow("Minimum Loops:", self.spinbox_min_loops)
+
+        # Max capture time spinner (seconds)
+        self.spinbox_max_capture = QSpinBox()
+        self.spinbox_max_capture.setRange(10, 600)
+        self.spinbox_max_capture.setSuffix(" seconds")
+        self.spinbox_max_capture.setValue(bookend_settings.get("max_capture_time", 120))
+        self.spinbox_max_capture.setToolTip("Maximum capture duration in seconds")
+        bookend_layout.addRow("Maximum Capture Time:", self.spinbox_max_capture)
+
+        # Bookend duration spinner (seconds)
+        self.spinbox_bookend_duration = QDoubleSpinBox()
+        self.spinbox_bookend_duration.setRange(0.1, 5.0)
+        self.spinbox_bookend_duration.setSingleStep(0.1)
+        self.spinbox_bookend_duration.setSuffix(" seconds")
+        self.spinbox_bookend_duration.setValue(bookend_settings.get("bookend_duration", 0.5))
+        self.spinbox_bookend_duration.setToolTip("Duration of white bookend frames in seconds")
+        bookend_layout.addRow("Bookend Duration:", self.spinbox_bookend_duration)
+
+        # White threshold slider (0-255)
+        self.slider_white_threshold = QSlider(Qt.Horizontal)
+        self.slider_white_threshold.setRange(200, 255)
+        self.slider_white_threshold.setValue(bookend_settings.get("white_threshold", 240))
+        self.lbl_white_threshold = QLabel(str(self.slider_white_threshold.value()))
+        self.slider_white_threshold.valueChanged.connect(lambda v: self.lbl_white_threshold.setText(str(v)))
+        self.slider_white_threshold.setToolTip("Brightness threshold for detecting white frames (0-255)")
+
+        threshold_layout = QHBoxLayout()
+        threshold_layout.addWidget(self.slider_white_threshold)
+        threshold_layout.addWidget(self.lbl_white_threshold)
+        bookend_layout.addRow("White Threshold:", threshold_layout)
+
+        bookend_group.setLayout(bookend_layout)
+        return bookend_group
+
+    def _create_vmaf_options_group(self, settings):
+        """Create the VMAF options group"""
+        vmaf_group = QGroupBox("VMAF Analysis Settings")
+        vmaf_layout = QFormLayout()
+
+        # Get current VMAF settings
+        vmaf_settings = settings.get("vmaf", self.options_manager.default_settings["vmaf"])
+
+        # Default VMAF model selection
+        self.combo_default_vmaf_model = QComboBox()
+        available_models = vmaf_settings.get("available_models", ["vmaf_v0.6.1", "vmaf_4k_v0.6.1"])
+        for model in available_models:
+            self.combo_default_vmaf_model.addItem(model)
+
+        # Set current model
+        current_model = vmaf_settings.get("default_model", "vmaf_v0.6.1")
+        index = self.combo_default_vmaf_model.findText(current_model)
+        if index >= 0:
+            self.combo_default_vmaf_model.setCurrentIndex(index)
+
+        self.combo_default_vmaf_model.setToolTip("Default VMAF model to use for analysis")
+        vmaf_layout.addRow("Default VMAF Model:", self.combo_default_vmaf_model)
+
+        # Subsample (analyze every Nth frame)
+        self.spinbox_subsample = QSpinBox()
+        self.spinbox_subsample.setRange(1, 10)
+        self.spinbox_subsample.setValue(vmaf_settings.get("subsample", 1))
+        self.spinbox_subsample.setToolTip("Analyze every Nth frame (1 = all frames)")
+        vmaf_layout.addRow("Subsample Rate:", self.spinbox_subsample)
+
+        # Threads
+        self.spinbox_threads = QSpinBox()
+        self.spinbox_threads.setRange(0, 16)
+        self.spinbox_threads.setValue(vmaf_settings.get("threads", 0))
+        self.spinbox_threads.setToolTip("Number of threads for VMAF analysis (0 = auto)")
+        self.spinbox_threads.setSpecialValueText("Auto")
+        vmaf_layout.addRow("Threads:", self.spinbox_threads)
+
+        # Output format
+        self.combo_output_format = QComboBox()
+        self.combo_output_format.addItems(["json", "xml", "csv"])
+        current_format = vmaf_settings.get("output_format", "json")
+        index = self.combo_output_format.findText(current_format)
+        if index >= 0:
+            self.combo_output_format.setCurrentIndex(index)
+        self.combo_output_format.setToolTip("Output format for VMAF results")
+        vmaf_layout.addRow("Output Format:", self.combo_output_format)
+
+        # Custom model path
+        self.txt_custom_model = QLineEdit()
+        self.txt_custom_model.setText(vmaf_settings.get("custom_model_path", ""))
+        self.txt_custom_model.setToolTip("Path to custom VMAF model (leave empty to use built-in models)")
+        browse_button = QPushButton("Browse...")
+        browse_button.clicked.connect(self.browse_custom_model)
+
+        custom_model_layout = QHBoxLayout()
+        custom_model_layout.addWidget(self.txt_custom_model)
+        custom_model_layout.addWidget(browse_button)
+        vmaf_layout.addRow("Custom Model Path:", custom_model_layout)
+
+        vmaf_group.setLayout(vmaf_layout)
+        return vmaf_group
+
+    def _create_capture_options_group(self, settings):
+        """Create the capture options group"""
+        capture_group = QGroupBox("Capture Card Settings")
+        capture_layout = QFormLayout()
+
+        # Get current capture settings
+        capture_settings = settings.get("capture", self.options_manager.default_settings["capture"])
+
+        # Default device selection
+        self.combo_default_device = QComboBox()
+        device_layout = QHBoxLayout()
+        device_layout.addWidget(self.combo_default_device)
+
+        # Status indicator for device
+        self.options_device_indicator = QLabel()
+        self.options_device_indicator.setFixedSize(16, 16)
+        self.options_device_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")  # Grey by default
+        device_layout.addWidget(self.options_device_indicator)
+
+        # Refresh button
+        self.btn_refresh_options_devices = QPushButton("Refresh Devices")
+        self.btn_refresh_options_devices.clicked.connect(self.refresh_capture_devices)
+        device_layout.addWidget(self.btn_refresh_options_devices)
+
+        capture_layout.addRow("Default Capture Device:", device_layout)
+
+        # Resolution selection
+        self.combo_resolution = QComboBox()
+        available_resolutions = capture_settings.get("available_resolutions", ["1080p", "720p", "576p", "480p"])
+        self.combo_resolution.addItems(available_resolutions)
+        current_resolution = capture_settings.get("resolution", "1080p")
+        index = self.combo_resolution.findText(current_resolution)
+        if index >= 0:
+            self.combo_resolution.setCurrentIndex(index)
+        self.combo_resolution.setToolTip("Default capture resolution")
+        capture_layout.addRow("Default Resolution:", self.combo_resolution)
+
+        # Frame rate selection
+        self.combo_frame_rate = QComboBox()
+        available_rates = capture_settings.get("available_frame_rates", [23.98, 24, 25, 29.97, 30, 50, 59.94, 60])
+        for rate in available_rates:
+            self.combo_frame_rate.addItem(str(rate))
+        current_rate = str(capture_settings.get("frame_rate", 30))
+        index = self.combo_frame_rate.findText(current_rate)
+        if index >= 0:
+            self.combo_frame_rate.setCurrentIndex(index)
+        self.combo_frame_rate.setToolTip("Default capture frame rate")
+        capture_layout.addRow("Default Frame Rate:", self.combo_frame_rate)
+
+        # Pixel format selection
+        self.combo_pixel_format = QComboBox()
+        self.combo_pixel_format.addItems(["uyvy422", "yuyv422", "nv12", "rgb24"])
+        current_format = capture_settings.get("pixel_format", "uyvy422")
+        index = self.combo_pixel_format.findText(current_format)
+        if index >= 0:
+            self.combo_pixel_format.setCurrentIndex(index)
+        self.combo_pixel_format.setToolTip("Pixel format for capture")
+        capture_layout.addRow("Pixel Format:", self.combo_pixel_format)
+
+        # Auto detect formats button
+        self.btn_detect_formats = QPushButton("Auto-Detect Formats")
+        self.btn_detect_formats.clicked.connect(self.detect_device_formats)
+        capture_layout.addRow("", self.btn_detect_formats)
+
+        capture_group.setLayout(capture_layout)
+
+        # Populate devices on initialization
+        self.refresh_capture_devices()
+
+        return capture_group
+
+    def _create_paths_options_group(self, settings):
+        """Create the paths options group"""
+        paths_group = QGroupBox("File Paths Settings")
+        paths_layout = QFormLayout()
+
+        # Get current paths settings
+        paths_settings = settings.get("paths", self.options_manager.default_settings["paths"])
+
+        # Default output directory
+        self.txt_default_output = QLineEdit()
+        self.txt_default_output.setText(paths_settings.get("default_output_dir", ""))
+        output_browse = QPushButton("Browse...")
+        output_browse.clicked.connect(self.browse_default_output)
+
+        output_layout = QHBoxLayout()
+        output_layout.addWidget(self.txt_default_output)
+        output_layout.addWidget(output_browse)
+        paths_layout.addRow("Default Output Directory:", output_layout)
+
+        # Reference video directory
+        self.txt_reference_dir = QLineEdit()
+        self.txt_reference_dir.setText(paths_settings.get("reference_video_dir", ""))
+        ref_browse = QPushButton("Browse...")
+        ref_browse.clicked.connect(self.browse_reference_dir)
+
+        ref_layout = QHBoxLayout()
+        ref_layout.addWidget(self.txt_reference_dir)
+        ref_layout.addWidget(ref_browse)
+        paths_layout.addRow("Reference Videos Directory:", ref_layout)
+
+        # Results directory
+        self.txt_results_dir = QLineEdit()
+        self.txt_results_dir.setText(paths_settings.get("results_dir", ""))
+        results_browse = QPushButton("Browse...")
+        results_browse.clicked.connect(self.browse_results_dir)
+
+        results_layout = QHBoxLayout()
+        results_layout.addWidget(self.txt_results_dir)
+        results_layout.addWidget(results_browse)
+        paths_layout.addRow("Results Directory:", results_layout)
+
+        # Temporary files directory
+        self.txt_temp_dir = QLineEdit()
+        self.txt_temp_dir.setText(paths_settings.get("temp_dir", ""))
+        self.txt_temp_dir.setPlaceholderText("Leave empty to use system temp directory")
+        temp_browse = QPushButton("Browse...")
+        temp_browse.clicked.connect(self.browse_temp_dir)
+
+        temp_layout = QHBoxLayout()
+        temp_layout.addWidget(self.txt_temp_dir)
+        temp_layout.addWidget(temp_browse)
+        paths_layout.addRow("Temporary Files Directory:", temp_layout)
+
+        paths_group.setLayout(paths_layout)
+        return paths_group
+
+    def refresh_capture_devices(self):
+        """Refresh the list of capture devices and update the dropdown"""
+        self.combo_default_device.clear()
+        self.combo_default_device.addItem("Detecting devices...")
+        self.options_device_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")  # Grey while checking
+
+        # Run in timer to avoid blocking UI
+        QTimer.singleShot(100, lambda: self._populate_capture_devices())
+
+    def _populate_capture_devices(self):
+        """Populate the device dropdown with detected devices"""
+        # Get devices from options manager
+        devices = self.options_manager.get_decklink_devices()
+
+        # Update dropdown
+        self.combo_default_device.clear()
+        for device in devices:
+            self.combo_default_device.addItem(device, device)
+
+        # Set current device from settings
+        current_device = self.options_manager.get_setting("capture", "default_device")
+        index = self.combo_default_device.findText(current_device)
+        if index >= 0:
+            self.combo_default_device.setCurrentIndex(index)
+
+        # Check if main device is available
+        if hasattr(self, 'capture_mgr'):
+            try:
+                # Use first device for check
+                if devices:
+                    available, _ = self.capture_mgr._test_device_availability(devices[0])
+                    if available:
+                        # Green for connected device
+                        self.options_device_indicator.setStyleSheet("background-color: #00AA00; border-radius: 8px;")
+                        self.options_device_indicator.setToolTip("Capture card status: connected")
+                    else:
+                        # Red for unavailable device
+                        self.options_device_indicator.setStyleSheet("background-color: #AA0000; border-radius: 8px;")
+                        self.options_device_indicator.setToolTip("Capture card status: not connected")
+                else:
+                    # Grey for no devices
+                    self.options_device_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
+                    self.options_device_indicator.setToolTip("No capture devices found")
+            except:
+                # Grey for error
+                self.options_device_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
+                self.options_device_indicator.setToolTip("Error checking device status")
+
+        # Also update the device status in the capture tab if it exists
+        if hasattr(self, 'device_status_indicator'):
+            self.device_status_indicator.setStyleSheet(self.options_device_indicator.styleSheet())
+            self.device_status_indicator.setToolTip(self.options_device_indicator.toolTip())
+
+    def detect_device_formats(self):
+        """Auto-detect formats supported by the selected device"""
+        device = self.combo_default_device.currentData()
+        if not device:
+            return
+
+        # Disable button during detection
+        self.btn_detect_formats.setEnabled(False)
+        self.btn_detect_formats.setText("Detecting...")
+
+        # Run in timer to avoid blocking UI
+        QTimer.singleShot(100, lambda: self._perform_format_detection(device))
+
+    def _perform_format_detection(self, device):
+        """Perform the actual format detection"""
+        try:
+            # Get formats from options manager
+            format_info = self.options_manager.get_decklink_formats(device)
+
+            # Update UI with detected options
+            if format_info["resolutions"]:
+                self.combo_resolution.clear()
+                for res in format_info["resolutions"]:
+                    self.combo_resolution.addItem(res)
+            else:
+                # If no resolutions detected, fall back to defaults
+                default_resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
+                self.combo_resolution.clear()
+                for res in default_resolutions:
+                    self.combo_resolution.addItem(res)
+                format_info["resolutions"] = default_resolutions
+
+            if format_info["frame_rates"]:
+                self.combo_frame_rate.clear()
+                for rate in format_info["frame_rates"]:
+                    self.combo_frame_rate.addItem(str(rate))
+            else:
+                # If no frame rates detected, fall back to defaults
+                default_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+                self.combo_frame_rate.clear()
+                for rate in default_rates:
+                    self.combo_frame_rate.addItem(str(rate))
+                format_info["frame_rates"] = default_rates
+
+            # Update settings
+            new_capture_settings = self.options_manager.get_setting("capture")
+            new_capture_settings["available_resolutions"] = format_info["resolutions"]
+            new_capture_settings["available_frame_rates"] = format_info["frame_rates"]
+            self.options_manager.update_category("capture", new_capture_settings)
+
+            # Show success message with number of formats
+            num_formats = len(format_info['formats']) if format_info['formats'] else 0
+            if num_formats > 0:
+                QMessageBox.information(self, "Format Detection Complete", 
+                                      f"Detected {num_formats} formats for {device}")
+            else:
+                QMessageBox.information(self, "Format Detection Complete", 
+                                      f"Using default formats for {device}")
+        except Exception as e:
+            logger.error(f"Error detecting formats: {str(e)}")
+            QMessageBox.warning(self, "Format Detection Error", 
+                               f"Could not detect formats: {str(e)}")
+
+            # Even on error, ensure we have default values
+            default_resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
+            default_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+
+            # Update UI with defaults
+            self.combo_resolution.clear()
+            for res in default_resolutions:
+                self.combo_resolution.addItem(res)
+
+            self.combo_frame_rate.clear()
+            for rate in default_rates:
+                self.combo_frame_rate.addItem(str(rate))
+
+            # Update settings with defaults
+            new_capture_settings = self.options_manager.get_setting("capture")
+            new_capture_settings["available_resolutions"] = default_resolutions
+            new_capture_settings["available_frame_rates"] = default_rates
+            self.options_manager.update_category("capture", new_capture_settings)
+        finally:
+            # Re-enable button
+            self.btn_detect_formats.setEnabled(True)
+            self.btn_detect_formats.setText("Auto-Detect Formats")
+
+    def browse_custom_model(self):
+        """Browse for custom VMAF model file"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Custom VMAF Model", "", "VMAF Models (*.json)"
+        )
+        if file_path:
+            self.txt_custom_model.setText(file_path)
+
+    def browse_default_output(self):
+        """Browse for default output directory"""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Default Output Directory", self.txt_default_output.text()
+        )
+        if directory:
+            self.txt_default_output.setText(directory)
+
+    def browse_reference_dir(self):
+        """Browse for reference videos directory"""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Reference Videos Directory", self.txt_reference_dir.text()
+        )
+        if directory:
+            self.txt_reference_dir.setText(directory)
+
+    def browse_results_dir(self):
+        """Browse for results directory"""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Results Directory", self.txt_results_dir.text()
+        )
+        if directory:
+            self.txt_results_dir.setText(directory)
+
+    def browse_temp_dir(self):
+        """Browse for temporary files directory"""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Temporary Files Directory", self.txt_temp_dir.text()
+        )
+        if directory:
+            self.txt_temp_dir.setText(directory)
+
+    def save_all_options(self):
+        """Save all options from the UI to settings"""
+        try:
+            # Bookend settings
+            bookend_settings = self.options_manager.get_setting("bookend")
+            bookend_settings["min_loops"] = self.spinbox_min_loops.value()
+            bookend_settings["max_capture_time"] = self.spinbox_max_capture.value()
+            bookend_settings["bookend_duration"] = self.spinbox_bookend_duration.value()
+            bookend_settings["white_threshold"] = self.slider_white_threshold.value()
+            self.options_manager.update_category("bookend", bookend_settings)
+
+            # VMAF settings
+            vmaf_settings = self.options_manager.get_setting("vmaf")
+            vmaf_settings["default_model"] = self.combo_default_vmaf_model.currentText()
+            vmaf_settings["subsample"] = self.spinbox_subsample.value()
+            vmaf_settings["threads"] = self.spinbox_threads.value()
+            vmaf_settings["output_format"] = self.combo_output_format.currentText()
+            vmaf_settings["custom_model_path"] = self.txt_custom_model.text()
+            self.options_manager.update_category("vmaf", vmaf_settings)
+
+            # Capture settings
+            capture_settings = self.options_manager.get_setting("capture")
+            capture_settings["default_device"] = self.combo_default_device.currentText()
+            capture_settings["resolution"] = self.combo_resolution.currentText()
+            capture_settings["frame_rate"] = float(self.combo_frame_rate.currentText())
+            capture_settings["pixel_format"] = self.combo_pixel_format.currentText()
+            self.options_manager.update_category("capture", capture_settings)
+
+            # Paths settings
+            paths_settings = self.options_manager.get_setting("paths")
+            paths_settings["default_output_dir"] = self.txt_default_output.text()
+            paths_settings["reference_video_dir"] = self.txt_reference_dir.text()
+            paths_settings["results_dir"] = self.txt_results_dir.text()
+            paths_settings["temp_dir"] = self.txt_temp_dir.text()
+            self.options_manager.update_category("paths", paths_settings)
+
+            # Apply settings to other components
+            self._apply_settings_to_components()
+
+            # Show confirmation
+            QMessageBox.information(self, "Settings Saved", "All options have been saved successfully")
+
+        except Exception as e:
+            logger.error(f"Error saving options: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to save options: {str(e)}")
+
+    def reset_options_to_defaults(self):
+        """Reset all options to default values"""
+        if QMessageBox.question(self, "Confirm Reset", 
+                              "Are you sure you want to reset all options to defaults?",
+                              QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+            # Reset to defaults
+            self.options_manager.reset_to_defaults()
+
+            # Reload UI with defaults
+            self._reload_options_from_settings()
+
+            # Apply settings to other components
+            self._apply_settings_to_components()
+
+            QMessageBox.information(self, "Reset Complete", "All options have been reset to defaults")
+
+    def _reload_options_from_settings(self):
+        """Reload all UI elements with current settings"""
+        # Get current settings
+        settings = self.options_manager.settings
+
+        # Bookend settings
+        bookend_settings = settings.get("bookend", {})
+        self.spinbox_min_loops.setValue(bookend_settings.get("min_loops", 3))
+        self.spinbox_max_capture.setValue(bookend_settings.get("max_capture_time", 120))
+        self.spinbox_bookend_duration.setValue(bookend_settings.get("bookend_duration", 0.5))
+        self.slider_white_threshold.setValue(bookend_settings.get("white_threshold", 240))
+
+        # VMAF settings
+        vmaf_settings = settings.get("vmaf", {})
+        index = self.combo_default_vmaf_model.findText(vmaf_settings.get("default_model", "vmaf_v0.6.1"))
+        if index >= 0:
+            self.combo_default_vmaf_model.setCurrentIndex(index)
+        self.spinbox_subsample.setValue(vmaf_settings.get("subsample", 1))
+        self.spinbox_threads.setValue(vmaf_settings.get("threads", 0))
+        index = self.combo_output_format.findText(vmaf_settings.get("output_format", "json"))
+        if index >= 0:
+            self.combo_output_format.setCurrentIndex(index)
+        self.txt_custom_model.setText(vmaf_settings.get("custom_model_path", ""))
+
+        # Capture settings - refresh devices to update
+        self.refresh_capture_devices()
+
+        # Paths settings
+        paths_settings = settings.get("paths", {})
+        self.txt_default_output.setText(paths_settings.get("default_output_dir", ""))
+        self.txt_reference_dir.setText(paths_settings.get("reference_video_dir", ""))
+        self.txt_results_dir.setText(paths_settings.get("results_dir", ""))
+
+    def _apply_settings_to_components(self):
+        """Apply current settings to other components of the application"""
+        # Update capture manager if it exists
+        if hasattr(self, 'capture_mgr') and self.capture_mgr:
+            # Apply device and output directory settings
+            device = self.options_manager.get_setting("capture", "default_device")
+            if device and self.device_combo:
+                index = self.device_combo.findText(device) 
+                if index >= 0:
+                    self.device_combo.setCurrentIndex(index)
+
+            # Apply output directory settings
+            output_dir = self.options_manager.get_setting("paths", "default_output_dir")
+            if output_dir and os.path.exists(output_dir):
+                self.capture_mgr.set_output_directory(output_dir)
+                if hasattr(self, 'lbl_output_dir'):
+                    self.lbl_output_dir.setText(output_dir)
+                    self.lbl_output_dir.setToolTip(output_dir)
+
+        # Update VMAF model in analysis tab if it exists
+        vmaf_model = self.options_manager.get_setting("vmaf", "default_model")
+        if vmaf_model and hasattr(self, 'combo_vmaf_model'):
+            index = self.combo_vmaf_model.findText(vmaf_model)
+            if index >= 0:
+                self.combo_vmaf_model.setCurrentIndex(index)
+
+    def handle_vmaf_error(self, error_msg):
+        """Handle error in VMAF analysis"""
+        self.lbl_vmaf_status.setText(f"VMAF analysis failed")
+        self.log_to_analysis(f"Error: {error_msg}")
+        QMessageBox.critical(self, "VMAF Analysis Error", error_msg)
+
+        # Re-enable analysis button
+        self.btn_run_combined_analysis.setEnabled(True)
+
+    def export_pdf_certificate(self):
+        """Export VMAF results as PDF certificate"""
+        # For now, we'll just show a placeholder message
+        QMessageBox.information(self, "Export PDF", 
+                              "This feature is not yet implemented.\n\nIn a complete implementation, this would generate a PDF certificate with all test details and results.")
+
+    def export_csv_data(self):
+        """Export VMAF results as CSV data"""
+        # For now, we'll just show a placeholder message
+        QMessageBox.information(self, "Export CSV", 
+                              "This feature is not yet implemented.\n\nIn a complete implementation, this would export all analysis data to a CSV file.")
+
+    def open_result_file(self, item):
+        """Open selected result file"""
+        file_path = item.data(Qt.UserRole)
+        if file_path and os.path.exists(file_path):
+            # Use system default application to open the file
+            try:
+                if platform.system() == 'Windows':
+                    os.startfile(file_path)
+                elif platform.system() == 'Darwin':  # macOS
+                    subprocess.run(['open', file_path], check=True)
+                else:  # Linux
+                    subprocess.run(['xdg-open', file_path], check=True)
+            except Exception as e:
+                QMessageBox.warning(self, "Error Opening File", 
+                                  f"Could not open file: {str(e)}")
+
+    def start_new_test(self):
+        """Reset application for a new test"""
+        # Reset state variables
+        self.ensure_threads_finished()
+        self.capture_path = None
+        self.aligned_paths = None
+        self.vmaf_results = None
+
+        # Clear logs
+        self.txt_capture_log.clear()
+        self.txt_analysis_log.clear()
+
+        # Reset progress bars
+        self.pb_capture_progress.setValue(0)
+        self.pb_alignment_progress.setValue(0)
+        self.pb_vmaf_progress.setValue(0)
+
+        # Reset status
+        self.lbl_capture_status.setText("Ready to capture")
+        self.lbl_alignment_status.setText("Not aligned")
+        self.lbl_vmaf_status.setText("Not analyzed")
+
+        # Disable buttons
+        self.btn_next_to_analysis.setEnabled(False)
+        self.btn_next_to_results.setEnabled(False)
+        self.btn_run_combined_analysis.setEnabled(False)
+        self.btn_export_pdf.setEnabled(False)
+        self.btn_export_csv.setEnabled(False)
+
+        # Reset results
+        self.lbl_vmaf_score.setText("VMAF Score: --")
+        self.lbl_psnr_score.setText("PSNR: --")
+        self.lbl_ssim_score.setText("SSIM: --")
+        self.list_result_files.clear()
+
+        # Update summaries
+        if self.reference_info:
+            capture_text = f"Reference: {os.path.basename(self.reference_info['path'])}\nNo capture yet"
+            self.lbl_capture_summary.setText(capture_text)
+            self.lbl_analysis_summary.setText("No captured video yet for analysis")
+        else:
+            self.lbl_capture_summary.setText("No reference video selected")
+            self.lbl_analysis_summary.setText("No videos ready for analysis")
+
+        self.lbl_results_summary.setText("No VMAF analysis results yet")
+
+        # Increment test number
+        test_name = self.txt_test_name.currentText()
+        if test_name.startswith("Test_") and len(test_name) > 5 and test_name[5:].isdigit():
+            next_num = int(test_name[5:]) + 1
+            self.txt_test_name.setCurrentText(f"Test_{next_num:02d}")
+
+        # Go back to capture tab
+        self.tabs.setCurrentIndex(1)
+
+    # Helper methods for logging to the UI
+    def log_to_setup(self, message):
+        """Add message to setup status"""
+        self.lbl_setup_status.setText(message)
+        self.statusBar().showMessage(message)
+
+    def log_to_capture(self, message):
+        """Add message to capture log with smart formatting for errors and warnings"""
+        # Apply HTML formatting for different message types
+        formatted_message = message
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        # Format errors in red
+        if "error" in message.lower() or "failed" in message.lower() or "exception" in message.lower():
+            formatted_message = f'<span style="color: #D32F2F; font-weight: bold;">[{timestamp}] {message}</span>'
+        # Format warnings in orange
+        elif "warning" in message.lower() or "caution" in message.lower():
+            formatted_message = f'<span style="color: #FF9800;">[{timestamp}] {message}</span>'
+                # Format success messages in green
+        elif "success" in message.lower() or "complete" in message.lower() or "finished" in message.lower():
+            formatted_message = f'<span style="color: #388E3C; font-weight: bold;">[{timestamp}] {message}</span>'
+        # Regular messages with timestamp
+        else:
+            formatted_message = f'[{timestamp}] {message}'
+
+        # Append to log
+        self.txt_capture_log.append(formatted_message)
+
+        # Auto-scroll to bottom
+        self.txt_capture_log.verticalScrollBar().setValue(
+            self.txt_capture_log.verticalScrollBar().maximum()
+        )
+
+        # Update status bar (without HTML formatting)
+        self.statusBar().showMessage(message)
+
+        # If error message, flash status bar to draw attention
+        if "error" in message.lower():
+            current_style = self.statusBar().styleSheet()
+            self.statusBar().setStyleSheet("background-color: #FFCDD2;")  # Light red
+            # Reset style after 2 seconds
+            QTimer.singleShot(2000, lambda: self.statusBar().setStyleSheet(current_style))
+
+    def log_to_analysis(self, message):
+        """Add message to analysis log"""
+        self.txt_analysis_log.append(message)
+        self.txt_analysis_log.verticalScrollBar().setValue(
+            self.txt_analysis_log.verticalScrollBar().maximum()
+        )
+        self.statusBar().showMessage(message)
+
+    def closeEvent(self, event):
+        """Handle application close event"""
+        logger.info("Application closing - cleaning up resources")
+
+        # Stop any active capture process first
+        if hasattr(self, 'capture_mgr') and self.capture_mgr and self.capture_mgr.is_capturing:
+            logger.info("Stopping active capture process before closing")
+            self.capture_mgr.stop_capture(cleanup_temp=True)
+
+        # Ensure all threads are properly terminated
+        self.ensure_threads_finished()
+
+        # Clean up temporary files if file manager exists
+        if hasattr(self, 'file_manager') and self.file_manager:
+            logger.info("Cleaning up temporary files")
+            self.file_manager.cleanup_temp_files()
+
+        # Call parent close event
+        logger.info("Cleanup complete, proceeding with application close")
+        super().closeEvent(event)
+
+    def ensure_threads_finished(self):
+        """Ensure all running threads are properly terminated before proceeding"""
+        # Check for vmaf_thread specifically since that's causing the issue
+        if hasattr(self, 'vmaf_thread') and self.vmaf_thread and self.vmaf_thread.isRunning():
+            logger.info("VMAF thread is still running - attempting clean shutdown")
+            # Try to quit gracefully first
+            self.vmaf_thread.quit()
+
+            # Give it a reasonable timeout
+            if not self.vmaf_thread.wait(5000):  # 5 seconds
+                logger.warning("VMAF thread didn't respond to quit - forcing termination")
+                # Force termination if it doesn't respond
+                self.vmaf_thread.terminate()
+                self.vmaf_thread.wait(2000)  # Give it 2 more seconds to terminate
+
+                # If it's still running, we're in trouble but we've tried our best
+                if self.vmaf_thread.isRunning():
+                    logger.error("VMAF thread couldn't be terminated - possible resource leak")
+
+        # Do the same for other threads
+        for thread_attr, thread_name in [
+            ('alignment_thread', 'Alignment'), 
+            ('reference_thread', 'Reference analysis')
+        ]:
+            if hasattr(self, thread_attr) and getattr(self, thread_attr) and getattr(self, thread_attr).isRunning():
+                logger.info(f"{thread_name} thread is still running - attempting clean shutdown")
+                thread = getattr(self, thread_attr)
+                thread.quit()
+                if not thread.wait(3000):
+                    logger.warning(f"{thread_name} thread didn't respond to quit - forcing termination")
+                    thread.terminate()
+                    thread.wait(1000)

@@ -61,16 +61,25 @@ class VMAFAnalyzer(QObject):
 
             # Create a consistent timestamp for all files
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
+
             # Get test name or use "Test" as default
             test_name = self.test_name or "Test"
-            
-            # Create test directory with timestamp appended to test name
-            test_dir_name = f"{test_name}_{timestamp}"
-            test_dir = os.path.join(output_dir, test_dir_name)
-            os.makedirs(test_dir, exist_ok=True)
-            
-            logger.info(f"Created test results directory: {test_dir}")
+
+            # Determine if we should use an existing directory
+            # Check if reference or distorted paths are already in a test directory
+            parent_dir = os.path.dirname(reference_path)
+            using_existing_dir = False
+
+            if test_name and test_name in parent_dir:
+                # If reference path is already in a test directory, use that directory
+                test_dir = parent_dir
+                using_existing_dir = True
+                logger.info(f"Using existing test directory: {test_dir}")
+            else:
+                # Create a test results directory with timestamp
+                test_dir = os.path.join(output_dir, f"{test_name}_{timestamp}")
+                os.makedirs(test_dir, exist_ok=True)
+                logger.info(f"Created test results directory: {test_dir}")
 
             # Create consistent filenames with test name and timestamp
             vmaf_filename = f"{test_name}_{timestamp}_vmaf.json"
@@ -83,7 +92,7 @@ class VMAFAnalyzer(QObject):
             csv_path = os.path.join(test_dir, csv_filename).replace("\\", "/")
             psnr_log = os.path.join(test_dir, psnr_filename).replace("\\", "/")
             ssim_log = os.path.join(test_dir, ssim_filename).replace("\\", "/")
-            
+
             # For command line logging, save a copy
             vmaf_cmd_log = os.path.join(test_dir, f"{test_name}_{timestamp}_vmaf_command.txt").replace("\\", "/")
 
@@ -118,7 +127,7 @@ class VMAFAnalyzer(QObject):
             # Change directory to the vmaf output dir to use relative paths in the command
             # This avoids Windows path escaping issues with colons
             current_dir = os.getcwd()
-            os.chdir(vmaf_dir)
+            os.chdir(test_dir) # Changed to use test_dir
 
             # Now use simple filenames instead of full paths in the filter
             filter_complex = (
@@ -274,7 +283,7 @@ class VMAFAnalyzer(QObject):
                             ssim_score = pool["ssim"]["mean"]
                     except Exception as e:
                         logger.error(f"Error parsing VMAF metrics from pooled_metrics: {str(e)}")
-                
+
                 # If PSNR/SSIM are still None, try to parse from the log files
                 if psnr_score is None and os.path.exists(psnr_log.replace("/", "\\")):
                     try:
@@ -287,7 +296,7 @@ class VMAFAnalyzer(QObject):
                                 logger.info(f"Parsed PSNR from log file: {psnr_score}")
                     except Exception as e:
                         logger.error(f"Error parsing PSNR log: {str(e)}")
-                
+
                 if ssim_score is None and os.path.exists(ssim_log.replace("/", "\\")):
                     try:
                         with open(ssim_log.replace("/", "\\"), 'r') as f:
