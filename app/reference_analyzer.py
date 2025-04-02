@@ -72,8 +72,8 @@ class ReferenceAnalyzer(QObject):
             height = int(video_stream.get('height', 0))
             codec = video_stream.get('codec_name', 'unknown')
             
-            # Check for trigger frame
-            has_trigger = self._check_for_trigger(video_path)
+            # Check for white frames at beginning (potential bookends)
+            has_bookends = self._check_for_bookends(video_path)
             
             video_info = {
                 'path': video_path,
@@ -83,7 +83,7 @@ class ReferenceAnalyzer(QObject):
                 'width': width,
                 'height': height,
                 'codec': codec,
-                'has_trigger': has_trigger
+                'has_bookends': has_bookends
             }
             
             self.progress_update.emit(f"Analysis complete: {duration:.2f} seconds, {frame_rate} fps, {width}x{height}")
@@ -109,19 +109,19 @@ class ReferenceAnalyzer(QObject):
         except (ValueError, ZeroDivisionError):
             return 0
             
-    def _check_for_trigger(self, video_path):
-        """Check if video begins with a white 'STARTING' trigger frame"""
+    def _check_for_bookends(self, video_path):
+        """Check if video begins with a white frame (bookend)"""
         try:
             # Open video
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
-                logger.warning(f"Could not open video for trigger check: {video_path}")
+                logger.warning(f"Could not open video for bookend check: {video_path}")
                 return False
                 
             # Sample first few frames
             white_frame_detected = False
             
-            # Check first 30 frames (or first second) for trigger
+            # Check first 30 frames (or first second) for white frames
             max_frames = 30
             
             for i in range(max_frames):
@@ -137,19 +137,20 @@ class ReferenceAnalyzer(QObject):
                 total_pixels = gray.shape[0] * gray.shape[1]
                 white_percentage = white_pixel_count / total_pixels
                 
-                # If at least 85% white, consider it a trigger frame
+                # If at least 85% white, consider it a bookend frame
                 if white_percentage > 0.85:
                     white_frame_detected = True
-                    logger.info(f"White trigger frame detected at frame {i}")
+                    logger.info(f"White bookend frame detected at frame {i}")
                     break
                     
             cap.release()
             return white_frame_detected
             
         except Exception as e:
-            logger.error(f"Error checking for trigger frame: {e}")
+            logger.error(f"Error checking for bookend frames: {e}")
             return False
-            
+
+
 class ReferenceAnalysisThread(QThread):
     """Thread for reference video analysis"""
     analysis_complete = pyqtSignal(dict)

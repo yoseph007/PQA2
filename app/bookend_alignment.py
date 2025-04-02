@@ -3,18 +3,10 @@ import logging
 import subprocess
 import cv2
 import numpy as np
-import time
 from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
 
 logger = logging.getLogger(__name__)
-
-# Set up default logger if not configured elsewhere
-if not logger.handlers:
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
 
 class BookendAligner(QObject):
     """
@@ -29,8 +21,6 @@ class BookendAligner(QObject):
         super().__init__()
         self._ffmpeg_path = "ffmpeg"  # Assume ffmpeg is in PATH
   
-    
-
     def align_bookend_videos(self, reference_path, captured_path):
         """
         Align videos based on white frame bookends that surround the content
@@ -40,8 +30,8 @@ class BookendAligner(QObject):
         - aligned_captured: Path to trimmed captured video
         """
         try:
-            self.status_update.emit(f"Starting white bookend alignment process...")
-            logger.info(f"Starting white bookend alignment process")
+            self.status_update.emit("Starting white bookend alignment process...")
+            logger.info("Starting white bookend alignment process")
             
             # Verify files exist
             if not os.path.exists(reference_path):
@@ -102,8 +92,7 @@ class BookendAligner(QObject):
             # Check if reference video duration is similar
             ref_duration = ref_info.get('duration', 0)
             
-            # IMPROVED: Handle multi-loop videos
-            # If content duration is much longer than reference, we likely have multiple loops
+            # Handle multi-loop videos
             if content_duration > ref_duration * 1.5:
                 logger.warning(f"Reference duration ({ref_duration:.3f}s) differs from content duration ({content_duration:.3f}s)")
                 logger.info("Detected multiple loops in captured video, looking for individual loops")
@@ -145,7 +134,7 @@ class BookendAligner(QObject):
                     content_duration = ref_duration
             
             self.alignment_progress.emit(50)
-            self.status_update.emit(f"Creating aligned videos...")
+            self.status_update.emit("Creating aligned videos...")
                 
             # Create aligned videos by trimming the content between bookends
             aligned_reference, aligned_captured = self._create_aligned_videos_by_bookends(
@@ -190,9 +179,6 @@ class BookendAligner(QObject):
             self.error_occurred.emit(error_msg)
             return None
 
-
-  
-  
     def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration):
         """Create aligned videos based on bookend content timing"""
         try:
@@ -246,8 +232,6 @@ class BookendAligner(QObject):
             logger.error(traceback.format_exc())
             return None, None
 
-
-  
     def _get_video_info(self, video_path):
         """Get detailed information about a video file using FFprobe"""
         try:
@@ -322,10 +306,7 @@ class BookendAligner(QObject):
         except Exception as e:
             logger.error(f"Error getting video info for {video_path}: {str(e)}")
             return None 
-    
- 
-    
-    
+  
     def _detect_white_bookends(self, video_path):
         """
         Enhanced white bookend detection with multiple thresholds and diagnostic output
@@ -505,19 +486,7 @@ class BookendAligner(QObject):
             import traceback
             logger.error(traceback.format_exc())
             return None
-    
-    
-    
-    
-    
-    
-    
- 
- 
- 
-  
 
-  
 
 class BookendAlignmentThread(QThread):
     """Thread for bookend video alignment with reliable progress reporting"""
@@ -574,11 +543,3 @@ class BookendAlignmentThread(QThread):
             logger.error(error_msg)
             import traceback
             logger.error(traceback.format_exc())
-
-        except Exception as e:
-            error_msg = f"Error in bookend alignment thread: {str(e)}"
-            self.error_occurred.emit(error_msg)
-            logger.error(error_msg)
-            import traceback
-            logger.error(traceback.format_exc())
-            return

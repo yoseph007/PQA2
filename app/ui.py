@@ -1,51 +1,34 @@
-import sys
 import os
 import logging
 from datetime import datetime
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QPushButton, QLabel, QComboBox, QProgressBar, QFileDialog,
-                           QGroupBox, QMessageBox, QTabWidget, QSpinBox, QCheckBox,
-                           QStatusBar, QSplitter, QTextEdit, QListWidget, QListWidgetItem,
-                           QStyle, QStackedWidget, QFormLayout, QCheckBox)  # Added QStackedWidget, QFormLayout, and QCheckBox
-from PyQt5.QtCore import Qt, pyqtSlot, QSize, QTimer
+                           QGroupBox, QMessageBox, QTabWidget, QSplitter, QTextEdit,
+                           QListWidget, QListWidgetItem, QStyle, QFormLayout, QCheckBox)
+from PyQt5.QtCore import Qt, pyqtSlot, QTimer
 from PyQt5.QtGui import QPixmap, QImage
 import cv2
+import subprocess
+import platform
 
-# Import application modules with proper relative imports
-from .reference_analyzer import ReferenceAnalyzer, ReferenceAnalysisThread
+# Import application modules
+from .reference_analyzer import ReferenceAnalysisThread
 from .capture import CaptureManager, CaptureState
-from .alignment import VideoAligner, AlignmentThread
-from .analysis import VMAFAnalyzer, VMAFAnalysisThread
-from .improved_file_manager import ImprovedFileManager
-from .frame_alignment import align_videos_frame_perfect, get_video_info
-from .improved_vmaf_analyzer import ImprovedVMAFAnalyzer, ImprovedVMAFAnalysisThread
-from .improved_file_manager import ImprovedFileManager
+from .bookend_alignment import BookendAlignmentThread
+from .vmaf_analyzer import VMAFAnalysisThread
+from .utils import FileManager, timestamp_string
 
 logger = logging.getLogger(__name__)
 
-class VMafTestApp(QMainWindow):
+class MainWindow(QMainWindow):
     """Main application window for VMAF Test App"""
-    def __init__(self):
+    def __init__(self, capture_mgr=None, file_manager=None):
         super().__init__()
 
-        # Set up logger
-        self._setup_logging()
-
-        # Create improved file manager with tests/test_results as base dir
-        base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests", "test_results")
-        os.makedirs(base_dir, exist_ok=True)
-        self.file_manager = ImprovedFileManager(base_dir=base_dir)
-        logger.info(f"Using test results directory: {base_dir}")
-
         # Initialize managers
-        self.reference_analyzer = ReferenceAnalyzer()
-        self.capture_manager = CaptureManager()
-        self.video_aligner = VideoAligner()
-        self.vmaf_analyzer = VMAFAnalyzer()
-
-        # Share file manager with capture manager 
-        self.capture_manager.path_manager = self.file_manager
-
+        self.capture_mgr = capture_mgr or CaptureManager()
+        self.file_manager = file_manager or FileManager()
+        
         # Set up UI
         self._setup_ui()
         self._connect_signals()
@@ -57,18 +40,6 @@ class VMafTestApp(QMainWindow):
         self.vmaf_results = None
 
         logger.info("VMAF Test App initialized")
-
-    def _setup_logging(self):
-        """Configure logging"""
-        log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        logging.basicConfig(
-            level=logging.INFO,
-            format=log_format,
-            handlers=[
-                logging.StreamHandler(),
-                logging.FileHandler('vmaf_app.log')
-            ]
-        )
 
     def _setup_ui(self):
         """Set up the application UI"""
@@ -226,16 +197,6 @@ class VMafTestApp(QMainWindow):
         bookend_info.setWordWrap(True)
         method_layout.addWidget(bookend_info)
 
-        bookend_settings = QHBoxLayout()
-        bookend_settings.addWidget(QLabel("White threshold:"))
-        self.sb_bookend_threshold = QSpinBox()
-        self.sb_bookend_threshold.setRange(200, 250)
-        self.sb_bookend_threshold.setValue(230)
-        bookend_settings.addWidget(self.sb_bookend_threshold)
-
-        bookend_settings.addStretch()
-        method_layout.addLayout(bookend_settings)
-
         method_group.setLayout(method_layout)
         left_layout.addWidget(method_group)
 
@@ -317,82 +278,6 @@ class VMafTestApp(QMainWindow):
 
         layout.addLayout(nav_layout)
 
-    def start_capture(self):
-        """Start the capture process with better progress monitoring"""
-        if not self.reference_info:
-            QMessageBox.warning(self, "Warning", "Please select a reference video first")
-            return
-
-        # Get device
-        device_name = self.device_combo.currentData()
-        if not device_name:
-            QMessageBox.warning(self, "Warning", "Please select a capture device")
-            return
-
-        # Update UI
-        self.btn_start_capture.setEnabled(False)
-        self.btn_stop_capture.setEnabled(True)
-        self.pb_capture_progress.setValue(0)
-
-        # Clear logs
-        self.txt_capture_log.clear()
-        self.log_to_capture("Starting capture process...")
-
-        # Get output directory and test name
-        output_dir = self.lbl_output_dir.text()
-        if output_dir == "Default output directory":
-            output_dir = self.file_manager.get_default_base_dir()
-
-        # Add timestamp prefix to test name to prevent overwriting
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_test_name = self.txt_test_name.currentText()
-        test_name = f"{timestamp}_{base_test_name}"
-
-        self.log_to_capture(f"Using test name with timestamp: {test_name}")
-
-        # Update file manager base directory
-        self.file_manager.base_dir = output_dir
-
-        # Set output information in capture manager
-        self.capture_manager.set_output_directory(output_dir)
-        self.capture_manager.set_test_name(test_name)
-
-        # Set reference info
-        self.capture_manager.set_reference_video(self.reference_info)
-
-        # Get the selected capture method
-        method = self.capture_method_combo.currentData()
-
-        if method == "trigger":
-            # Use trigger-based capture
-            if self.cb_use_trigger.isChecked():
-                self.log_to_capture("Waiting for trigger frame...")
-
-                # Get trigger settings from UI
-                threshold = self.sb_trigger_threshold.value() / 100.0  # Convert percentage to decimal
-                consecutive_frames = self.sb_trigger_frames.value()
-
-                # Start trigger detection with settings
-                self.capture_manager.start_trigger_detection(
-                    device_name,
-                    threshold=threshold,
-                    consecutive_frames=consecutive_frames
-                )
-            else:
-                self.log_to_capture("Starting direct capture...")
-
-                # Start capture directly
-                self.capture_manager.start_capture(device_name)
-        else:
-            # Use bookend-based capture
-            self.log_to_capture("Starting bookend frame capture mode...")
-
-            # Get settings from UI if needed
-            # bookend_threshold = self.sb_bookend_threshold.value()
-
-            # Start bookend capture
-            self.capture_manager.start_bookend_capture(device_name)
-
     def _setup_analysis_tab(self):
         """Set up the Analysis tab with improved layout and combined workflow"""
         layout = QVBoxLayout(self.analysis_tab)
@@ -407,17 +292,6 @@ class VMafTestApp(QMainWindow):
 
         # Model selection and duration
         settings_row = QHBoxLayout()
-
-        # Alignment method selection
-        alignment_layout = QHBoxLayout()
-        alignment_layout.addWidget(QLabel("Alignment Method:"))
-        self.combo_alignment_method = QComboBox()
-        self.combo_alignment_method.addItem("Content-based", "content")
-        self.combo_alignment_method.addItem("White Bookend", "bookend")
-        alignment_layout.addWidget(self.combo_alignment_method)
-        settings_row.addLayout(alignment_layout)
-
-        settings_row.addSpacing(10)
 
         # VMAF model selection
         model_layout = QHBoxLayout()
@@ -450,25 +324,11 @@ class VMafTestApp(QMainWindow):
         actions_row = QHBoxLayout()
 
         # Run combined analysis button
-        self.btn_run_combined_analysis = QPushButton("Run Video Alignment and VMAF Analysis")
+        self.btn_run_combined_analysis = QPushButton("Run Analysis (Alignment + VMAF)")
         self.btn_run_combined_analysis.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.btn_run_combined_analysis.setEnabled(False)
         self.btn_run_combined_analysis.clicked.connect(self.run_combined_analysis)
         actions_row.addWidget(self.btn_run_combined_analysis)
-
-        # Or run them separately
-        actions_row.addWidget(QLabel("or"))
-
-        # Individual buttons
-        self.btn_align_videos = QPushButton("1. Align Videos")
-        self.btn_align_videos.clicked.connect(self.align_videos)
-        self.btn_align_videos.setEnabled(False)
-        actions_row.addWidget(self.btn_align_videos)
-
-        self.btn_run_vmaf = QPushButton("2. Run VMAF Analysis")
-        self.btn_run_vmaf.clicked.connect(self.run_vmaf_analysis)
-        self.btn_run_vmaf.setEnabled(False)
-        actions_row.addWidget(self.btn_run_vmaf)
 
         actions_row.addStretch()
         settings_layout.addLayout(actions_row)
@@ -535,155 +395,6 @@ class VMafTestApp(QMainWindow):
         nav_layout.addWidget(self.btn_next_to_results)
 
         layout.addLayout(nav_layout)
-
-    def run_combined_analysis(self):
-        """Run video alignment and VMAF analysis in sequence"""
-        if not self.reference_info or not self.capture_path:
-            self.log_to_analysis("Missing reference or captured video")
-            return
-
-        # Reset progress bars
-        self.pb_alignment_progress.setValue(0)
-        self.pb_vmaf_progress.setValue(0)
-
-        # Reset status labels
-        self.lbl_alignment_status.setText("Starting alignment...")
-        self.lbl_vmaf_status.setText("Waiting for alignment to complete...")
-
-        # Clear log
-        self.txt_analysis_log.clear()
-        self.log_to_analysis("Starting combined analysis process...")
-
-        # Get analysis settings
-        self.selected_model = self.combo_vmaf_model.currentData()
-
-        # Convert duration option to seconds
-        duration_option = self.combo_duration.currentData()
-        if duration_option == "full":
-            self.selected_duration = None
-        else:
-            self.selected_duration = float(duration_option)
-
-        self.log_to_analysis(f"Using VMAF model: {self.selected_model}")
-        self.log_to_analysis(f"Duration: {self.selected_duration if self.selected_duration else 'Full video'}")
-
-        # Disable all analysis buttons during process
-        self.btn_run_combined_analysis.setEnabled(False)
-        self.btn_align_videos.setEnabled(False)
-        self.btn_run_vmaf.setEnabled(False)
-
-        # Start the alignment process
-        self.align_videos_for_combined_workflow()
-
-    def align_videos_for_combined_workflow(self):
-        """Start video alignment as part of the combined workflow using selected method"""
-        # Get selected alignment method
-        alignment_method = self.combo_alignment_method.currentData()
-
-        self.log_to_analysis(f"Starting video alignment using {alignment_method} method...")
-
-        if alignment_method == "bookend":
-            # Import BookendAlignmentThread
-            from .bookend_alignment import BookendAlignmentThread
-
-            # Create bookend alignment thread
-            self.alignment_thread = BookendAlignmentThread(
-                self.reference_info['path'],
-                self.capture_path
-            )
-
-            # Log bookend method usage
-            self.log_to_analysis("Using white bookend frame alignment method")
-        else:
-            # Default to content-based alignment
-            self.alignment_thread = AlignmentThread(
-                self.reference_info['path'],
-                self.capture_path
-            )
-
-            # Log content method usage
-            self.log_to_analysis("Using content-based alignment method")
-
-        # Connect signals
-        self.alignment_thread.alignment_progress.connect(self.pb_alignment_progress.setValue)
-        self.alignment_thread.status_update.connect(self.log_to_analysis)
-        self.alignment_thread.error_occurred.connect(self.handle_alignment_error)
-
-        # Connect to special handler for combined workflow
-        self.alignment_thread.alignment_complete.connect(self.handle_alignment_for_combined_workflow)
-
-        # Start alignment
-        self.alignment_thread.start()
-
-    def handle_alignment_for_combined_workflow(self, results):
-        """Handle completion of video alignment in combined workflow"""
-        # Process alignment results
-        offset_frames = results['offset_frames']
-        offset_seconds = results['offset_seconds']
-        confidence = results['confidence']
-
-        aligned_reference = results['aligned_reference']
-        aligned_captured = results['aligned_captured']
-
-        # Store aligned paths
-        self.aligned_paths = {
-            'reference': aligned_reference,
-            'captured': aligned_captured
-        }
-
-        # Update UI
-        self.lbl_alignment_status.setText(
-            f"Aligned with offset: {offset_frames} frames ({offset_seconds:.3f}s), conf: {confidence:.2f}"
-        )
-        self.log_to_analysis(f"Alignment complete! Offset: {offset_frames} frames")
-        self.log_to_analysis(f"Aligned reference: {os.path.basename(aligned_reference)}")
-        self.log_to_analysis(f"Aligned captured: {os.path.basename(aligned_captured)}")
-
-        # Proceed to VMAF analysis
-        self.log_to_analysis("Proceeding to VMAF analysis...")
-        self.lbl_vmaf_status.setText("Starting VMAF analysis...")
-
-        try:
-            # Start VMAF analysis
-            self.start_vmaf_for_combined_workflow()
-        except Exception as e:
-            # Handle any errors during VMAF start
-            error_msg = f"Error starting VMAF analysis: {str(e)}"
-            self.log_to_analysis(f"Error: {error_msg}")
-            self.lbl_vmaf_status.setText("VMAF analysis failed to start")
-
-            # Re-enable buttons
-            self.btn_run_combined_analysis.setEnabled(True)
-            self.btn_align_videos.setEnabled(True)
-            self.btn_run_vmaf.setEnabled(True)
-
-            # Show error to user
-            QMessageBox.critical(self, "VMAF Error", error_msg)
-
-    def start_vmaf_for_combined_workflow(self):
-        """Start VMAF analysis as part of combined workflow"""
-        # Reset VMAF progress
-        self.pb_vmaf_progress.setValue(0)
-
-        # Create analysis thread using previously stored settings
-        # Make sure proper imports are at the top of this file
-        from .analysis import VMAFAnalysisThread
-
-        self.vmaf_thread = VMAFAnalysisThread(
-            self.aligned_paths['reference'],
-            self.aligned_paths['captured'],
-            self.selected_model,
-            self.selected_duration
-        )
-
-        # Connect signals
-        self.vmaf_thread.analysis_progress.connect(self.handle_vmaf_progress)
-        self.vmaf_thread.status_update.connect(self.log_to_analysis)
-        self.vmaf_thread.error_occurred.connect(self.handle_vmaf_error)
-        self.vmaf_thread.analysis_complete.connect(self.handle_vmaf_complete)
-
-        # Start analysis
-        self.vmaf_thread.start()
 
     def _setup_results_tab(self):
         """Set up the Results tab"""
@@ -758,42 +469,30 @@ class VMafTestApp(QMainWindow):
 
         layout.addLayout(nav_layout)
 
-    def update_capture_progress(self, progress):
-        """Handle capture progress updates with proper scale"""
-        if isinstance(progress, int):
-            # Ensure progress is between 0-100
-            scaled_progress = min(100, max(0, progress))
-            self.pb_capture_progress.setValue(scaled_progress)
-        else:
-            # Just in case we receive non-int progress
-            self.pb_capture_progress.setValue(0)
-
     def _connect_signals(self):
-        """Connect signals to handlers with improved progress tracking"""
-        # Capture manager signals
-        self.capture_manager.status_update.connect(self.update_capture_status)
-        self.capture_manager.progress_update.connect(self.update_capture_progress)
-        self.capture_manager.state_changed.connect(self.handle_capture_state_change)
-        self.capture_manager.capture_started.connect(self.handle_capture_started)
-        self.capture_manager.capture_finished.connect(self.handle_capture_finished)
-        self.capture_manager.trigger_frame_available.connect(self.update_preview)
-        
-        # Set capture method to bookend by default
-        if hasattr(self, 'capture_manager'):
-            self.capture_manager.set_capture_method("bookend")
+        """Connect signals to handlers"""
+        # Connect signals only if capture_mgr exists
+        if hasattr(self, 'capture_mgr') and self.capture_mgr:
+            self.capture_mgr.status_update.connect(self.update_capture_status)
+            self.capture_mgr.progress_update.connect(self.update_capture_progress) 
+            self.capture_mgr.state_changed.connect(self.handle_capture_state_change)
+            self.capture_mgr.capture_started.connect(self.handle_capture_started)
+            self.capture_mgr.capture_finished.connect(self.handle_capture_finished)
+            self.capture_mgr.frame_available.connect(self.update_preview)
 
     def browse_reference(self):
-        """Browse for reference video file from the read-only reference folder"""
-        # Use the designated read-only reference folder
-        reference_folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests", "test_data")
+        """Browse for reference video file"""
+        # Use the tests/test_data folder for reference videos if it exists
+        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        reference_folder = os.path.join(script_dir, "tests", "test_data")
         
-        # Make sure the folder exists
-        os.makedirs(reference_folder, exist_ok=True)
+        # If folder doesn't exist, use home directory
+        if not os.path.exists(reference_folder):
+            reference_folder = os.path.expanduser("~")
         
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select Reference Video", reference_folder, "Video Files (*.mp4 *.mov *.avi *.mkv)"
-        )
-
+        )        
         if file_path:
             self.lbl_reference_path.setText(os.path.basename(file_path))
             self.lbl_reference_path.setToolTip(file_path)
@@ -824,13 +523,13 @@ class VMafTestApp(QMainWindow):
         width = info['width']
         height = info['height']
         total_frames = info['total_frames']
-        has_trigger = info.get('has_trigger', False)
+        has_bookends = info.get('has_bookends', False)
 
         details = (f"Duration: {duration:.2f}s ({total_frames} frames), " + 
                 f"Resolution: {width}x{height}, {frame_rate:.2f} fps")
 
-        if has_trigger:
-            details += "\nTrigger frame detected at beginning"
+        if has_bookends:
+            details += "\nWhite bookend frames detected at beginning"
 
         self.lbl_reference_details.setText(details)
 
@@ -843,15 +542,25 @@ class VMafTestApp(QMainWindow):
         # Update capture tab
         self.lbl_capture_summary.setText(f"Reference: {os.path.basename(info['path'])}\n{details}")
 
+        # Share reference info with capture manager
+        if hasattr(self, 'capture_mgr') and self.capture_mgr:
+            self.capture_mgr.set_reference_video(info)
+
         # Populate the duration combo box with 1-second increments
         # up to the reference video duration
         self.combo_duration.clear()
         self.combo_duration.addItem("Full Video", "full")
 
-        # Add 1-second increments
+        # Add duration options based on reference video length
         max_seconds = int(duration)
-        for i in range(1, max_seconds + 1):
-            self.combo_duration.addItem(f"{i} seconds", i)
+        if max_seconds <= 60:  # For shorter videos, add every second
+            for i in range(1, max_seconds + 1):
+                self.combo_duration.addItem(f"{i} seconds", i)
+        else:  # For longer videos, add more reasonable options
+            durations = [1, 2, 5, 10, 15, 30, 60]
+            durations.extend([d for d in [90, 120, 180, 240, 300] if d < max_seconds])
+            for d in durations:
+                self.combo_duration.addItem(f"{d} seconds", d)
 
         self.log_to_setup("Reference video analysis complete")
 
@@ -860,38 +569,33 @@ class VMafTestApp(QMainWindow):
         self.log_to_setup(f"Error: {error_msg}")
         QMessageBox.critical(self, "Reference Analysis Error", error_msg)
 
-    def add_trigger_to_reference(self):
-        """Add white 'STARTING' trigger frame to reference video"""
-        if not self.reference_info:
-            return
-
-        # TODO: Implement trigger frame addition
-        QMessageBox.information(self, "Not Implemented", 
-                              "Adding trigger frames is not yet implemented")
-
     def browse_output_dir(self):
-        """Browse for output directory (always uses test_results)"""
-        # Always use the default test_results directory
-        default_dir = self.file_manager.get_default_base_dir()
+        """Browse for output directory"""
+        # Use standard test_results directory as base
+        default_dir = self.file_manager.get_default_base_dir() if hasattr(self, 'file_manager') else None
+        
+        if not default_dir:
+            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            default_dir = os.path.join(script_dir, "tests", "test_results")
+            os.makedirs(default_dir, exist_ok=True)
 
         # Show the browser but only for visual confirmation
         directory = QFileDialog.getExistingDirectory(
             self, "Select Output Directory", default_dir
         )
 
-        # Always use test_results regardless of selection
-        self.lbl_output_dir.setText(default_dir)
-        self.lbl_output_dir.setToolTip(default_dir)
+        if directory:
+            # Set output directory in UI and managers
+            self.lbl_output_dir.setText(directory)
+            self.lbl_output_dir.setToolTip(directory)
+            
+            if hasattr(self, 'file_manager'):
+                self.file_manager.base_dir = directory
+                
+            if hasattr(self, 'capture_mgr'):
+                self.capture_mgr.set_output_directory(directory)
 
-        # Update file manager base directory (even though it should already be set)
-        self.file_manager.base_dir = default_dir
-
-        # Update capture manager
-        self.capture_manager.set_output_directory(default_dir)
-
-        # Show message about standard directory
-        self.log_to_setup(f"Using standard output directory: {default_dir}")
-        logger.info(f"Output directory set/confirmed: {default_dir}")
+            self.log_to_setup(f"Output directory set to: {directory}")
 
     def refresh_devices(self):
         """Refresh list of capture devices and update status indicator"""
@@ -910,10 +614,10 @@ class VMafTestApp(QMainWindow):
         self.device_combo.addItem("Intensity Shuttle", "Intensity Shuttle")
         
         # Check if the device is actually available
-        if hasattr(self, 'capture_manager'):
+        if hasattr(self, 'capture_mgr'):
             # Use the capture manager's test method
             try:
-                available, _ = self.capture_manager._test_device_availability("Intensity Shuttle")
+                available, _ = self.capture_mgr._test_device_availability("Intensity Shuttle")
                 if available:
                     # Green for connected device
                     self.device_status_indicator.setStyleSheet("background-color: #00AA00; border-radius: 8px;")
@@ -930,7 +634,6 @@ class VMafTestApp(QMainWindow):
             # Grey for initialization not complete
             self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
             self.device_status_indicator.setToolTip("Capture card status: not initialized")
-
 
     def start_capture(self):
         """Start the bookend capture process"""
@@ -956,41 +659,61 @@ class VMafTestApp(QMainWindow):
         # Get output directory and test name
         output_dir = self.lbl_output_dir.text()
         if output_dir == "Default output directory":
-            output_dir = self.file_manager.get_default_base_dir()
+            if hasattr(self, 'file_manager'):
+                output_dir = self.file_manager.get_default_base_dir()
+            else:
+                script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                output_dir = os.path.join(script_dir, "tests", "test_results")
+                os.makedirs(output_dir, exist_ok=True)
 
         # Add timestamp prefix to test name to prevent overwriting
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_test_name = self.txt_test_name.currentText()
-        test_name = f"{timestamp}_{base_test_name}"
+        test_name = f"{base_test_name}"
 
-        self.log_to_capture(f"Using test name with timestamp: {test_name}")
-
-        # Update file manager base directory
-        self.file_manager.base_dir = output_dir
+        self.log_to_capture(f"Using test name: {test_name}")
 
         # Set output information in capture manager
-        self.capture_manager.set_output_directory(output_dir)
-        self.capture_manager.set_test_name(test_name)
-
-        # Set reference info
-        self.capture_manager.set_reference_video(self.reference_info)
-        
-        # Start bookend capture
-        self.log_to_capture("Starting bookend frame capture...")
-        self.capture_manager.start_bookend_capture(device_name)
+        if hasattr(self, 'capture_mgr'):
+            self.capture_mgr.set_output_directory(output_dir)
+            self.capture_mgr.set_test_name(test_name)
+            
+            # Start bookend capture
+            self.log_to_capture("Starting bookend frame capture...")
+            self.capture_mgr.start_bookend_capture(device_name)
+        else:
+            self.log_to_capture("Error: Capture manager not initialized")
+            self.btn_start_capture.setEnabled(True)
+            self.btn_stop_capture.setEnabled(False)
 
     def stop_capture(self):
         """Stop the capture process"""
         self.log_to_capture("Stopping capture...")
-        self.capture_manager.stop_capture(cleanup_temp=True)
+        if hasattr(self, 'capture_mgr'):
+            self.capture_mgr.stop_capture(cleanup_temp=True)
+        else:
+            self.log_to_capture("Error: Capture manager not initialized")
 
         # Reset progress bar to avoid stuck state
         self.pb_capture_progress.setValue(0)
+        
+        # Update UI
+        self.btn_start_capture.setEnabled(True)
+        self.btn_stop_capture.setEnabled(False)
 
     def update_capture_status(self, status_text):
         """Update capture status label"""
         self.lbl_capture_status.setText(status_text)
         self.log_to_capture(status_text)
+
+    def update_capture_progress(self, progress):
+        """Handle capture progress updates with proper scale"""
+        if isinstance(progress, int):
+            # Ensure progress is between 0-100
+            scaled_progress = min(100, max(0, progress))
+            self.pb_capture_progress.setValue(scaled_progress)
+        else:
+            # Just in case we receive non-int progress
+            self.pb_capture_progress.setValue(0)
 
     def handle_capture_state_change(self, state):
         """Handle changes in capture state"""
@@ -1003,33 +726,7 @@ class VMafTestApp(QMainWindow):
         self.btn_stop_capture.setEnabled(True)
 
     def handle_capture_finished(self, success, result):
-        """Handle capture completion with better button management"""
-        self.btn_start_capture.setEnabled(True)
-        self.btn_stop_capture.setEnabled(False)
-
-        # Reset progress bar to avoid stuck state
-        self.pb_capture_progress.setValue(0)
-
-        if success:
-            # Normalize the path for consistent display
-            display_path = os.path.normpath(result)
-
-            self.log_to_capture(f"Capture completed: {display_path}")
-            self.capture_path = result
-
-            # Update analysis tab
-            capture_name = os.path.basename(self.capture_path)
-            ref_name = os.path.basename(self.reference_info['path'])
-
-            analysis_summary = (f"Reference: {ref_name}\n" +
-                            f"Captured: {capture_name}\n" +
-                            f"Ready for alignment and VMAF analysis")
-
-
-    # Method removed as part of simplification to use only bookend capture
-
-    def handle_capture_finished(self, success, result):
-        """Handle capture completion with better button management"""
+        """Handle capture completion"""
         self.btn_start_capture.setEnabled(True)
         self.btn_stop_capture.setEnabled(False)
 
@@ -1055,12 +752,11 @@ class VMafTestApp(QMainWindow):
 
             # Enable analysis tab and buttons
             self.btn_next_to_analysis.setEnabled(True)
-            self.btn_align_videos.setEnabled(True)
             self.btn_run_combined_analysis.setEnabled(True)
 
             # Show success message with normalized path
             QMessageBox.information(self, "Capture Complete", 
-                                f"Capture completed successfully!\n\nSaved to: {display_path}")
+                                  f"Capture completed successfully!\n\nSaved to: {display_path}")
 
             # Switch to analysis tab
             self.tabs.setCurrentIndex(2)
@@ -1092,52 +788,67 @@ class VMafTestApp(QMainWindow):
         # Update label
         self.lbl_preview.setPixmap(scaled_pixmap)
 
-    def align_videos(self):
-        """Start video alignment process using selected method"""
+    def run_combined_analysis(self):
+        """Run video alignment and VMAF analysis in sequence"""
         if not self.reference_info or not self.capture_path:
             self.log_to_analysis("Missing reference or captured video")
             return
 
-        # Get selected alignment method
-        alignment_method = self.combo_alignment_method.currentData()
-
-        self.log_to_analysis(f"Starting video alignment using {alignment_method} method...")
+        # Reset progress bars
         self.pb_alignment_progress.setValue(0)
-        self.lbl_alignment_status.setText("Aligning videos...")
+        self.pb_vmaf_progress.setValue(0)
 
-        if alignment_method == "bookend":
-            # Import BookendAlignmentThread
-            from .bookend_alignment import BookendAlignmentThread
+        # Reset status labels
+        self.lbl_alignment_status.setText("Starting alignment...")
+        self.lbl_vmaf_status.setText("Waiting for alignment to complete...")
 
-            # Create bookend alignment thread
-            self.alignment_thread = BookendAlignmentThread(
-                self.reference_info['path'],
-                self.capture_path
-            )
+        # Clear log
+        self.txt_analysis_log.clear()
+        self.log_to_analysis("Starting combined analysis process...")
 
-            # Log bookend method usage
-            self.log_to_analysis("Using white bookend frame alignment method")
+        # Get analysis settings
+        self.selected_model = self.combo_vmaf_model.currentData()
+
+        # Convert duration option to seconds
+        duration_option = self.combo_duration.currentData()
+        if duration_option == "full":
+            self.selected_duration = None
         else:
-            # Default to content-based alignment
-            self.alignment_thread = AlignmentThread(
-                self.reference_info['path'],
-                self.capture_path
-            )
+            self.selected_duration = float(duration_option)
 
-            # Log content method usage
-            self.log_to_analysis("Using content-based alignment method")
+        self.log_to_analysis(f"Using VMAF model: {self.selected_model}")
+        self.log_to_analysis(f"Duration: {self.selected_duration if self.selected_duration else 'Full video'}")
+
+        # Disable all analysis buttons during process
+        self.btn_run_combined_analysis.setEnabled(False)
+
+        # Start the alignment process
+        self.align_videos_for_combined_workflow()
+
+    def align_videos_for_combined_workflow(self):
+        """Start video alignment as part of the combined workflow using bookend method"""
+        self.log_to_analysis("Starting video alignment using bookend method...")
+
+        # Create bookend alignment thread
+        self.alignment_thread = BookendAlignmentThread(
+            self.reference_info['path'],
+            self.capture_path
+        )
 
         # Connect signals
         self.alignment_thread.alignment_progress.connect(self.pb_alignment_progress.setValue)
         self.alignment_thread.status_update.connect(self.log_to_analysis)
         self.alignment_thread.error_occurred.connect(self.handle_alignment_error)
-        self.alignment_thread.alignment_complete.connect(self.handle_alignment_complete)
+
+        # Connect to special handler for combined workflow
+        self.alignment_thread.alignment_complete.connect(self.handle_alignment_for_combined_workflow)
 
         # Start alignment
         self.alignment_thread.start()
 
-    def handle_alignment_complete(self, results):
-        """Handle completion of video alignment"""
+    def handle_alignment_for_combined_workflow(self, results):
+        """Handle completion of video alignment in combined workflow"""
+        # Process alignment results
         offset_frames = results['offset_frames']
         offset_seconds = results['offset_seconds']
         confidence = results['confidence']
@@ -1153,59 +864,58 @@ class VMafTestApp(QMainWindow):
 
         # Update UI
         self.lbl_alignment_status.setText(
-            f"Aligned with offset: {offset_frames} frames ({offset_seconds:.3f}s), conf: {confidence:.2f}"
+            f"Aligned using bookend method (conf: {confidence:.2f})"
         )
-        self.log_to_analysis(f"Alignment complete! Offset: {offset_frames} frames")
+        self.log_to_analysis(f"Alignment complete!")
         self.log_to_analysis(f"Aligned reference: {os.path.basename(aligned_reference)}")
         self.log_to_analysis(f"Aligned captured: {os.path.basename(aligned_captured)}")
 
-        # Enable VMAF analysis
-        self.btn_run_vmaf.setEnabled(True)
+        # Proceed to VMAF analysis
+        self.log_to_analysis("Proceeding to VMAF analysis...")
+        self.lbl_vmaf_status.setText("Starting VMAF analysis...")
 
-    def handle_alignment_error(self, error_msg):
-        """Handle error in video alignment"""
-        self.lbl_alignment_status.setText(f"Alignment failed")
-        self.log_to_analysis(f"Error: {error_msg}")
-        QMessageBox.critical(self, "Alignment Error", error_msg)
+        try:
+            # Start VMAF analysis
+            self.start_vmaf_for_combined_workflow()
+        except Exception as e:
+            # Handle any errors during VMAF start
+            error_msg = f"Error starting VMAF analysis: {str(e)}"
+            self.log_to_analysis(f"Error: {error_msg}")
+            self.lbl_vmaf_status.setText("VMAF analysis failed to start")
 
-    def run_vmaf_analysis(self):
-        """Start VMAF analysis"""
-        if not self.aligned_paths:
-            self.log_to_analysis("No aligned videos available")
-            return
+            # Re-enable buttons
+            self.btn_run_combined_analysis.setEnabled(True)
 
-        # Get VMAF model and duration settings
-        model = self.combo_vmaf_model.currentData()
-        duration_option = self.combo_duration.currentData()
+            # Show error to user
+            QMessageBox.critical(self, "VMAF Error", error_msg)
 
-        # Convert duration option to seconds
-        if duration_option == "full":
-            duration = None
-        else:
-            duration = float(duration_option)
-
-        self.log_to_analysis(f"Starting VMAF analysis with model: {model}")
-        self.log_to_analysis(f"Duration: {duration if duration else 'Full video'}")
-
-        # Reset progress
+    def start_vmaf_for_combined_workflow(self):
+        """Start VMAF analysis as part of combined workflow"""
+        # Reset VMAF progress
         self.pb_vmaf_progress.setValue(0)
-        self.lbl_vmaf_status.setText("Running VMAF analysis...")
 
-        # Disable buttons during analysis
-        self.btn_run_combined_analysis.setEnabled(False)
-        self.btn_align_videos.setEnabled(False)
-        self.btn_run_vmaf.setEnabled(False)
+        # Get test name and output directory
+        test_name = self.txt_test_name.currentText()
+        output_dir = self.lbl_output_dir.text()
+        if output_dir == "Default output directory" and hasattr(self, 'file_manager'):
+            output_dir = self.file_manager.get_default_base_dir()
 
         # Create analysis thread
         self.vmaf_thread = VMAFAnalysisThread(
             self.aligned_paths['reference'],
             self.aligned_paths['captured'],
-            model,
-            duration
+            self.selected_model,
+            self.selected_duration
         )
 
+        # Set output directory and test name if available
+        if output_dir and output_dir != "Default output directory":
+            self.vmaf_thread.set_output_directory(output_dir)
+        if test_name:
+            self.vmaf_thread.set_test_name(test_name)
+
         # Connect signals
-        self.vmaf_thread.analysis_progress.connect(self.handle_vmaf_progress)
+        self.vmaf_thread.analysis_progress.connect(self.pb_vmaf_progress.setValue)
         self.vmaf_thread.status_update.connect(self.log_to_analysis)
         self.vmaf_thread.error_occurred.connect(self.handle_vmaf_error)
         self.vmaf_thread.analysis_complete.connect(self.handle_vmaf_complete)
@@ -1213,15 +923,14 @@ class VMafTestApp(QMainWindow):
         # Start analysis
         self.vmaf_thread.start()
 
-    def handle_vmaf_progress(self, progress):
-        """Handle VMAF progress updates, ensuring proper range"""
-        if isinstance(progress, int):
-            # Ensure progress is between 0-100
-            scaled_progress = min(100, max(0, progress))
-            self.pb_vmaf_progress.setValue(scaled_progress)
-        else:
-            # Just in case we receive non-int progress
-            self.pb_vmaf_progress.setValue(0)
+    def handle_alignment_error(self, error_msg):
+        """Handle error in video alignment"""
+        self.lbl_alignment_status.setText(f"Alignment failed")
+        self.log_to_analysis(f"Error: {error_msg}")
+        QMessageBox.critical(self, "Alignment Error", error_msg)
+        
+        # Re-enable button
+        self.btn_run_combined_analysis.setEnabled(True)
 
     def handle_vmaf_complete(self, results):
         """Handle completion of VMAF analysis"""
@@ -1231,10 +940,8 @@ class VMafTestApp(QMainWindow):
         psnr = results.get('psnr')
         ssim = results.get('ssim')
 
-        # Re-enable buttons
+        # Re-enable analysis button
         self.btn_run_combined_analysis.setEnabled(True)
-        self.btn_align_videos.setEnabled(True)
-        self.btn_run_vmaf.setEnabled(True)
 
         # Update UI with vmaf score
         if vmaf_score is not None:
@@ -1312,139 +1019,57 @@ class VMafTestApp(QMainWindow):
 
         ref_path = results.get('reference_path')
         if ref_path and os.path.exists(ref_path):
-            item = QListWidgetItem(f"Aligned Reference: {os.path.basename(ref_path)}")
+            item = QListWidgetItem(f"Reference: {os.path.basename(ref_path)}")
             item.setData(Qt.UserRole, ref_path)
             self.list_result_files.addItem(item)
 
         dist_path = results.get('distorted_path')
         if dist_path and os.path.exists(dist_path):
-            item = QListWidgetItem(f"Aligned Captured: {os.path.basename(dist_path)}")
+            item = QListWidgetItem(f"Captured: {os.path.basename(dist_path)}")
             item.setData(Qt.UserRole, dist_path)
             self.list_result_files.addItem(item)
+            
+        # Add aligned videos
+        if self.aligned_paths:
+            for key, path in self.aligned_paths.items():
+                if path and os.path.exists(path):
+                    item = QListWidgetItem(f"Aligned {key.title()}: {os.path.basename(path)}")
+                    item.setData(Qt.UserRole, path)
+                    self.list_result_files.addItem(item)
+
+        # Show message with VMAF score
+        QMessageBox.information(self, "Analysis Complete", 
+                              f"VMAF analysis complete!\n\nVMAF Score: {vmaf_score:.2f}")
+
+        # Switch to results tab
+        self.tabs.setCurrentIndex(3)
 
     def handle_vmaf_error(self, error_msg):
         """Handle error in VMAF analysis"""
         self.lbl_vmaf_status.setText(f"VMAF analysis failed")
         self.log_to_analysis(f"Error: {error_msg}")
         QMessageBox.critical(self, "VMAF Analysis Error", error_msg)
+        
+        # Re-enable analysis button
+        self.btn_run_combined_analysis.setEnabled(True)
 
     def export_pdf_certificate(self):
         """Export VMAF results as PDF certificate"""
-        if not self.vmaf_results:
-            QMessageBox.warning(self, "No Results", "No VMAF analysis results available to export")
-            return
-
-        try:
-            # Get test name
-            test_name = self.txt_test_name.currentText()
-
-            # Get paths of videos
-            reference_path = self.reference_info['path'] if self.reference_info else "Unknown"
-            captured_path = self.capture_path or "Unknown"
-
-            # Get aligned paths if available
-            if self.aligned_paths:
-                reference_path = self.aligned_paths.get('reference', reference_path)
-                captured_path = self.aligned_paths.get('captured', captured_path)
-
-            # Create file dialog for saving
-            output_dir = os.path.dirname(self.vmaf_results.get('json_path', os.getcwd()))
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            default_filename = f"vmaf_certificate_{test_name}_{timestamp}.pdf"
-
-            file_path, _ = QFileDialog.getSaveFileName(
-                self, "Save PDF Certificate", 
-                os.path.join(output_dir, default_filename),
-                "PDF Files (*.pdf)"
-            )
-
-            if not file_path:
-                return  # User cancelled
-
-            # Create PDF generator and generate certificate
-            from .pdf_generator import PDFCertificateGenerator
-            generator = PDFCertificateGenerator()
-
-            self.statusBar().showMessage("Generating PDF certificate...")
-            output_path = generator.generate_certificate(
-                test_name,
-                reference_path,
-                captured_path,
-                self.vmaf_results,
-                file_path
-            )
-
-            if output_path:
-                self.statusBar().showMessage(f"PDF certificate saved to: {output_path}")
-                QMessageBox.information(self, "Export Complete", 
-                                       f"PDF certificate saved to:\n{output_path}")
-
-                # Add to results list
-                item = QListWidgetItem(f"PDF Certificate: {os.path.basename(output_path)}")
-                item.setData(Qt.UserRole, output_path)
-                self.list_result_files.addItem(item)
-            else:
-                QMessageBox.warning(self, "Export Failed", "Failed to generate PDF certificate")
-        except Exception as e:
-            error_msg = f"Error generating PDF: {str(e)}"
-            self.statusBar().showMessage(error_msg)
-            QMessageBox.critical(self, "Export Error", error_msg)
+        # For now, we'll just show a placeholder message
+        QMessageBox.information(self, "Export PDF", 
+                              "This feature is not yet implemented.\n\nIn a complete implementation, this would generate a PDF certificate with all test details and results.")
 
     def export_csv_data(self):
         """Export VMAF results as CSV data"""
-        if not self.vmaf_results:
-            QMessageBox.warning(self, "No Results", "No VMAF analysis results available to export")
-            return
-
-        try:
-            # Get test name
-            test_name = self.txt_test_name.currentText()
-
-            # Create file dialog for saving
-            output_dir = os.path.dirname(self.vmaf_results.get('json_path', os.getcwd()))
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            default_filename = f"vmaf_data_{test_name}_{timestamp}.csv"
-
-            file_path, _ = QFileDialog.getSaveFileName(
-                self, "Save CSV Data", 
-                os.path.join(output_dir, default_filename),
-                "CSV Files (*.csv)"
-            )
-
-            if not file_path:
-                return  # User cancelled
-
-            # Create PDF generator and use its CSV export method
-            from .pdf_generator import PDFCertificateGenerator
-            generator = PDFCertificateGenerator()
-
-            self.statusBar().showMessage("Exporting data to CSV...")
-            output_path = generator.export_csv(self.vmaf_results, file_path)
-
-            if output_path:
-                self.statusBar().showMessage(f"CSV data saved to: {output_path}")
-                QMessageBox.information(self, "Export Complete", 
-                                       f"CSV data saved to:\n{output_path}")
-
-                # Add to results list
-                item = QListWidgetItem(f"CSV Data: {os.path.basename(output_path)}")
-                item.setData(Qt.UserRole, output_path)
-                self.list_result_files.addItem(item)
-            else:
-                QMessageBox.warning(self, "Export Failed", "Failed to export CSV data")
-        except Exception as e:
-            error_msg = f"Error exporting CSV: {str(e)}"
-            self.statusBar().showMessage(error_msg)
-            QMessageBox.critical(self, "Export Error", error_msg)
+        # For now, we'll just show a placeholder message
+        QMessageBox.information(self, "Export CSV", 
+                              "This feature is not yet implemented.\n\nIn a complete implementation, this would export all analysis data to a CSV file.")
 
     def open_result_file(self, item):
         """Open selected result file"""
         file_path = item.data(Qt.UserRole)
         if file_path and os.path.exists(file_path):
             # Use system default application to open the file
-            import subprocess
-            import platform
-
             try:
                 if platform.system() == 'Windows':
                     os.startfile(file_path)
@@ -1459,66 +1084,58 @@ class VMafTestApp(QMainWindow):
     def start_new_test(self):
         """Reset application for a new test"""
         # Reset state variables
-        self.reference_info = None
         self.capture_path = None
         self.aligned_paths = None
         self.vmaf_results = None
 
-        # Reset UI
-        self.lbl_reference_path.setText("No reference video selected")
-        self.lbl_reference_details.setText("Reference details: None")
-        self.lbl_capture_summary.setText("No reference video selected")
-        self.lbl_analysis_summary.setText("No videos ready for analysis")
-        self.lbl_results_summary.setText("No VMAF analysis results yet")
-
-        # Disable buttons
-        self.btn_next_to_capture.setEnabled(False)
-        self.btn_next_to_analysis.setEnabled(False)
-        self.btn_next_to_results.setEnabled(False)
-        self.btn_align_videos.setEnabled(False)
-        self.btn_run_vmaf.setEnabled(False)
-        self.btn_export_pdf.setEnabled(False)
-        self.btn_export_csv.setEnabled(False)
-
-        # Clear logs and progress
+        # Clear logs
         self.txt_capture_log.clear()
         self.txt_analysis_log.clear()
+        
+        # Reset progress bars
         self.pb_capture_progress.setValue(0)
         self.pb_alignment_progress.setValue(0)
         self.pb_vmaf_progress.setValue(0)
 
-        # Go to setup tab
-        self.tabs.setCurrentIndex(0)
+        # Reset status
+        self.lbl_capture_status.setText("Ready to capture")
+        self.lbl_alignment_status.setText("Not aligned")
+        self.lbl_vmaf_status.setText("Not analyzed")
+        
+        # Disable buttons
+        self.btn_next_to_analysis.setEnabled(False)
+        self.btn_next_to_results.setEnabled(False)
+        self.btn_run_combined_analysis.setEnabled(False)
+        self.btn_export_pdf.setEnabled(False)
+        self.btn_export_csv.setEnabled(False)
+        
+        # Reset results
+        self.lbl_vmaf_score.setText("VMAF Score: --")
+        self.lbl_psnr_score.setText("PSNR: --")
+        self.lbl_ssim_score.setText("SSIM: --")
+        self.list_result_files.clear()
+        
+        # Update summaries
+        if self.reference_info:
+            capture_text = f"Reference: {os.path.basename(self.reference_info['path'])}\nNo capture yet"
+            self.lbl_capture_summary.setText(capture_text)
+            self.lbl_analysis_summary.setText("No captured video yet for analysis")
+        else:
+            self.lbl_capture_summary.setText("No reference video selected")
+            self.lbl_analysis_summary.setText("No videos ready for analysis")
+        
+        self.lbl_results_summary.setText("No VMAF analysis results yet")
 
         # Increment test number
         test_name = self.txt_test_name.currentText()
-        if test_name.startswith("Test_") and test_name[5:].isdigit():
+        if test_name.startswith("Test_") and len(test_name) > 5 and test_name[5:].isdigit():
             next_num = int(test_name[5:]) + 1
             self.txt_test_name.setCurrentText(f"Test_{next_num:02d}")
 
-    # Add this to the UI class to properly wait for threads before closing
-    def closeEvent(self, event):
-        """Handle application close event"""
-        # Wait for any running threads to finish
-        if hasattr(self, 'alignment_thread') and self.alignment_thread and self.alignment_thread.isRunning():
-            logger.info("Waiting for alignment thread to finish...")
-            self.alignment_thread.wait(2000)  # Wait up to 2 seconds
+        # Go back to capture tab
+        self.tabs.setCurrentIndex(1)
 
-        if hasattr(self, 'vmaf_thread') and self.vmaf_thread and self.vmaf_thread.isRunning():
-            logger.info("Waiting for VMAF thread to finish...")
-            self.vmaf_thread.wait(2000)  # Wait up to 2 seconds
-
-        # Clean up temporary files
-        if hasattr(self, 'file_manager'):
-            logger.info("Cleaning up temporary files")
-            self.file_manager.cleanup_temp_files()
-
-        # Call parent close event
-        super().closeEvent(event)
-
-
-    # ---------- Helper methods ----------
-
+    # Helper methods for logging to the UI
     def log_to_setup(self, message):
         """Add message to setup status"""
         self.lbl_setup_status.setText(message)
@@ -1539,16 +1156,53 @@ class VMafTestApp(QMainWindow):
             self.txt_analysis_log.verticalScrollBar().maximum()
         )
         self.statusBar().showMessage(message)
+        
+    def closeEvent(self, event):
+        """Handle application close event"""
+        # Wait for any running threads to finish
+        running_threads = []
+        
+        if hasattr(self, 'alignment_thread') and self.alignment_thread and self.alignment_thread.isRunning():
+            running_threads.append(('alignment', self.alignment_thread))
+            
+        if hasattr(self, 'vmaf_thread') and self.vmaf_thread and self.vmaf_thread.isRunning():
+            running_threads.append(('VMAF', self.vmaf_thread))
+            
+        if hasattr(self, 'reference_thread') and self.reference_thread and self.reference_thread.isRunning():
+            running_threads.append(('reference analysis', self.reference_thread))
+            
+        # Stop any active capture process
+        if hasattr(self, 'capture_mgr') and self.capture_mgr.is_capturing:
+            logger.info("Stopping active capture process before closing")
+            self.capture_mgr.stop_capture(cleanup_temp=True)
+        
+        # If threads are running, ask the user if they want to wait
+        if running_threads:
+            thread_names = ", ".join([name for name, _ in running_threads])
+            reply = QMessageBox.question(
+                self, "Processes Running",
+                f"The following processes are still running: {thread_names}.\n\nDo you want to wait for them to finish?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+            )
+            
+            if reply == QMessageBox.Yes:
+                # Wait for threads with timeout
+                for name, thread in running_threads:
+                    logger.info(f"Waiting for {name} thread to finish...")
+                    thread.wait(3000)  # Wait up to 3 seconds
+                    if thread.isRunning():
+                        logger.warning(f"{name} thread still running after timeout")
+                        thread.terminate()
+            else:
+                # Force terminate threads
+                for name, thread in running_threads:
+                    logger.info(f"Terminating {name} thread...")
+                    thread.terminate()
 
+        # Clean up temporary files if file manager exists
+        if hasattr(self, 'file_manager'):
+            logger.info("Cleaning up temporary files")
+            self.file_manager.cleanup_temp_files()
 
-
-
-
-
-
-def main():
-    """Main application entry point"""
-    app = QApplication(sys.argv)
-    window = VMafTestApp()
-    window.show()
-    sys.exit(app.exec_())
+        # Call parent close event
+        super().closeEvent(event)
