@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
         self.capture_path = None
         self.aligned_paths = None
         self.vmaf_results = None
+        self.vmaf_running = False # Added vmaf_running flag
 
         logger.info("VMAF Test App initialized")
 
@@ -999,6 +1000,7 @@ class MainWindow(QMainWindow):
 
         # Disable all analysis buttons during process
         self.btn_run_combined_analysis.setEnabled(False)
+        self.vmaf_running = True # Set vmaf_running flag before starting analysis
 
         # Start the alignment process
         self.align_videos_for_combined_workflow()
@@ -1120,6 +1122,7 @@ class MainWindow(QMainWindow):
 
         # Re-enable analysis button
         self.btn_run_combined_analysis.setEnabled(True)
+        self.vmaf_running = False # Reset vmaf_running flag
 
         # Update UI with vmaf score
         if vmaf_score is not None:
@@ -1231,6 +1234,9 @@ class MainWindow(QMainWindow):
         self.lbl_vmaf_status.setText(f"VMAF analysis failed")
         self.log_to_analysis(f"Error: {error_msg}")
         QMessageBox.critical(self, "VMAF Analysis Error", error_msg)
+
+        # Reset vmaf_running flag to allow new analysis
+        self.vmaf_running = False
 
         # Re-enable analysis button
         self.btn_run_combined_analysis.setEnabled(True)
@@ -2013,6 +2019,9 @@ class MainWindow(QMainWindow):
         self.log_to_analysis(f"Error: {error_msg}")
         QMessageBox.critical(self, "VMAF Analysis Error", error_msg)
 
+        # Reset vmaf_running flag to allow new analysis
+        self.vmaf_running = False
+
         # Re-enable analysis button
         self.btn_run_combined_analysis.setEnabled(True)
 
@@ -2117,7 +2126,7 @@ class MainWindow(QMainWindow):
         # Format warnings in orange
         elif "warning" in message.lower() or "caution" in message.lower():
             formatted_message = f'<span style="color: #FF9800;">[{timestamp}] {message}</span>'
-                # Format success messages in green
+        # Format success messages in green
         elif "success" in message.lower() or "complete" in message.lower() or "finished" in message.lower():
             formatted_message = f'<span style="color: #388E3C; font-weight: bold;">[{timestamp}] {message}</span>'
         # Regular messages with timestamp

@@ -363,6 +363,16 @@ class VMAFAnalyzer(QObject):
                 # Restore original directory
                 os.chdir(current_dir)
 
+                # Delete the primary capture file if it exists
+                if 'distorted_path' in results:
+                    primary_capture = results['distorted_path']
+                    try:
+                        if os.path.exists(primary_capture) and "capture" in primary_capture.lower():
+                            logger.info(f"Deleting primary capture file: {primary_capture}")
+                            os.remove(primary_capture)
+                    except Exception as cleanup_error:
+                        logger.warning(f"Could not delete primary capture file: {cleanup_error}")
+                
                 # Return results
                 self.analysis_complete.emit(results)
                 return results

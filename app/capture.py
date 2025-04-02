@@ -35,6 +35,8 @@ class CaptureMonitor(QThread):
         self.start_time = time.time()
         self.duration = duration  # Expected duration in seconds
         self.is_bookend_capture = True  # Always true since we only use bookend mode now
+        self.last_frame_count = 0
+        self.total_frames = 0
 
     def run(self):
         """Monitor process output and emit signals"""
@@ -82,7 +84,29 @@ class CaptureMonitor(QThread):
                                 match = re.search(r'frame=\s*(\d+)', line)
                                 if match:
                                     frame_num = int(match.group(1))
-                                    self.progress_updated.emit(frame_num)
+                                    self.last_frame_count = frame_num
+                                    
+                                    # Try to estimate total frames from fps and duration
+                                    if self.total_frames == 0 and self.duration:
+                                        fps_match = re.search(r'fps=\s*([\d.]+)', line)
+                                        if fps_match:
+                                            fps = float(fps_match.group(1))
+                                            if fps > 0:
+                                                self.total_frames = int(self.duration * fps)
+                                    
+                                    # Calculate progress percentage
+                                    if self.duration and self.total_frames > 0:
+                                        # If we have both duration and total frames
+                                        progress = min(int((frame_num / self.total_frames) * 100), 99)
+                                    elif self.duration:
+                                        # If we only have duration, use elapsed time
+                                        elapsed = time.time() - self.start_time
+                                        progress = min(int((elapsed / self.duration) * 100), 99)
+                                    else:
+                                        # Fallback - increment slowly
+                                        progress = min(int(frame_num % 100), 99)
+                                    
+                                    self.progress_updated.emit(progress)
                             except (ValueError, AttributeError) as e:
                                 logger.warning(f"Error parsing frame number: {e}")
 
@@ -325,6 +349,16 @@ class CaptureManager(QObject):
 
         logger.info("Starting bookend capture mode")
         self.status_update.emit("Initializing bookend capture mode...")
+        
+        # Initialize preview capture to show input feed
+        try:
+            self._start_preview_capture(device_name)
+            # Update UI to show preview is active
+            self.frame_available.emit(self._get_preview_frame())
+            self.status_update.emit("Video preview started - confirming capture card input")
+        except Exception as preview_error:
+            logger.warning(f"Could not start preview: {preview_error}")
+            # Continue with capture even if preview fails
 
         # Prepare output path
         self._prepare_output_path()
@@ -843,7 +877,8 @@ class CaptureManager(QObject):
         time.sleep(2)
 
         # Try multiple connection approaches
-        for attempt in range(1, max_retries + 1):            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
+        for attempt in range(1, max_retries + 1):
+            logger.info(f"Attempt {attempt}/{max_retries} to connect to {device_name}")
             self.status_update.emit(f"Connecting to device (attempt {attempt}/{max_retries})...")
 
             # Check device availability
@@ -915,3 +950,90 @@ class CaptureManager(QObject):
             logger.warning(f"Error repairing MP4: {e}")
 
         return False, None
+        
+    def _start_preview_capture(self, device_name):
+        """Start a preview capture to show input feed before recording"""
+        try:
+            # Stop any existing preview
+            self._stop_preview_capture()
+            
+            # Initialize OpenCV capture
+            self.preview_cap = cv2.VideoCapture()
+            
+            # For Windows with DirectShow
+            if platform.system() == 'Windows':
+                # Try to open the device
+                self.preview_cap.open(f"video={device_name}", cv2.CAP_DSHOW)
+            else:
+                # For Linux/macOS try a different approach
+                self.preview_cap.open(device_name)
+                
+            if not self.preview_cap.isOpened():
+                logger.warning(f"Could not open preview capture for {device_name}")
+                return False
+                
+            # Set lower resolution for preview to reduce processing load
+            self.preview_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.preview_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+            
+            # Create preview thread
+            self.preview_active = True
+            self.preview_thread = QThread()
+            self.preview_thread.run = self._update_preview
+            self.preview_thread.start()
+            
+            logger.info(f"Preview capture started for {device_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error starting preview: {str(e)}")
+            self.preview_active = False
+            return False
+            
+    def _stop_preview_capture(self):
+        """Stop the preview capture"""
+        if hasattr(self, 'preview_active') and self.preview_active:
+            self.preview_active = False
+            
+            # Wait for thread to finish
+            if hasattr(self, 'preview_thread') and self.preview_thread:
+                self.preview_thread.quit()
+                self.preview_thread.wait(1000)
+                
+            # Release capture
+            if hasattr(self, 'preview_cap') and self.preview_cap:
+                self.preview_cap.release()
+                
+            logger.info("Preview capture stopped")
+            
+    def _update_preview(self):
+        """Update preview frames in background thread"""
+        while self.preview_active:
+            try:
+                frame = self._get_preview_frame()
+                if frame is not None:
+                    self.frame_available.emit(frame)
+            except Exception as e:
+                logger.error(f"Error updating preview: {str(e)}")
+                
+            # Limit to ~15 fps for preview to reduce CPU usage
+            time.sleep(0.067)
+            
+    def _get_preview_frame(self):
+        """Get current frame from preview capture"""
+        if not hasattr(self, 'preview_cap') or not self.preview_cap:
+            # Return placeholder frame
+            placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
+            placeholder[:] = (224, 224, 224)  # Light gray background
+            cv2.putText(placeholder, "No video feed", (160, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+            return placeholder
+            
+        if not self.preview_cap.isOpened():
+            logger.warning("Preview capture not open")
+            return None
+            
+        ret, frame = self.preview_cap.read()
+        if not ret:
+            return None
+            
+        return frame
