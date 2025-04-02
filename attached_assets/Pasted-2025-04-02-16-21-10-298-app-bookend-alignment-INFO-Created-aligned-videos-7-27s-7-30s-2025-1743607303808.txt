@@ -1,0 +1,28 @@
+2025-04-02 16:21:10,298 - app.bookend_alignment - INFO - Created aligned videos: 7.27s / 7.30s
+2025-04-02 16:21:10,303 - app.vmaf_analyzer - INFO - Set output directory to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 16:21:10,304 - app.vmaf_analyzer - INFO - Set test name to: RR
+2025-04-02 16:21:10,306 - app.vmaf_analyzer - INFO - Set output directory to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 16:21:10,306 - app.vmaf_analyzer - INFO - Set output directory to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 16:21:10,306 - app.vmaf_analyzer - INFO - Set test name to: RR
+2025-04-02 16:21:10,307 - app.vmaf_analyzer - INFO - Set test name to: RR
+2025-04-02 16:21:10,308 - app.vmaf_analyzer - INFO - VMAF Reference: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\RR_20250402_161902\REF03_161902_aligned.mp4
+2025-04-02 16:21:10,308 - app.vmaf_analyzer - INFO - VMAF Distorted: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\RR_20250402_161902\REF03_capture_161902_aligned.mp4
+2025-04-02 16:21:10,309 - app.vmaf_analyzer - INFO - Set output directory to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-02 16:21:10,310 - app.vmaf_analyzer - INFO - Created test results directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\RR_20250402_162110
+2025-04-02 16:21:10,310 - app.vmaf_analyzer - INFO - Set test name to: RR
+2025-04-02 16:21:10,311 - app.vmaf_analyzer - ERROR - Error in VMAF analysis: name 'vmaf_dir' is not defined
+2025-04-02 16:21:10,311 - app.vmaf_analyzer - INFO - VMAF Reference: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\RR_20250402_161902\REF03_161902_aligned.mp4
+2025-04-02 16:21:10,312 - app.vmaf_analyzer - INFO - VMAF Distorted: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\RR_20250402_161902\REF03_capture_161902_aligned.mp4
+2025-04-02 16:21:10,316 - app.vmaf_analyzer - ERROR - Traceback (most recent call last):
+  File "C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\vmaf_analyzer.py", line 121, in analyze_videos
+    os.chdir(vmaf_dir)
+             ^^^^^^^^
+NameError: name 'vmaf_dir' is not defined. Did you mean: 'vmaf_cmd'?
+
+2025-04-02 16:21:10,317 - app.vmaf_analyzer - INFO - Created test results directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\RR_20250402_162110
+2025-04-02 16:21:10,319 - app.vmaf_analyzer - ERROR - Error in VMAF analysis: name 'vmaf_dir' is not defined
+2025-04-02 16:21:10,322 - app.vmaf_analyzer - ERROR - Traceback (most recent call last):
+  File "C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\vmaf_analyzer.py", line 121, in analyze_videos
+    os.chdir(vmaf_dir)
+             ^^^^^^^^
+NameError: name 'vmaf_dir' is not defined. Did you mean: 'vmaf_cmd'?
