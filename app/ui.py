@@ -734,7 +734,7 @@ class MainWindow(QMainWindow):
                                         logger.info(f"Detected frame rates: {format_info['frame_rates']}")
 
                                     # Update settings
-                                    self.options_manager.update_category(""capture", capture_settings)
+                                    self.options_manager.update_category("capture", capture_settings)
                             except Exception as e:
                                 logger.warning(f"Error getting device formats: {str(e)}")
                     else:

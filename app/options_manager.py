@@ -191,9 +191,16 @@ class OptionsManager(QObject):
         frame_rates = []
         
         try:
-            # Run FFmpeg command to list formats for device
+            # First try using decklink format (for Intensity Shuttle)
             cmd = ["ffmpeg", "-f", "decklink", "-list_formats", "1", "-i", device_name]
             result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            # If no useful output, try with DirectShow format
+            if "Supported formats" not in result.stderr:
+                logger.info("No formats found using decklink, trying dshow format")
+                # Try DirectShow format (Windows)
+                cmd = ["ffmpeg", "-f", "dshow", "-list_options", "true", "-i", f"video={device_name}"]
+                result = subprocess.run(cmd, capture_output=True, text=True)
             
             # Parse the error output
             output = result.stderr
@@ -213,7 +220,9 @@ class OptionsManager(QObject):
                         # Pattern for "1920x1080"
                         r'(\d+)x(\d+)',
                         # Pattern for resolution like "1920 x 1080"
-                        r'(\d+)\s*x\s*(\d+)'
+                        r'(\d+)\s*x\s*(\d+)',
+                        # Pattern for min s=1920x1080 format from dshow/decklink
+                        r'min\s+s=(\d+)x(\d+)'
                     ]
                     
                     for pattern in resolution_patterns:
@@ -236,7 +245,10 @@ class OptionsManager(QObject):
                         r'(\d+)[pi]',
                         # Pattern for "29.97 hz" or similar
                         r'(\d+\.\d+)\s*hz',
-                        r'(\d+)\s*hz'
+                        r'(\d+)\s*hz',
+                        # Pattern for fps=29.97 from dshow/decklink
+                        r'fps=(\d+\.\d+)',
+                        r'fps=(\d+)'
                     ]
                     
                     for pattern in rate_patterns:
