@@ -351,7 +351,7 @@ class CaptureManager(QObject):
         logger.info(f"Setting capture duration for at least {min_loops} loops: {capture_duration:.2f}s")
         
         # Inform the user
-        self.status_update.emit(f"Capturing video with white bookend frames for approximately {capture_duration:.0f} seconds...")
+        self.status_update.emit(f"Capturing video with bookend frames for approximately {capture_duration:.0f} seconds...\n")
         self.status_update.emit("Please ensure the video plays in a loop with white frames between repetitions")
 
         # Kill any lingering FFmpeg processes

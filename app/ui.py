@@ -1084,6 +1084,7 @@ class MainWindow(QMainWindow):
     def start_new_test(self):
         """Reset application for a new test"""
         # Reset state variables
+        self.ensure_threads_finished()
         self.capture_path = None
         self.aligned_paths = None
         self.vmaf_results = None
@@ -1156,53 +1157,59 @@ class MainWindow(QMainWindow):
             self.txt_analysis_log.verticalScrollBar().maximum()
         )
         self.statusBar().showMessage(message)
-        
+ 
     def closeEvent(self, event):
         """Handle application close event"""
-        # Wait for any running threads to finish
-        running_threads = []
+        logger.info("Application closing - cleaning up resources")
         
-        if hasattr(self, 'alignment_thread') and self.alignment_thread and self.alignment_thread.isRunning():
-            running_threads.append(('alignment', self.alignment_thread))
-            
-        if hasattr(self, 'vmaf_thread') and self.vmaf_thread and self.vmaf_thread.isRunning():
-            running_threads.append(('VMAF', self.vmaf_thread))
-            
-        if hasattr(self, 'reference_thread') and self.reference_thread and self.reference_thread.isRunning():
-            running_threads.append(('reference analysis', self.reference_thread))
-            
-        # Stop any active capture process
-        if hasattr(self, 'capture_mgr') and self.capture_mgr.is_capturing:
+        # Stop any active capture process first
+        if hasattr(self, 'capture_mgr') and self.capture_mgr and self.capture_mgr.is_capturing:
             logger.info("Stopping active capture process before closing")
             self.capture_mgr.stop_capture(cleanup_temp=True)
         
-        # If threads are running, ask the user if they want to wait
-        if running_threads:
-            thread_names = ", ".join([name for name, _ in running_threads])
-            reply = QMessageBox.question(
-                self, "Processes Running",
-                f"The following processes are still running: {thread_names}.\n\nDo you want to wait for them to finish?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
-            )
-            
-            if reply == QMessageBox.Yes:
-                # Wait for threads with timeout
-                for name, thread in running_threads:
-                    logger.info(f"Waiting for {name} thread to finish...")
-                    thread.wait(3000)  # Wait up to 3 seconds
-                    if thread.isRunning():
-                        logger.warning(f"{name} thread still running after timeout")
-                        thread.terminate()
-            else:
-                # Force terminate threads
-                for name, thread in running_threads:
-                    logger.info(f"Terminating {name} thread...")
-                    thread.terminate()
-
+        # Ensure all threads are properly terminated
+        self.ensure_threads_finished()
+        
         # Clean up temporary files if file manager exists
-        if hasattr(self, 'file_manager'):
+        if hasattr(self, 'file_manager') and self.file_manager:
             logger.info("Cleaning up temporary files")
             self.file_manager.cleanup_temp_files()
-
+        
         # Call parent close event
+        logger.info("Cleanup complete, proceeding with application close")
         super().closeEvent(event)
+  
+    def ensure_threads_finished(self):
+        """Ensure all running threads are properly terminated before proceeding"""
+        # Check for vmaf_thread specifically since that's causing the issue
+        if hasattr(self, 'vmaf_thread') and self.vmaf_thread and self.vmaf_thread.isRunning():
+            logger.info("VMAF thread is still running - attempting clean shutdown")
+            # Try to quit gracefully first
+            self.vmaf_thread.quit()
+            
+            # Give it a reasonable timeout
+            if not self.vmaf_thread.wait(5000):  # 5 seconds
+                logger.warning("VMAF thread didn't respond to quit - forcing termination")
+                # Force termination if it doesn't respond
+                self.vmaf_thread.terminate()
+                self.vmaf_thread.wait(2000)  # Give it 2 more seconds to terminate
+                
+                # If it's still running, we're in trouble but we've tried our best
+                if self.vmaf_thread.isRunning():
+                    logger.error("VMAF thread couldn't be terminated - possible resource leak")
+        
+        # Do the same for other threads
+        for thread_attr, thread_name in [
+            ('alignment_thread', 'Alignment'), 
+            ('reference_thread', 'Reference analysis')
+        ]:
+            if hasattr(self, thread_attr) and getattr(self, thread_attr) and getattr(self, thread_attr).isRunning():
+                logger.info(f"{thread_name} thread is still running - attempting clean shutdown")
+                thread = getattr(self, thread_attr)
+                thread.quit()
+                if not thread.wait(3000):
+                    logger.warning(f"{thread_name} thread didn't respond to quit - forcing termination")
+                    thread.terminate()
+                    thread.wait(1000)
+ 
+ 

@@ -6,6 +6,7 @@ import re
 import time
 from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
+from .utils import normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,10 @@ class VMAFAnalyzer(QObject):
     
     def analyze_videos(self, reference_path, distorted_path, model="vmaf_v0.6.1", duration=None):
         """Run VMAF analysis with the correct command format and properly escaped paths"""
+        tmp_json = normalize_path(os.path.join(vmaf_dir, "vmaf.json"), for_ffmpeg=True)
+        tmp_csv = normalize_path(os.path.join(vmaf_dir, "vmaf.csv"), for_ffmpeg=True)
+        tmp_psnr = normalize_path(os.path.join(vmaf_dir, "psnr.txt"), for_ffmpeg=True)
+        tmp_ssim = normalize_path(os.path.join(vmaf_dir, "ssim.txt"), for_ffmpeg=True)       
         try:
             self.status_update.emit(f"Analyzing videos with model: {model}")
 
@@ -62,7 +67,7 @@ class VMAFAnalyzer(QObject):
             vmaf_dir = os.path.join(output_dir, f"vmaf_{timestamp}")
             os.makedirs(vmaf_dir, exist_ok=True)
 
-            # Output filenames - Convert paths to use forward slashes to avoid FFmpeg filter syntax issues
+            # Output filenames - Convert paths to use forward slashes and escape any spaces
             json_path = os.path.join(vmaf_dir, "vmaf_log.json").replace("\\", "/")
             csv_path = os.path.join(vmaf_dir, "vmaf_log.csv").replace("\\", "/")
             psnr_log = os.path.join(vmaf_dir, "psnr_log.txt").replace("\\", "/")
@@ -95,9 +100,21 @@ class VMAFAnalyzer(QObject):
             if duration_cmd:
                 vmaf_cmd.extend(duration_cmd)
 
-            # Add complex filter with exact format from working example
+            # Simplify the filter_complex configuration to avoid issues with paths
+            # Use simpler paths that are less likely to cause escaping issues
+            tmp_json = os.path.join(vmaf_dir, "vmaf.json").replace("\\", "/")
+            tmp_csv = os.path.join(vmaf_dir, "vmaf.csv").replace("\\", "/")
+            tmp_psnr = os.path.join(vmaf_dir, "psnr.txt").replace("\\", "/")
+            tmp_ssim = os.path.join(vmaf_dir, "ssim.txt").replace("\\", "/")
+
+            # Use a simpler filter complex that's less likely to break
             filter_complex = (
-                f"libvmaf=log_path={json_path}:log_fmt=json:model={model_name}:psnr=1:ssim=1"
+                "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
+                "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
+                f"[ref1][dist1]libvmaf=log_path={tmp_json}:log_fmt=json;"
+                f"[ref2][dist2]libvmaf=log_path={tmp_csv}:log_fmt=csv;"
+                f"[0:v][1:v]psnr=stats_file={tmp_psnr};"
+                f"[0:v][1:v]ssim=stats_file={tmp_ssim}"
             )
 
             # Use the -filter_complex parameter instead of -lavfi which seems more compatible
@@ -129,7 +146,6 @@ class VMAFAnalyzer(QObject):
                 logger.error(error_msg)
                 self.error_occurred.emit(error_msg)
                 return None
-
             # Monitor progress
             frame_total = 0
             frame_count = 0
@@ -383,6 +399,22 @@ class VMAFAnalysisThread(QThread):
         self.output_directory = None
         self.test_name = None
 
+    def __del__(self):
+        """Clean up resources when thread is destroyed"""
+        try:
+            # Disconnect all signals to prevent issues during thread destruction
+            self.disconnect()
+            
+            # Also disconnect signals from the analyzer if it exists
+            if hasattr(self, 'analyzer'):
+                self.analyzer.analysis_progress.disconnect()
+                self.analyzer.status_update.disconnect()
+                self.analyzer.error_occurred.disconnect()
+                self.analyzer.analysis_complete.disconnect()
+        except Exception as e:
+            # Just log errors during cleanup but don't raise them
+            pass
+
     def set_output_directory(self, output_dir):
         """Set output directory for results"""
         self.output_directory = output_dir
@@ -406,7 +438,11 @@ class VMAFAnalysisThread(QThread):
 
     def run(self):
         """Run analysis in thread"""
-        try:
+        try:            
+            # Check if thread should exit (in case quit was called right after start)
+            if self.isInterruptionRequested():
+                logger.info("VMAF analysis thread: interruption requested before starting")
+                return           
             self.status_update.emit("Starting VMAF analysis...")
 
             # Report initial progress
