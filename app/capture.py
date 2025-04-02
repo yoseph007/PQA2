@@ -810,10 +810,25 @@ class BookendCaptureManager(QObject):
         return frame
 
     def update_frame_counter(self, current_frame, total_frames):
-        """Update frame counter display"""
-        # This method is connected to CaptureMonitor signals
-        # It can be overridden by child classes to update UI
-        pass
+        """Update frame counter display during capture process"""
+        # This method receives updates from the CaptureMonitor
+        # It emits the status update signal with frame information
+        try:
+            # Format a user-friendly frame counter message
+            if total_frames > 0:
+                percentage = min(100, int((current_frame / total_frames) * 100))
+                frame_msg = f"Capturing: Frame {current_frame}/{total_frames} ({percentage}%)"
+            else:
+                frame_msg = f"Capturing: Frame {current_frame}"
+                
+            # Update status
+            self.status_update.emit(frame_msg)
+            
+            # Log every 100 frames to avoid excessive logging
+            if current_frame % 100 == 0:
+                logger.debug(f"Capture progress: Frame {current_frame}")
+        except Exception as e:
+            logger.error(f"Error updating frame counter: {e}")
 
     def update_capture_progress(self, frame_num):
         """Handle frame progress update and convert to percentage"""
