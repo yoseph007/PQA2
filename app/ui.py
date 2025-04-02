@@ -607,14 +607,13 @@ class MainWindow(QMainWindow):
             if video_files:
                 for video_path in sorted(video_files):
                     self.combo_reference_videos.addItem(os.path.basename(video_path), video_path)
-                # Use logger instead of status_update to avoid attribute error
                 logger.info(f"Found {len(video_files)} reference videos")
             else:
                 self.combo_reference_videos.addItem("No reference videos found", "")
                 logger.info("No reference videos found in the configured directory")
         except Exception as e:
             logger.error(f"Error loading reference videos: {str(e)}")
-            self.combo_reference_videos.addItem(f"Error: {str(e)}", "")
+            self.combo_reference_videos.addItem("Error loading videos", "")
             
     def reference_selected(self, index):
         """Handle reference video selection from dropdown"""

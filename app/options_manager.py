@@ -98,11 +98,19 @@ class OptionsManager(QObject):
             logger.info("Settings updated with new default values")
             self.save_settings()
     
-    def __init__(self, settings_file="settings.json"):
+    def __init__(self, settings_file=None):
         super().__init__()
-        self.settings_file = settings_file
+        if settings_file is None:
+            # Use config directory by default
+            config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
+            os.makedirs(config_dir, exist_ok=True)
+            self.settings_file = os.path.join(config_dir, "settings.json")
+        else:
+            self.settings_file = settings_file
+            
         self.last_save_time = 0  # Track the last time settings were saved
         self.save_debounce_ms = 1000  # Minimum time between saves in milliseconds
+        logger.info(f"Using settings file: {self.settings_file}")
         
         # Default settings
         self.default_settings = {
@@ -251,26 +259,27 @@ class OptionsManager(QObject):
         try:
             # First try using decklink format (for Intensity Shuttle)
             cmd = ["ffmpeg", "-f", "decklink", "-list_formats", "1", "-i", device_name]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             
             # If no useful output, try with DirectShow format
             if "Supported formats" not in result.stderr:
                 logger.info("No formats found using decklink, trying dshow format")
                 # Try DirectShow format (Windows)
                 cmd = ["ffmpeg", "-f", "dshow", "-list_options", "true", "-i", f"video={device_name}"]
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             
             # Parse the error output
             output = result.stderr
             lines = output.split('\n')
             
             logger.info(f"Parsing format output for {device_name}:")
-            for line in lines:
-                logger.info(f"Format line: {line}")
             
             # Extract format information with more robust parsing
             for line in lines:
-                if ("fps" in line or "hz" in line.lower()) and ("format" in line.lower() or "mode" in line.lower()):
+                if "format_code" in line or "description" in line:
+                    continue  # Skip headers
+                    
+                if ("fps" in line or "hz" in line.lower()) and ("format" in line.lower() or "mode" in line.lower() or "x" in line):
                     formats.append(line.strip())
                     
                     # Try to extract resolution with different patterns
@@ -320,6 +329,10 @@ class OptionsManager(QObject):
                             except ValueError:
                                 pass
             
+            # If no formats found, use the defaults
+            if not formats:
+                raise Exception("No formats parsed successfully")
+                
             # Deduplicate and sort
             resolutions = sorted(list(set(resolutions)))
             frame_rates = sorted(list(set(frame_rates)))
