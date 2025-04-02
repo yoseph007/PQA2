@@ -67,6 +67,7 @@ def main():
         # Create and configure capture manager
         capture_manager = CaptureManager()
         capture_manager.path_manager = file_manager
+        capture_manager.options_manager = options_manager
         
         # Create main window and connect to managers
         window = MainWindow(capture_manager, file_manager, options_manager)

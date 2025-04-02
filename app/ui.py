@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
         # Store manager references
         self.capture_mgr = capture_manager
         self.file_mgr = file_manager
-        self.options_mgr = options_manager
+        self.options_manager = options_manager
 
         # Flag to handle headless mode
         self.headless_mode = False
