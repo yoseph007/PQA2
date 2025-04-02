@@ -1,9 +1,9 @@
 {
     "bookend": {
-        "min_loops": 3,
-        "max_capture_time": 120,
+        "min_loops": 2,
+        "max_capture_time": 30,
         "bookend_duration": 0.5,
-        "white_threshold": 240
+        "white_threshold": 244
     },
     "vmaf": {
         "default_model": "vmaf_v0.6.1",
@@ -14,33 +14,20 @@
         ],
         "subsample": 1,
         "threads": 0,
-        "output_format": "json"
+        "output_format": "json",
+        "custom_model_path": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/models/vmaf_v0.6.1.json"
     },
     "capture": {
         "default_device": "Intensity Shuttle",
         "resolution": "1080p",
-        "frame_rate": 30,
-        "pixel_format": "uyvy422",
-        "available_resolutions": [
-            "1080p",
-            "720p",
-            "576p",
-            "480p"
-        ],
-        "available_frame_rates": [
-            23.98,
-            24,
-            25,
-            29.97,
-            30,
-            50,
-            59.94,
-            60
-        ]
+        "frame_rate": 24.0,
+        "pixel_format": "yuyv422",
+        "available_resolutions": [],
+        "available_frame_rates": []
     },
     "paths": {
-        "default_output_dir": "",
-        "reference_video_dir": "",
-        "results_dir": ""
+        "default_output_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results",
+        "reference_video_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Ref_Videos",
+        "results_dir": "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Ref_Results"
     }
 }
