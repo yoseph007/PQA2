@@ -1,4 +1,3 @@
-
 import os
 import sys
 import logging
@@ -52,29 +51,7 @@ def main():
         os.environ["QT_QPA_PLATFORM"] = "offscreen"  # Use offscreen platform which is available
         os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
         headless = True
-        
-    # Configure font paths to resolve Qt font loading issues
-    logger.info("Configuring font paths")
-    if platform.system() == 'Windows':
-        # On Windows, use system fonts
-        import platform
-        from PyQt5.QtGui import QFontDatabase
-        logger.info("Running on Windows, configuring font paths")
-        # Add Windows system fonts directory
-        QFontDatabase.addApplicationFont(os.path.join(os.environ["WINDIR"], "Fonts", "arial.ttf"))
-    else:
-        # On Linux/Replit, configure a font path
-        os.environ["QT_QPA_FONTDIR"] = "/usr/share/fonts"
-</old_str>
-<new_str>
-    # Check if running in headless environment (like Replit)
-    headless = False
-    if 'REPLIT_ENVIRONMENT' in os.environ or not os.environ.get('DISPLAY'):
-        logger.info("Running in headless environment, setting QT_QPA_PLATFORM to offscreen")
-        os.environ["QT_QPA_PLATFORM"] = "offscreen"  # Use offscreen platform which is available
-        os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
-        headless = True
-    
+
     # Configure font paths to resolve Qt font loading issues
     logger.info("Configuring font paths")
     import platform
@@ -106,7 +83,7 @@ def main():
     # Create managers
     options_manager = OptionsManager()
     file_manager = FileManager()
-    
+
     # Initialize capture manager with proper parameters
     capture_manager = CaptureManager()
     # Set options_manager and file_manager after initialization
