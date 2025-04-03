@@ -105,8 +105,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'options_manager') and self.options_manager:
             self.options_manager.settings_updated.connect(self.handle_settings_updated)
 
-        # Initialize reference video dropdown
-        self.setup_tab.refresh_reference_videos()
+        # Reference video selection is now handled via file browser
 
         # Connect tab navigation signals
         self.setup_tab.btn_next_to_capture.clicked.connect(lambda: self.tabs.setCurrentIndex(1))
