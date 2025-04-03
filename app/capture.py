@@ -543,12 +543,24 @@ class BookendCaptureManager(QObject):
             ]
 
             try:
+                # Create startupinfo to suppress Windows error dialogs
+                startupinfo = None
+                creationflags = 0
+                
+                if platform.system() == 'Windows':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = 0  # SW_HIDE
+                    creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                
                 devices_result = subprocess.run(
                     devices_cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    timeout=3
+                    timeout=3,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags
                 )
 
                 # If device name appears in the output, it's likely available
@@ -567,12 +579,24 @@ class BookendCaptureManager(QObject):
             ]
 
             try:
+                # Create startupinfo to suppress Windows error dialogs
+                startupinfo = None
+                creationflags = 0
+                
+                if platform.system() == 'Windows':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = 0  # SW_HIDE
+                    creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                
                 format_result = subprocess.run(
                     format_cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    timeout=3
+                    timeout=3,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags
                 )
 
                 if "Supported formats" in format_result.stderr:
@@ -592,12 +616,24 @@ class BookendCaptureManager(QObject):
             ]
 
             try:
+                # Create startupinfo to suppress Windows error dialogs
+                startupinfo = None
+                creationflags = 0
+                
+                if platform.system() == 'Windows':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = 0  # SW_HIDE
+                    creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                
                 capture_result = subprocess.run(
                     capture_cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    timeout=5
+                    timeout=5,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags
                 )
 
                 stderr = capture_result.stderr.lower()
@@ -1428,6 +1464,29 @@ class CaptureManager(QObject):
         try:
             logger.info("Looking for lingering FFmpeg processes to terminate")
             killed_count = 0
+            
+            if platform.system() == 'Windows':
+                # On Windows, use taskkill for more reliable FFmpeg process termination
+                try:
+                    # Use subprocess with startupinfo to suppress dialog boxes
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = 0  # SW_HIDE
+                    
+                    subprocess.run(
+                        ["taskkill", "/F", "/IM", "ffmpeg.exe"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        startupinfo=startupinfo,
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                    )
+                    logger.info("Used taskkill to terminate FFmpeg processes")
+                    time.sleep(1)  # Give Windows time to fully release resources
+                    return
+                except Exception as e:
+                    logger.warning(f"Taskkill failed, falling back to psutil: {e}")
+            
+            # Standard psutil approach (works on all platforms)
             for proc in psutil.process_iter(['pid', 'name']):
                 if proc.info['name'] and 'ffmpeg' in proc.info['name'].lower():
                     try:
@@ -1707,15 +1766,31 @@ class CaptureManager(QObject):
             # Log command
             logger.info(f"FFmpeg bookend capture command: {' '.join(cmd)}")
 
-            # Start FFmpeg process
-            self.ffmpeg_process = subprocess.Popen(
-                cmd,
-                stderr=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-                universal_newlines=True,
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-            )
+            # Start FFmpeg process with proper error suppression
+            if platform.system() == 'Windows':
+                # Windows-specific settings to suppress error dialogs
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0  # SW_HIDE
+                
+                self.ffmpeg_process = subprocess.Popen(
+                    cmd,
+                    stderr=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    universal_newlines=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                    startupinfo=startupinfo
+                )
+            else:
+                # Regular process creation for non-Windows platforms
+                self.ffmpeg_process = subprocess.Popen(
+                    cmd,
+                    stderr=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    universal_newlines=True
+                )
 
             # Create a more reliable monitor with proper frame estimation based on max_capture_time
             frame_rate = self.reference_info.get('frame_rate', 30)  # Default to 30fps if unknown

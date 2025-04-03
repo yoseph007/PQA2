@@ -300,6 +300,28 @@ def normalize_path(path, for_ffmpeg=False):
     return normalized
 
 
+def get_subprocess_startupinfo():
+    """
+    Get a STARTUPINFO object configured to suppress Windows console windows and error dialogs
+    
+    Returns:
+        Tuple containing (startupinfo, creationflags) for subprocess calls
+    """
+    startupinfo = None
+    creationflags = 0
+    
+    if platform.system() == 'Windows':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0  # SW_HIDE
+        
+        # Use CREATE_NO_WINDOW flag if available
+        if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+            creationflags = subprocess.CREATE_NO_WINDOW
+    
+    return startupinfo, creationflags
+
+
 def get_video_info(video_path):
     """
     Get detailed information about a video file using FFprobe
@@ -326,7 +348,16 @@ def get_video_info(video_path):
             video_path_ffmpeg
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Get startup info to suppress dialogs
+        startupinfo, creationflags = get_subprocess_startupinfo()
+        
+        result = subprocess.run(
+            cmd, 
+            capture_output=True, 
+            text=True,
+            startupinfo=startupinfo,
+            creationflags=creationflags
+        )
         
         if result.returncode != 0:
             logger.error(f"FFprobe failed: {result.stderr}")
