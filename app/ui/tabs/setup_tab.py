@@ -61,10 +61,11 @@ class SetupTab(QWidget):
         preview_layout = QVBoxLayout()
         preview_layout.addWidget(QLabel("Reference Video Preview:"))
         self.video_preview = QLabel()
-        self.video_preview.setMinimumSize(320, 180)
-        self.video_preview.setMaximumSize(640, 360)
+        self.video_preview.setMinimumSize(480, 270)  # Increased size
+        self.video_preview.setMaximumSize(800, 450)  # Increased max size
         self.video_preview.setAlignment(Qt.AlignCenter)
-        self.video_preview.setStyleSheet("background-color: #000000;")
+        # Use theme-aware background that adapts to light/dark mode
+        self.video_preview.setStyleSheet("background-color: rgba(0, 0, 0, 0.8); color: white; border-radius: 4px;")
         self.video_preview.setText("No video selected")
         preview_layout.addWidget(self.video_preview)
         preview_layout.addStretch()
@@ -124,8 +125,9 @@ class SetupTab(QWidget):
         # Determine starting directory
         start_dir = ""
         if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-            paths = self.parent.options_manager.get_setting('paths', {})
-            start_dir = paths.get('reference_video_dir', '')
+            paths = self.parent.options_manager.get_setting('paths')
+            if isinstance(paths, dict):
+                start_dir = paths.get('reference_video_dir', '')
             
         if not start_dir or not os.path.exists(start_dir):
             start_dir = os.path.expanduser("~")
@@ -154,9 +156,11 @@ class SetupTab(QWidget):
             
             # Save the directory to options
             if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-                paths = self.parent.options_manager.get_setting('paths', {})
+                paths = self.parent.options_manager.get_setting('paths')
+                if not isinstance(paths, dict):
+                    paths = {}
                 paths['reference_video_dir'] = ref_dir
-                self.parent.options_manager.update_setting('paths', paths)
+                self.parent.options_manager.update_category('paths', paths)
                 
             # Analyze the selected video
             self.analyze_reference(file_path)
