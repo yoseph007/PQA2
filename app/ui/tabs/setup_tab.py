@@ -34,7 +34,7 @@ class SetupTab(QWidget):
         self.txt_reference_path.setReadOnly(True)
         self.btn_browse_reference = QPushButton("Browse...")
         self.btn_browse_reference.clicked.connect(self.browse_reference_video)
-        
+
         ref_file_layout.addWidget(self.lbl_reference_path)
         ref_file_layout.addWidget(self.txt_reference_path)
         ref_file_layout.addWidget(self.btn_browse_reference)
@@ -53,10 +53,10 @@ class SetupTab(QWidget):
         # Reference details
         self.lbl_reference_details = QLabel("Reference details: None")
         reference_layout.addWidget(self.lbl_reference_details)
-        
+
         # Video preview - arrange side by side with details for larger screens
         preview_area = QHBoxLayout()
-        
+
         # Left side - preview
         preview_layout = QVBoxLayout()
         preview_layout.addWidget(QLabel("Reference Video Preview:"))
@@ -69,7 +69,7 @@ class SetupTab(QWidget):
         self.video_preview.setText("No video selected")
         preview_layout.addWidget(self.video_preview)
         preview_layout.addStretch()
-        
+
         preview_area.addLayout(preview_layout)
         reference_layout.addLayout(preview_area)
 
@@ -126,16 +126,16 @@ class SetupTab(QWidget):
         start_dir = ""
         if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
             paths = self.parent.options_manager.get_setting('paths')
-            if isinstance(paths, dict):
-                start_dir = paths.get('reference_video_dir', '')
-            
+            if isinstance(paths, dict) and 'reference_video_dir' in paths:
+                start_dir = paths['reference_video_dir']
+
         if not start_dir or not os.path.exists(start_dir):
             start_dir = os.path.expanduser("~")
-            
+
         # Store reference directory for display
         self.lbl_ref_dir_path.setText(start_dir)
         self.lbl_ref_dir_path.setToolTip(start_dir)
-            
+
         # Show file dialog
         file_path, _ = QFileDialog.getOpenFileName(
             self,
@@ -143,17 +143,17 @@ class SetupTab(QWidget):
             start_dir,
             "Video Files (*.mp4 *.mov *.avi *.mkv);;All Files (*.*)"
         )
-        
+
         if file_path and os.path.exists(file_path):
             # Update UI
             self.txt_reference_path.setText(file_path)
             self.txt_reference_path.setToolTip(file_path)
-            
+
             # Update directory display
             ref_dir = os.path.dirname(file_path)
             self.lbl_ref_dir_path.setText(ref_dir)
             self.lbl_ref_dir_path.setToolTip(ref_dir)
-            
+
             # Save the directory to options
             if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
                 paths = self.parent.options_manager.get_setting('paths')
@@ -161,10 +161,10 @@ class SetupTab(QWidget):
                     paths = {}
                 paths['reference_video_dir'] = ref_dir
                 self.parent.options_manager.update_category('paths', paths)
-                
+
             # Analyze the selected video
             self.analyze_reference(file_path)
-            
+
     def analyze_reference(self, file_path):
         """Analyze reference video to extract metadata"""
         self.log_to_setup(f"Analyzing reference video: {os.path.basename(file_path)}")
@@ -212,7 +212,7 @@ class SetupTab(QWidget):
             details += "\nWhite bookend frames detected at beginning"
 
         self.lbl_reference_details.setText(details)
-        
+
         # Load video preview
         self.load_video_preview(info['path'])
 
@@ -302,20 +302,20 @@ class SetupTab(QWidget):
         try:
             import cv2
             from PyQt5.QtGui import QImage, QPixmap
-            
+
             # Open the video file
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
                 self.video_preview.setText("Error: Could not open video")
                 return
-                
+
             # Read the first frame
             ret, frame = cap.read()
             if not ret:
                 self.video_preview.setText("Error: Could not read video frame")
                 cap.release()
                 return
-                
+
             # Get the middle frame for preview
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             if total_frames > 10:
@@ -326,15 +326,15 @@ class SetupTab(QWidget):
                     # Fall back to first frame if middle frame fails
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     ret, frame = cap.read()
-            
+
             # Convert frame to RGB format (OpenCV uses BGR)
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
+
             # Calculate scaled dimensions to fit the preview area
             h, w, ch = frame_rgb.shape
             preview_w = self.video_preview.width()
             preview_h = self.video_preview.height()
-            
+
             # Calculate aspect ratio-preserving dimensions
             if w/h > preview_w/preview_h:  # Width-limited
                 new_w = preview_w
@@ -342,22 +342,22 @@ class SetupTab(QWidget):
             else:  # Height-limited
                 new_h = preview_h
                 new_w = int(w * (preview_h / h))
-            
+
             # Resize the frame
             resized = cv2.resize(frame_rgb, (new_w, new_h))
-            
+
             # Convert the resized frame to QImage and then to QPixmap
             bytes_per_line = ch * new_w
             q_img = QImage(resized.data, new_w, new_h, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(q_img)
-            
+
             # Set the pixmap to the QLabel
             self.video_preview.setPixmap(pixmap)
             self.video_preview.setAlignment(Qt.AlignCenter)
-            
+
             # Release the video capture
             cap.release()
-            
+
         except Exception as e:
             logger.error(f"Error creating video preview: {str(e)}")
             import traceback
