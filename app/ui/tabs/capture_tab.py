@@ -326,8 +326,8 @@ class CaptureTab(QWidget):
         self.log_to_capture("Starting bookend capture process...")
 
         # Get output directory and test name
-        output_dir = self.parent.setup_tab.lbl_output_dir.text()
-        if output_dir == "Default output directory":
+        output_dir = self.parent.setup_tab.txt_output_dir.text()
+        if not output_dir or output_dir == "Default output directory":
             if hasattr(self.parent, 'file_manager'):
                 output_dir = self.parent.file_manager.get_default_base_dir()
             else:
@@ -336,7 +336,7 @@ class CaptureTab(QWidget):
                 os.makedirs(output_dir, exist_ok=True)
 
         # Add timestamp prefix to test name to prevent overwriting
-        base_test_name = self.parent.setup_tab.txt_test_name.currentText()
+        base_test_name = self.parent.setup_tab.txt_test_name.text()
         test_name = f"{base_test_name}"
 
         self.log_to_capture(f"Using test name: {test_name}")

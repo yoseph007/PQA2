@@ -259,7 +259,7 @@ class ResultsTab(QWidget):
             self.results_table.setRowCount(0)
             
             # Get output directory
-            output_dir = self.parent.setup_tab.lbl_output_dir.text()
+            output_dir = self.parent.setup_tab.txt_output_dir.text()
             if output_dir == "Default output directory" and hasattr(self.parent, 'file_manager'):
                 output_dir = self.parent.file_manager.get_default_base_dir()
             
