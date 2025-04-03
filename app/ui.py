@@ -2351,29 +2351,46 @@ class MainWindow(QMainWindow):
                 self.lbl_format_info.setText("Using default formats (detection failed)")
 
             # Also update the hidden fields for backward compatibility
-            if format_info["resolutions"]:
+            # Extract unique resolutions from format_map
+            resolutions = []
+            if "format_map" in format_info and format_info["format_map"]:
+                resolutions = list(format_info["format_map"].keys())
+            
+            if resolutions:
                 self.combo_resolution.clear()
-                for res in format_info["resolutions"]:
+                for res in resolutions:
                     self.combo_resolution.addItem(res)
+                format_info["resolutions"] = resolutions
             else:
                 # If no resolutions detected, fall back to defaults
                 default_resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
                 self.combo_resolution.clear()
                 for res in default_resolutions:
                     self.combo_resolution.addItem(res)
-                format_info["resolutions"] = default_resolutions
+                format_info["resolutions"] = default_resolutionsions
 
-            if format_info["frame_rates"]:
-                self.combo_frame_rate.clear()
-                for rate in format_info["frame_rates"]:
-                    self.combo_frame_rate.addItem(str(rate))
-            else:
-                # If no frame rates detected, fall back to defaults
-                default_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
-                self.combo_frame_rate.clear()
-                for rate in default_rates:
-                    self.combo_frame_rate.addItem(str(rate))
-                format_info["frame_rates"] = default_rates
+            # Extract all frame rates from format_map
+    frame_rates = []
+    if "format_map" in format_info and format_info["format_map"]:
+        for res in format_info["format_map"]:
+            for rate in format_info["format_map"][res]:
+                if rate not in frame_rates:
+                    frame_rates.append(rate)
+        # Sort the frame rates
+        frame_rates.sort()
+    
+    if frame_rates:
+        self.combo_frame_rate.clear()
+        for rate in frame_rates:
+            self.combo_frame_rate.addItem(str(rate))
+        format_info["frame_rates"] = frame_rates
+    else:
+        # If no frame rates detected, fall back to defaults
+        default_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+        self.combo_frame_rate.clear()
+        for rate in default_rates:
+            self.combo_frame_rate.addItem(str(rate))
+        format_info["frame_rates"] = default_rates
 
             # Update settings
             new_capture_settings = self.options_manager.get_setting("capture")
