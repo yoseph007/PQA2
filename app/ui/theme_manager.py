@@ -16,13 +16,14 @@ class ThemeManager:
     def set_theme(self, theme_name):
         """Set theme and update settings"""
         if hasattr(self.options_manager, 'update_setting'):
-            # Update the theme setting
-            if isinstance(self.options_manager.get_setting("theme"), dict):
-                # If theme is stored as a dict, update the selected_theme key
-                self.options_manager.update_setting("theme", "selected_theme", theme_name)
+            # Update the theme setting in branding
+            if isinstance(self.options_manager.get_setting("branding"), dict):
+                # If branding is stored as a dict, update the selected_theme key
+                self.options_manager.update_setting("branding", "selected_theme", theme_name)
             else:
-                # If theme is stored as a string, update the whole theme setting
-                self.options_manager.update_setting("theme", None, {"selected_theme": theme_name})
+                # If branding is stored as a string or not defined, create it
+                branding_settings = {"selected_theme": theme_name}
+                self.options_manager.set_setting("branding", branding_settings)
             
             # Apply the new theme
             self.apply_current_theme()
@@ -30,16 +31,16 @@ class ThemeManager:
     def apply_current_theme(self):
         """Apply the current theme stored in settings to the application"""
         try:
-            # Get theme settings
-            theme_settings = self.options_manager.get_setting("theme")
+            # Get theme settings from branding
+            branding_settings = self.options_manager.get_setting("branding")
             # Handle both dictionary and string theme settings
             theme = "System"  # Default
             
-            if isinstance(theme_settings, dict):
-                theme = theme_settings.get("selected_theme", "System")
-            elif isinstance(theme_settings, str):
+            if isinstance(branding_settings, dict):
+                theme = branding_settings.get("selected_theme", "System")
+            elif isinstance(branding_settings, str):
                 # If theme_settings is a string, it's the theme name
-                theme = theme_settings
+                theme = branding_settings
             
             # Apply theme
             app = QApplication.instance()
@@ -68,11 +69,11 @@ class ThemeManager:
                     text_color = "#FFFFFF"
                     accent_color = "#007ACC"
                     
-                    # Try to get colors from settings with fallbacks
-                    if isinstance(theme_settings, dict):
-                        bg_color = theme_settings.get("bg_color", bg_color)
-                        text_color = theme_settings.get("text_color", text_color)
-                        accent_color = theme_settings.get("accent_color", accent_color)
+                    # Try to get colors from branding settings with fallbacks
+                    if isinstance(branding_settings, dict):
+                        bg_color = branding_settings.get("bg_color", bg_color)
+                        text_color = branding_settings.get("text_color", text_color)
+                        accent_color = branding_settings.get("accent_color", accent_color)
                     
                     palette.setColor(QPalette.Window, QColor(bg_color))
                     palette.setColor(QPalette.WindowText, QColor(text_color))

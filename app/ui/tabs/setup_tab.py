@@ -143,28 +143,52 @@ class SetupTab(QWidget):
                     video_files.append(os.path.join(ref_dir, file))
 
             # Update UI on the main thread
-            from PyQt5.QtCore import QCoreApplication
-            QCoreApplication.processEvents()
+            from PyQt5.QtCore import QCoreApplication, QMetaObject, Qt
+            from PyQt5.QtWidgets import QApplication
+            
+            # Clear the combo box
             self.combo_reference_videos.clear()
+            
             if video_files:
-                for video_path in sorted(video_files):
-                    # Ensure the path is a string, not a dict or other unhashable type
-                    if isinstance(video_path, str) and os.path.exists(video_path):
-                        # Add the item with basename as display text and full path as data
-                        basename = os.path.basename(video_path)
-                        self.combo_reference_videos.addItem(basename, video_path)
+                # Use signal-safe method to update the combobox
+                def update_combo():
+                    for video_path in sorted(video_files):
+                        if isinstance(video_path, str) and os.path.exists(video_path):
+                            basename = os.path.basename(video_path)
+                            self.combo_reference_videos.addItem(basename)
+                            # Store the path as a string in the item data
+                            index = self.combo_reference_videos.count() - 1
+                            self.combo_reference_videos.setItemData(index, video_path, Qt.UserRole)
+                    self.combo_reference_videos.setEnabled(True)
+                
+                # Execute on the main thread
+                QMetaObject.invokeMethod(self, update_combo, Qt.QueuedConnection)
                 logger.info(f"Found {len(video_files)} reference videos")
             else:
-                self.combo_reference_videos.addItem("No reference videos found", "")
+                # No videos found
+                def no_videos():
+                    self.combo_reference_videos.addItem("No reference videos found")
+                    self.combo_reference_videos.setItemData(0, "", Qt.UserRole)
+                    self.combo_reference_videos.setEnabled(True)
+                
+                QMetaObject.invokeMethod(self, no_videos, Qt.QueuedConnection)
                 logger.info("No reference videos found in the configured directory")
-            self.combo_reference_videos.setEnabled(True)
+            
+            # Process events to ensure UI updates
+            QCoreApplication.processEvents()
         except Exception as e:
             logger.error(f"Error loading reference videos: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-            self.combo_reference_videos.addItem("Error loading videos")
-            self.combo_reference_videos.setItemData(0, "")
-            self.combo_reference_videos.setEnabled(True)
+            
+            # Handle error in a thread-safe way
+            def handle_error():
+                self.combo_reference_videos.clear()
+                self.combo_reference_videos.addItem("Error loading videos")
+                self.combo_reference_videos.setItemData(0, "", Qt.UserRole)
+                self.combo_reference_videos.setEnabled(True)
+            
+            QMetaObject.invokeMethod(self, handle_error, Qt.QueuedConnection)
 
 
     def reference_selected(self, index):
@@ -172,7 +196,10 @@ class SetupTab(QWidget):
         if index < 0:
             return
 
-        file_path = self.combo_reference_videos.itemData(index)
+        from PyQt5.QtCore import Qt
+        
+        # Get file path from user role
+        file_path = self.combo_reference_videos.itemData(index, Qt.UserRole)
         # Log the value for debugging
         logger.debug(f"Selected reference video data: {file_path} (type: {type(file_path)})")
         

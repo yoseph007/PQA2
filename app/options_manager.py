@@ -65,21 +65,18 @@ class OptionsManager(QObject):
                 "results_dir": "",
                 "temp_dir": ""
             },
-            # Theme and branding settings
-            "theme": {
-                "selected_theme": "System",
-                "bg_color": "#2D2D30",
-                "text_color": "#FFFFFF",
-                "accent_color": "#007ACC",
-                "logo_path": ""
-            },
             # White-label branding
             "branding": {
                 "app_name": "VMAF Test App",
                 "company_name": "Chroma",
                 "enable_white_label": False,
                 "footer_text": "© 2025 Chroma",
-                "primary_color": "#4CAF50"
+                "primary_color": "#4CAF50",
+                "selected_theme": "System",
+                "bg_color": "#2D2D30",
+                "text_color": "#FFFFFF",
+                "accent_color": "#007ACC",
+                "logo_path": ""
             }
         }
 
