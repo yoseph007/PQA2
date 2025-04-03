@@ -47,12 +47,20 @@ def main():
 
     # Check if running in headless environment (like Replit)
     headless = False
-    # Only use headless mode in Replit environment, not on local machines
-    if 'REPLIT_ENVIRONMENT' in os.environ:
-        logger.info("Running in Replit environment, setting QT_QPA_PLATFORM to offscreen")
+    # Check for Replit environment in multiple ways
+    if 'REPLIT_ENVIRONMENT' in os.environ or os.path.exists('/.replit'):
+        logger.info("Running in Replit environment, setting headless mode and QT_QPA_PLATFORM")
         os.environ["QT_QPA_PLATFORM"] = "offscreen"  # Use offscreen platform which is available
         os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
         headless = True
+        
+        # Display a message about limitations in Replit
+        print("\n=====================================================")
+        print("NOTICE: Running in Replit environment")
+        print("This app is designed for local hardware and may have limited")
+        print("functionality in Replit. Capture features requiring Blackmagic")
+        print("hardware will not be available.")
+        print("=====================================================\n")
     # For local machines on Windows, force GUI mode
     elif platform.system() == 'Windows':
         logger.info("Running on Windows local machine, forcing GUI mode")

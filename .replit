@@ -95,7 +95,7 @@ name = "Run VMAF Debug"
 exec = "python vmaf_debug.py -r models/reference_video.mp4 -d models/distorted_video.mp4"
 
 [workflows]
-runButton = "Run VMAF App with VNC"
+runButton = "Run VMAF App"
 
 [[workflows.workflow]]
 name = "Run VMAF App"
