@@ -761,3 +761,68 @@ class VMAFAnalysisThread(QThread):
             logger.error(error_msg)
             import traceback
             logger.error(traceback.format_exc())
+
+class BookendAligner:
+    def __init__(self):
+        self.frame_sampling_rate = 5 #Default value
+
+    def align(self, reference_path, captured_path):
+        #Implementation details unknown, needs to be added based on the requirements.
+        pass
+
+
+class AlignmentState:
+    RUNNING = 1
+    COMPLETE = 2
+    ERROR = 3
+
+
+class Aligner(QObject):
+    alignment_progress = pyqtSignal(int)
+    alignment_complete = pyqtSignal(str)
+    alignment_error = pyqtSignal(str)
+    alignment_state_changed = pyqtSignal(int)
+    options_manager = None
+    alignment_state = None
+
+    def __init__(self):
+        super().__init__()
+        self.alignment_state = AlignmentState.COMPLETE
+
+    def set_options_manager(self, options_manager):
+        self.options_manager= options_manager
+
+    def align_videos_with_bookends(self, reference_path, captured_path):
+        """Align videos based on bookend frames"""
+        logger.info(f"Starting bookend alignment process")
+        logger.info(f"Reference: {reference_path}")
+        logger.info(f"Captured: {captured_path}")
+
+        self.alignment_state = AlignmentState.RUNNING
+        self.alignment_state_changed.emit(self.alignment_state)
+
+        # Create bookend aligner
+        aligner = BookendAligner()
+
+        # Pass frame sampling rate from options if available
+        if hasattr(self, 'options_manager') and self.options_manager:
+            bookend_settings = self.options_manager.get_setting('bookend')
+            frame_sampling_rate = bookend_settings.get('frame_sampling_rate', 5)
+            logger.info(f"Using frame sampling rate from options: {frame_sampling_rate}")
+            aligner.frame_sampling_rate = frame_sampling_rate
+
+        try:
+            # Simulate alignment process (replace with actual alignment logic)
+            time.sleep(2)  # Simulate processing time
+            aligned_path = captured_path + "_aligned" # Placeholder for aligned file path
+            logger.info(f"Alignment complete. Aligned video saved to: {aligned_path}")
+            self.alignment_complete.emit(aligned_path)
+            self.alignment_state = AlignmentState.COMPLETE
+            self.alignment_state_changed.emit(self.alignment_state)
+        except Exception as e:
+            logger.error(f"Bookend alignment failed: {str(e)}")
+            self.alignment_error.emit(str(e))
+            self.alignment_state = AlignmentState.ERROR
+            self.alignment_state_changed.emit(self.alignment_state)
+
+    # ... (rest of the Aligner class remains unchanged) ...

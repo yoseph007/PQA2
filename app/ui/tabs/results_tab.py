@@ -259,12 +259,21 @@ class ResultsTab(QWidget):
             # Get output directory
             output_dir = self.parent.setup_tab.txt_output_dir.text()
             if not output_dir or output_dir == "Default output directory":
-                if hasattr(self.parent, 'file_mgr'):
+                if hasattr(self.parent, 'file_mgr') and hasattr(self.parent.file_mgr, 'get_default_base_dir'):
                     output_dir = self.parent.file_mgr.get_default_base_dir()
+                elif hasattr(self.parent, 'options_manager'):
+                    # Get path from options manager
+                    paths = self.parent.options_manager.get_setting('paths', {})
+                    output_dir = paths.get('default_output_dir', '')
+                    if not output_dir:
+                        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "tests", "test_results")
                 else:
                     # Fallback to a default directory
-                    output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tests", "test_results")
-                    os.makedirs(output_dir, exist_ok=True)
+                    output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "tests", "test_results")
+                
+                # Ensure directory exists
+                os.makedirs(output_dir, exist_ok=True)
+                logger.info(f"Using results directory: {output_dir}")
 
             if not os.path.exists(output_dir):
                 logger.warning(f"Output directory does not exist: {output_dir}")

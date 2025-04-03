@@ -628,9 +628,11 @@ class BookendAligner(QObject):
                 if hasattr(self, 'frame_sampling_rate') and self.frame_sampling_rate is not None:
                     # Use user-configured sampling rate (1-30)
                     sample_rate = min(30, max(1, self.frame_sampling_rate))
+                    logger.info(f"Using configured frame sampling rate: {sample_rate}")
                 else:
                     # Default behavior - check more frames for stricter thresholds
                     sample_rate = 5 if threshold_idx < 2 else 3
+                    logger.info(f"Using default frame sampling rate: {sample_rate}")
 
                 # Minimum frames to consider as bookend
                 min_white_frames = max(1, int(0.15 * fps / sample_rate))  # At least 0.15 seconds
