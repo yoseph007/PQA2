@@ -52,6 +52,47 @@ def main():
         os.environ["QT_QPA_PLATFORM"] = "offscreen"  # Use offscreen platform which is available
         os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
         headless = True
+        
+    # Configure font paths to resolve Qt font loading issues
+    logger.info("Configuring font paths")
+    if platform.system() == 'Windows':
+        # On Windows, use system fonts
+        import platform
+        from PyQt5.QtGui import QFontDatabase
+        logger.info("Running on Windows, configuring font paths")
+        # Add Windows system fonts directory
+        QFontDatabase.addApplicationFont(os.path.join(os.environ["WINDIR"], "Fonts", "arial.ttf"))
+    else:
+        # On Linux/Replit, configure a font path
+        os.environ["QT_QPA_FONTDIR"] = "/usr/share/fonts"
+</old_str>
+<new_str>
+    # Check if running in headless environment (like Replit)
+    headless = False
+    if 'REPLIT_ENVIRONMENT' in os.environ or not os.environ.get('DISPLAY'):
+        logger.info("Running in headless environment, setting QT_QPA_PLATFORM to offscreen")
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"  # Use offscreen platform which is available
+        os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
+        headless = True
+    
+    # Configure font paths to resolve Qt font loading issues
+    logger.info("Configuring font paths")
+    import platform
+    if platform.system() == 'Windows':
+        # On Windows, use system fonts
+        from PyQt5.QtGui import QFontDatabase
+        logger.info("Running on Windows, configuring font paths")
+        # Add Windows system fonts directory
+        if "WINDIR" in os.environ:
+            QFontDatabase.addApplicationFont(os.path.join(os.environ["WINDIR"], "Fonts", "arial.ttf"))
+    else:
+        # On Linux/Replit, configure a font path
+        if os.path.exists("/usr/share/fonts"):
+            os.environ["QT_QPA_FONTDIR"] = "/usr/share/fonts"
+        # Create a fonts directory and add a font file if it doesn't exist
+        fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+        if not os.path.exists(fonts_dir):
+            os.makedirs(fonts_dir, exist_ok=True)
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="VMAF Test App")
