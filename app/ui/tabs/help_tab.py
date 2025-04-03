@@ -458,6 +458,17 @@ class HelpTab(QWidget):
                     <li>More accurately reflects human perception than traditional metrics like PSNR</li>
                     <li>Updated through multiple versions with various optimization targets (standard, 4K, phone, etc.)</li>
                 </ul>
+                
+                <h3>Enhanced VMAF Analysis</h3>
+                <p>This application uses an enhanced VMAF analysis approach that improves consistency of results by:</p>
+                <ul>
+                    <li>Preprocessing videos to match frame rates and resolutions before analysis</li>
+                    <li>Using consistent pixel formats for more reliable comparison</li>
+                    <li>Optimizing VMAF commands based on video characteristics</li>
+                    <li>Identifying problem segments with low quality</li>
+                    <li>Providing detailed frame-by-frame analysis</li>
+                </ul>
+                <p>When consistency issues are detected, the application will warn you and provide more detailed information about the variation in quality scores.</p>
             </div>
 
             <h2>VMAF Models</h2>

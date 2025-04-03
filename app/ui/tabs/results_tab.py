@@ -7,7 +7,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                            QLabel, QTabWidget, QGroupBox, QListWidget, 
                            QListWidgetItem, QTableWidget, QTableWidgetItem,
-                           QAbstractItemView, QHeaderView, QMessageBox)
+                           QAbstractItemView, QHeaderView, QMessageBox, QTextEdit)
 from PyQt5.QtCore import Qt
 
 logger = logging.getLogger(__name__)
