@@ -1,6 +1,7 @@
-
 import os
 import logging
+import sys
+import platform
 from datetime import datetime
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter
 from PyQt5.QtCore import Qt, QTimer
@@ -48,7 +49,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("VMAF Test App")
         self.setGeometry(100, 100, 1200, 800)
         self.setFixedSize(1200, 800)  # Set fixed size to prevent resizing
-        
+
         # Set application icon/logo
         self._set_application_logo()
 
@@ -59,7 +60,7 @@ class MainWindow(QMainWindow):
 
         # Create tabs
         self.tabs = QTabWidget()
-        
+
         # Create tab widgets
         self.setup_tab = SetupTab(self)
         self.capture_tab = CaptureTab(self)
@@ -78,7 +79,7 @@ class MainWindow(QMainWindow):
 
         # Status bar
         self.statusBar().showMessage("Ready")
-        
+
         # Apply theme
         self.theme_manager.apply_current_theme()
 
@@ -103,7 +104,7 @@ class MainWindow(QMainWindow):
 
         # Initialize reference video dropdown
         self.setup_tab.refresh_reference_videos()
-        
+
         # Connect tab navigation signals
         self.setup_tab.btn_next_to_capture.clicked.connect(lambda: self.tabs.setCurrentIndex(1))
         self.capture_tab.btn_prev_to_setup.clicked.connect(lambda: self.tabs.setCurrentIndex(0))
@@ -118,7 +119,7 @@ class MainWindow(QMainWindow):
 
         # Update device status indicator in capture tab
         self.capture_tab.populate_devices_and_check_status()
-        
+
         # Apply theme if changed
         self.theme_manager.apply_current_theme()
 
@@ -171,14 +172,14 @@ class MainWindow(QMainWindow):
             logo_path = None
             if hasattr(self, 'options_manager') and self.options_manager:
                 theme_settings = self.options_manager.get_setting("theme")
-                
+
                 # Handle both dictionary and string theme settings
                 if isinstance(theme_settings, dict):
                     logo_path = theme_settings.get("logo_path", "")
                 elif isinstance(theme_settings, str):
                     # If theme_settings is a string, it's just the theme name
                     logo_path = ""
-                
+
             # If not set or doesn't exist, use default
             if not logo_path or not os.path.exists(logo_path):
                 # Try multiple potential logo locations
@@ -188,23 +189,23 @@ class MainWindow(QMainWindow):
                     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
                                "assets", "chroma-logo.png")
                 ]
-                
+
                 for path in possible_paths:
                     if os.path.exists(path):
                         logo_path = path
                         break
-            
+
             # Set the window icon if the logo exists
             if logo_path and os.path.exists(logo_path):
                 from PyQt5.QtGui import QIcon
                 self.setWindowIcon(QIcon(logo_path))
-                
+
                 # Store the logo path for future reference
                 self.logo_path = logo_path
                 logger.info(f"Set application logo: {logo_path}")
             else:
                 logger.warning("Could not find a valid logo file")
-                
+
         except Exception as e:
             logger.error(f"Error setting application logo: {str(e)}")
             import traceback
@@ -230,7 +231,7 @@ class MainWindow(QMainWindow):
         # Call parent close event
         logger.info("Cleanup complete, proceeding with application close")
         super().closeEvent(event)
-        
+
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated before proceeding"""
         # Check each tab's threads
