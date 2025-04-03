@@ -18,7 +18,14 @@ class ThemeManager:
         try:
             # Get theme settings
             theme_settings = self.options_manager.get_setting("theme", {})
-            theme = theme_settings.get("selected_theme", "System")
+            # Handle both dictionary and string theme settings
+            theme = "System"  # Default
+            
+            if isinstance(theme_settings, dict):
+                theme = theme_settings.get("selected_theme", "System")
+            else:
+                # If theme_settings is a string, it's the theme name
+                theme = theme_settings
             
             # Apply theme
             app = QApplication.instance()
@@ -39,11 +46,19 @@ class ThemeManager:
                     app.setStyleSheet("")
                     app.setPalette(app.style().standardPalette())
                 elif theme == "Custom":
-                    # Use custom colors
+                    # Use custom colors with safety checks
                     palette = QPalette()
-                    bg_color = theme_settings.get("bg_color", "#2D2D30")
-                    text_color = theme_settings.get("text_color", "#FFFFFF")
-                    accent_color = theme_settings.get("accent_color", "#007ACC")
+                    
+                    # Default colors
+                    bg_color = "#2D2D30"
+                    text_color = "#FFFFFF"
+                    accent_color = "#007ACC"
+                    
+                    # Try to get colors from settings with fallbacks
+                    if isinstance(theme_settings, dict):
+                        bg_color = theme_settings.get("bg_color", bg_color)
+                        text_color = theme_settings.get("text_color", text_color)
+                        accent_color = theme_settings.get("accent_color", accent_color)
                     
                     palette.setColor(QPalette.Window, QColor(bg_color))
                     palette.setColor(QPalette.WindowText, QColor(text_color))
@@ -64,3 +79,8 @@ class ThemeManager:
             
         except Exception as e:
             logger.error(f"Error applying theme: {str(e)}")
+            # Apply default theme as fallback
+            app = QApplication.instance()
+            if app:
+                app.setStyleSheet("")
+                app.setPalette(app.style().standardPalette())

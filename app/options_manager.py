@@ -64,6 +64,22 @@ class OptionsManager(QObject):
                 "reference_video_dir": "",
                 "results_dir": "",
                 "temp_dir": ""
+            },
+            # Theme and branding settings
+            "theme": {
+                "selected_theme": "System",
+                "bg_color": "#2D2D30",
+                "text_color": "#FFFFFF",
+                "accent_color": "#007ACC",
+                "logo_path": ""
+            },
+            # White-label branding
+            "branding": {
+                "app_name": "VMAF Test App",
+                "company_name": "Chroma",
+                "enable_white_label": False,
+                "footer_text": "© 2025 Chroma",
+                "primary_color": "#4CAF50"
             }
         }
 
@@ -162,6 +178,10 @@ class OptionsManager(QObject):
             default_value = self.default_settings[category][key]
 
         return self.settings[category].get(key, default_value)
+        
+    def get_settings(self):
+        """Get all settings"""
+        return self.settings
 
     def update_setting(self, category, key, value):
         """Update a specific setting"""

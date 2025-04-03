@@ -252,10 +252,85 @@ class OptionsTab(QWidget):
         debug_group.setLayout(debug_layout)
         advanced_layout.addWidget(debug_group)
         
+        # Theme and Branding tab
+        theme_tab = QWidget()
+        theme_layout = QVBoxLayout(theme_tab)
+        
+        # UI Theme settings
+        ui_theme_group = QGroupBox("UI Theme")
+        ui_theme_layout = QFormLayout()
+        
+        self.combo_theme_selection = QComboBox()
+        self.combo_theme_selection.addItems(["System", "Light", "Dark", "Custom"])
+        ui_theme_layout.addRow("Theme:", self.combo_theme_selection)
+        
+        # Custom theme colors
+        self.color_bg = QLineEdit("#2D2D30")
+        ui_theme_layout.addRow("Background Color:", self.color_bg)
+        self.btn_pick_bg = QPushButton("...")
+        self.btn_pick_bg.setMaximumWidth(30)
+        self.btn_pick_bg.clicked.connect(lambda: self.pick_color(self.color_bg))
+        ui_theme_layout.addWidget(self.btn_pick_bg)
+        
+        self.color_text = QLineEdit("#FFFFFF")
+        ui_theme_layout.addRow("Text Color:", self.color_text)
+        self.btn_pick_text = QPushButton("...")
+        self.btn_pick_text.setMaximumWidth(30)
+        self.btn_pick_text.clicked.connect(lambda: self.pick_color(self.color_text))
+        ui_theme_layout.addWidget(self.btn_pick_text)
+        
+        self.color_accent = QLineEdit("#007ACC")
+        ui_theme_layout.addRow("Accent Color:", self.color_accent)
+        self.btn_pick_accent = QPushButton("...")
+        self.btn_pick_accent.setMaximumWidth(30)
+        self.btn_pick_accent.clicked.connect(lambda: self.pick_color(self.color_accent))
+        ui_theme_layout.addWidget(self.btn_pick_accent)
+        
+        ui_theme_group.setLayout(ui_theme_layout)
+        theme_layout.addWidget(ui_theme_group)
+        
+        # White-label branding settings
+        branding_group = QGroupBox("White-Label Branding")
+        branding_layout = QFormLayout()
+        
+        self.check_enable_white_label = QCheckBox()
+        branding_layout.addRow("Enable White-Label:", self.check_enable_white_label)
+        
+        self.txt_app_name = QLineEdit("VMAF Test App")
+        branding_layout.addRow("Application Name:", self.txt_app_name)
+        
+        self.txt_company_name = QLineEdit("Chroma")
+        branding_layout.addRow("Company Name:", self.txt_company_name)
+        
+        self.txt_footer_text = QLineEdit("© 2025 Chroma")
+        branding_layout.addRow("Footer Text:", self.txt_footer_text)
+        
+        self.color_primary = QLineEdit("#4CAF50")
+        branding_layout.addRow("Primary Brand Color:", self.color_primary)
+        self.btn_pick_primary = QPushButton("...")
+        self.btn_pick_primary.setMaximumWidth(30)
+        self.btn_pick_primary.clicked.connect(lambda: self.pick_color(self.color_primary))
+        branding_layout.addWidget(self.btn_pick_primary)
+        
+        # Logo selection
+        logo_layout = QHBoxLayout()
+        logo_layout.addWidget(QLabel("Logo:"))
+        self.txt_logo_path = QLineEdit()
+        self.txt_logo_path.setReadOnly(True)
+        logo_layout.addWidget(self.txt_logo_path)
+        self.btn_browse_logo = QPushButton("Browse...")
+        self.btn_browse_logo.clicked.connect(self.browse_logo)
+        logo_layout.addWidget(self.btn_browse_logo)
+        branding_layout.addRow(logo_layout)
+        
+        branding_group.setLayout(branding_layout)
+        theme_layout.addWidget(branding_group)
+        
         # Add tabs to options tabwidget
         options_tabs.addTab(general_tab, "General")
         options_tabs.addTab(capture_tab, "Capture")
         options_tabs.addTab(analysis_tab, "Analysis")
+        options_tabs.addTab(theme_tab, "Theme & Branding")
         options_tabs.addTab(advanced_tab, "Advanced")
         
         layout.addWidget(options_tabs)
@@ -281,111 +356,187 @@ class OptionsTab(QWidget):
                 settings = self.parent.options_manager.get_settings()
                 
                 # Populate directories
-                self.txt_ref_dir.setText(settings.get('reference_dir', ''))
-                self.txt_output_dir.setText(settings.get('output_dir', ''))
-                self.txt_vmaf_dir.setText(settings.get('vmaf_models_dir', ''))
-                self.txt_ffmpeg_path.setText(settings.get('ffmpeg_path', ''))
+                paths = settings.get('paths', {})
+                self.txt_ref_dir.setText(paths.get('reference_video_dir', ''))
+                self.txt_output_dir.setText(paths.get('default_output_dir', ''))
+                self.txt_vmaf_dir.setText(paths.get('models_dir', ''))
+                self.txt_ffmpeg_path.setText(paths.get('ffmpeg_path', ''))
                 
                 # Populate capture settings
-                self.combo_capture_api.setCurrentText(settings.get('capture_api', 'dshow'))
-                self.combo_pixel_format.setCurrentText(settings.get('pixel_format', 'uyvy422'))
-                self.combo_default_resolution.setCurrentText(settings.get('default_resolution', '1920x1080'))
-                self.combo_default_fps.setCurrentText(settings.get('default_fps', '29.97'))
+                capture = settings.get('capture', {})
+                self.combo_capture_api.setCurrentText(capture.get('capture_api', 'dshow'))
+                self.combo_pixel_format.setCurrentText(capture.get('pixel_format', 'uyvy422'))
+                self.combo_default_resolution.setCurrentText(capture.get('resolution', '1920x1080'))
+                self.combo_default_fps.setCurrentText(str(capture.get('frame_rate', '29.97')))
                 
                 # Populate bookend settings
-                self.spin_bookend_duration.setValue(float(settings.get('bookend_duration', 0.5)))
-                self.spin_min_loops.setValue(int(settings.get('min_loops', 3)))
-                self.spin_max_loops.setValue(int(settings.get('max_loops', 5)))
-                self.spin_bookend_threshold.setValue(int(settings.get('bookend_threshold', 230)))
+                bookend = settings.get('bookend', {})
+                self.spin_bookend_duration.setValue(float(bookend.get('bookend_duration', 0.5)))
+                self.spin_min_loops.setValue(int(bookend.get('min_loops', 3)))
+                self.spin_max_loops.setValue(int(bookend.get('max_loops', 5)))
+                self.spin_bookend_threshold.setValue(int(bookend.get('white_threshold', 230)))
                 
                 # Populate encoder settings
-                self.combo_default_encoder.setCurrentText(settings.get('default_encoder', 'libx264'))
-                self.spin_default_crf.setValue(int(settings.get('default_crf', 23)))
-                self.spin_default_preset.setCurrentText(settings.get('default_preset', 'medium'))
+                encoder = settings.get('encoder', {})
+                self.combo_default_encoder.setCurrentText(encoder.get('default_encoder', 'libx264'))
+                self.spin_default_crf.setValue(int(encoder.get('default_crf', 23)))
+                self.spin_default_preset.setCurrentText(encoder.get('default_preset', 'medium'))
                 
                 # Populate analysis settings
+                vmaf = settings.get('vmaf', {})
                 self.check_use_temp_files.setChecked(settings.get('use_temp_files', True))
-                self.check_save_json.setChecked(settings.get('save_json', True))
-                self.check_save_plots.setChecked(settings.get('save_plots', True))
+                self.check_save_json.setChecked(vmaf.get('save_json', True))
+                self.check_save_plots.setChecked(vmaf.get('save_plots', True))
                 self.check_auto_alignment.setChecked(settings.get('auto_alignment', True))
                 self.combo_alignment_method.setCurrentText(settings.get('alignment_method', 'Bookend Detection'))
                 
                 # Populate VMAF models and set default
                 self._populate_vmaf_models()
-                default_model = settings.get('default_vmaf_model', 'vmaf_v0.6.1')
+                default_model = vmaf.get('default_model', 'vmaf_v0.6.1')
                 index = self.combo_default_vmaf_model.findText(default_model)
                 if index >= 0:
                     self.combo_default_vmaf_model.setCurrentIndex(index)
                 
                 # Populate debug settings
-                self.combo_log_level.setCurrentText(settings.get('log_level', 'INFO'))
-                self.check_save_logs.setChecked(settings.get('save_logs', True))
-                self.check_show_commands.setChecked(settings.get('show_commands', True))
+                debug = settings.get('debug', {})
+                self.combo_log_level.setCurrentText(debug.get('log_level', 'INFO'))
+                self.check_save_logs.setChecked(debug.get('save_logs', True))
+                self.check_show_commands.setChecked(debug.get('show_commands', True))
                 
-                # Populate theme
-                self.combo_theme.setCurrentText(settings.get('theme', 'System'))
+                # Populate theme settings
+                theme = settings.get('theme', {})
+                if isinstance(theme, dict):
+                    self.combo_theme.setCurrentText(theme.get('selected_theme', 'System'))
+                    
+                    # Load custom theme settings if they exist
+                    if hasattr(self, 'combo_theme_selection'):
+                        self.combo_theme_selection.setCurrentText(theme.get('selected_theme', 'System'))
+                        self.color_bg.setText(theme.get('bg_color', '#2D2D30'))
+                        self.color_text.setText(theme.get('text_color', '#FFFFFF'))
+                        self.color_accent.setText(theme.get('accent_color', '#007ACC'))
+                        self.txt_logo_path.setText(theme.get('logo_path', ''))
+                else:
+                    # If theme is a string (legacy format)
+                    self.combo_theme.setCurrentText(theme if theme else 'System')
+                    if hasattr(self, 'combo_theme_selection'):
+                        self.combo_theme_selection.setCurrentText(theme if theme else 'System')
+                
+                # Populate branding settings
+                branding = settings.get('branding', {})
+                if hasattr(self, 'check_enable_white_label'):
+                    self.check_enable_white_label.setChecked(branding.get('enable_white_label', False))
+                    self.txt_app_name.setText(branding.get('app_name', 'VMAF Test App'))
+                    self.txt_company_name.setText(branding.get('company_name', 'Chroma'))
+                    self.txt_footer_text.setText(branding.get('footer_text', '© 2025 Chroma'))
+                    self.color_primary.setText(branding.get('primary_color', '#4CAF50'))
                 
                 # Populate device dropdown
-                devices = self.parent.options_manager.get_decklink_devices()
-                self.combo_device_for_formats.clear()
-                for device in devices:
-                    self.combo_device_for_formats.addItem(device)
+                if hasattr(self, 'combo_device_for_formats'):
+                    devices = self.parent.options_manager.get_decklink_devices()
+                    self.combo_device_for_formats.clear()
+                    for device in devices:
+                        self.combo_device_for_formats.addItem(device)
                 
                 logger.info("Settings loaded successfully")
             except Exception as e:
                 logger.error(f"Error loading settings: {e}")
+                # Print traceback for debugging
+                import traceback
+                logger.error(traceback.format_exc())
     
     def save_settings(self):
         """Save current settings to options manager"""
         if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
             try:
+                # Create settings in a structured format
                 settings = {
-                    # Directories
-                    'reference_dir': self.txt_ref_dir.text(),
-                    'output_dir': self.txt_output_dir.text(),
-                    'vmaf_models_dir': self.txt_vmaf_dir.text(),
-                    'ffmpeg_path': self.txt_ffmpeg_path.text(),
+                    # Paths
+                    'paths': {
+                        'reference_video_dir': self.txt_ref_dir.text(),
+                        'default_output_dir': self.txt_output_dir.text(),
+                        'models_dir': self.txt_vmaf_dir.text(),
+                        'ffmpeg_path': self.txt_ffmpeg_path.text(),
+                    },
                     
                     # Capture settings
-                    'capture_api': self.combo_capture_api.currentText(),
-                    'pixel_format': self.combo_pixel_format.currentText(),
-                    'default_resolution': self.combo_default_resolution.currentText(),
-                    'default_fps': self.combo_default_fps.currentText(),
+                    'capture': {
+                        'capture_api': self.combo_capture_api.currentText(),
+                        'pixel_format': self.combo_pixel_format.currentText(),
+                        'resolution': self.combo_default_resolution.currentText(),
+                        'frame_rate': self.combo_default_fps.currentText(),
+                    },
                     
                     # Bookend settings
-                    'bookend_duration': self.spin_bookend_duration.value(),
-                    'min_loops': self.spin_min_loops.value(),
-                    'max_loops': self.spin_max_loops.value(),
-                    'bookend_threshold': self.spin_bookend_threshold.value(),
+                    'bookend': {
+                        'bookend_duration': self.spin_bookend_duration.value(),
+                        'min_loops': self.spin_min_loops.value(),
+                        'max_loops': self.spin_max_loops.value(),
+                        'white_threshold': self.spin_bookend_threshold.value(),
+                    },
                     
                     # Encoder settings
-                    'default_encoder': self.combo_default_encoder.currentText(),
-                    'default_crf': self.spin_default_crf.value(),
-                    'default_preset': self.spin_default_preset.currentText(),
+                    'encoder': {
+                        'default_encoder': self.combo_default_encoder.currentText(),
+                        'default_crf': self.spin_default_crf.value(),
+                        'default_preset': self.spin_default_preset.currentText(),
+                    },
                     
                     # Analysis settings
-                    'use_temp_files': self.check_use_temp_files.isChecked(),
-                    'save_json': self.check_save_json.isChecked(),
-                    'save_plots': self.check_save_plots.isChecked(),
-                    'auto_alignment': self.check_auto_alignment.isChecked(),
-                    'alignment_method': self.combo_alignment_method.currentText(),
-                    'default_vmaf_model': self.combo_default_vmaf_model.currentText(),
+                    'vmaf': {
+                        'default_model': self.combo_default_vmaf_model.currentText(),
+                        'save_json': self.check_save_json.isChecked(),
+                        'save_plots': self.check_save_plots.isChecked(),
+                    },
+                    
+                    # Analysis general settings
+                    'analysis': {
+                        'use_temp_files': self.check_use_temp_files.isChecked(),
+                        'auto_alignment': self.check_auto_alignment.isChecked(),
+                        'alignment_method': self.combo_alignment_method.currentText(),
+                    },
                     
                     # Debug settings
-                    'log_level': self.combo_log_level.currentText(),
-                    'save_logs': self.check_save_logs.isChecked(),
-                    'show_commands': self.check_show_commands.isChecked(),
-                    
-                    # Theme
-                    'theme': self.combo_theme.currentText()
+                    'debug': {
+                        'log_level': self.combo_log_level.currentText(),
+                        'save_logs': self.check_save_logs.isChecked(),
+                        'show_commands': self.check_show_commands.isChecked(),
+                    }
                 }
                 
+                # Add theme settings if they exist
+                if hasattr(self, 'combo_theme_selection'):
+                    settings['theme'] = {
+                        'selected_theme': self.combo_theme_selection.currentText(),
+                        'bg_color': self.color_bg.text(),
+                        'text_color': self.color_text.text(),
+                        'accent_color': self.color_accent.text(),
+                        'logo_path': self.txt_logo_path.text()
+                    }
+                else:
+                    settings['theme'] = {
+                        'selected_theme': self.combo_theme.currentText()
+                    }
+                
+                # Add branding settings if they exist
+                if hasattr(self, 'check_enable_white_label'):
+                    settings['branding'] = {
+                        'enable_white_label': self.check_enable_white_label.isChecked(),
+                        'app_name': self.txt_app_name.text(),
+                        'company_name': self.txt_company_name.text(),
+                        'footer_text': self.txt_footer_text.text(),
+                        'primary_color': self.color_primary.text()
+                    }
+                
+                # Update settings
                 self.parent.options_manager.update_settings(settings)
                 QMessageBox.information(self, "Settings Saved", "Settings have been saved successfully.")
                 logger.info("Settings saved successfully")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save settings: {e}")
                 logger.error(f"Error saving settings: {e}")
+                # Print traceback for debugging
+                import traceback
+                logger.error(traceback.format_exc())
     
     def reset_settings(self):
         """Reset settings to defaults"""
@@ -497,9 +648,40 @@ class OptionsTab(QWidget):
         """Handle theme selection change"""
         if hasattr(self.parent, 'theme_manager'):
             self.parent.theme_manager.set_theme(theme_name)
+            
+    def pick_color(self, text_field):
+        """Open a color picker dialog and set the selected color"""
+        try:
+            from PyQt5.QtWidgets import QColorDialog
+            from PyQt5.QtGui import QColor
+            
+            current_color = text_field.text()
+            color = QColorDialog.getColor(QColor(current_color), self, "Select Color")
+            
+            if color.isValid():
+                text_field.setText(color.name())
+        except Exception as e:
+            logger.error(f"Error picking color: {e}")
+            
+    def browse_logo(self):
+        """Browse for logo file"""
+        file_filter = "Images (*.png *.jpg *.jpeg *.gif *.bmp);;All Files (*.*)"
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Logo Image",
+            self.txt_logo_path.text() or os.path.expanduser("~"),
+            file_filter
+        )
+        
+        if file_path:
+            self.txt_logo_path.setText(file_path)
     
     def _populate_device_list(self):
         """Populate the device dropdown with available devices"""
+        if not hasattr(self, 'combo_device_for_formats'):
+            logger.warning("Device formats combo box not initialized yet")
+            return
+            
         if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
             try:
                 devices = self.parent.options_manager.get_decklink_devices()

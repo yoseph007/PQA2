@@ -171,21 +171,37 @@ class MainWindow(QMainWindow):
             logo_path = None
             if hasattr(self, 'options_manager') and self.options_manager:
                 theme_settings = self.options_manager.get_setting("theme", {})
-                logo_path = theme_settings.get("logo_path", "")
-            
+                
+                # Handle both dictionary and string theme settings
+                if isinstance(theme_settings, dict):
+                    logo_path = theme_settings.get("logo_path", "")
+                
             # If not set or doesn't exist, use default
             if not logo_path or not os.path.exists(logo_path):
-                # Use the Chroma logo from assets
-                logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
-                                      "attached_assets", "chroma-logo.png")
+                # Try multiple potential logo locations
+                possible_paths = [
+                    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                               "attached_assets", "chroma-logo.png"),
+                    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                               "assets", "chroma-logo.png")
+                ]
+                
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        logo_path = path
+                        break
             
             # Set the window icon if the logo exists
-            if os.path.exists(logo_path):
+            if logo_path and os.path.exists(logo_path):
                 from PyQt5.QtGui import QIcon
                 self.setWindowIcon(QIcon(logo_path))
                 
                 # Store the logo path for future reference
                 self.logo_path = logo_path
+                logger.info(f"Set application logo: {logo_path}")
+            else:
+                logger.warning("Could not find a valid logo file")
+                
         except Exception as e:
             logger.error(f"Error setting application logo: {str(e)}")
 
