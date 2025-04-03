@@ -46,10 +46,20 @@ def main():
 
     # Check if running in headless environment (like Replit)
     headless = False
-    if 'REPLIT_ENVIRONMENT' in os.environ or not os.environ.get('DISPLAY'):
-        logger.info("Running in headless environment, setting QT_QPA_PLATFORM to offscreen")
+    # Only use headless mode in Replit environment, not on local machines
+    if 'REPLIT_ENVIRONMENT' in os.environ:
+        logger.info("Running in Replit environment, setting QT_QPA_PLATFORM to offscreen")
         os.environ["QT_QPA_PLATFORM"] = "offscreen"  # Use offscreen platform which is available
         os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
+        headless = True
+    # For local machines on Windows, force GUI mode
+    elif platform.system() == 'Windows':
+        logger.info("Running on Windows local machine, forcing GUI mode")
+        headless = False
+    # For other systems, check for display
+    elif not os.environ.get('DISPLAY'):
+        logger.info("No display detected on non-Windows system, setting headless mode")
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
         headless = True
 
     # Configure font paths to resolve Qt font loading issues
