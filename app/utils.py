@@ -8,6 +8,60 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+def get_ffmpeg_path():
+    """
+    Get path to ffmpeg executables
+    
+    Returns:
+        Tuple of (ffmpeg_exe, ffprobe_exe, ffplay_exe) paths
+    """
+    # Find the root directory of the application
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # The directory might be 'app' or we might be at the root already
+    # Try to determine the actual root directory
+    if os.path.basename(current_dir) == "app":
+        root_dir = os.path.dirname(current_dir)  # Go up one level if we're in the app directory
+    else:
+        root_dir = current_dir  # We're already at the root
+    
+    logger.info(f"Root directory determined to be: {root_dir}")
+    
+    # Check if ffmpeg_bin exists at the root level
+    ffmpeg_bin_dir = os.path.join(root_dir, "ffmpeg_bin")
+    if not os.path.exists(ffmpeg_bin_dir):
+        # If not, check adjacent to the app directory
+        ffmpeg_bin_dir = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "ffmpeg_bin")
+        if not os.path.exists(ffmpeg_bin_dir):
+            # As a last resort, just use the current directory
+            ffmpeg_bin_dir = current_dir
+    
+    logger.info(f"Using FFmpeg bin directory: {ffmpeg_bin_dir}")
+    
+    ffmpeg_exe = os.path.join(ffmpeg_bin_dir, "ffmpeg.exe")
+    ffprobe_exe = os.path.join(ffmpeg_bin_dir, "ffprobe.exe") 
+    ffplay_exe = os.path.join(ffmpeg_bin_dir, "ffplay.exe")
+    
+    # Check if files exist
+    if not os.path.exists(ffmpeg_exe):
+        logger.warning(f"FFmpeg executable not found at {ffmpeg_exe}")
+        # Try to find ffmpeg.exe in PATH
+        ffmpeg_exe = "ffmpeg.exe"
+    if not os.path.exists(ffprobe_exe):
+        logger.warning(f"FFprobe executable not found at {ffprobe_exe}")
+        # Try to find ffprobe.exe in PATH
+        ffprobe_exe = "ffprobe.exe"
+    if not os.path.exists(ffplay_exe):
+        logger.warning(f"FFplay executable not found at {ffplay_exe}")
+        # Try to find ffplay.exe in PATH  
+        ffplay_exe = "ffplay.exe"
+    
+    logger.info(f"FFmpeg path: {ffmpeg_exe}")
+    logger.info(f"FFprobe path: {ffprobe_exe}")
+    
+    return (ffmpeg_exe, ffprobe_exe, ffplay_exe)
+
+
 class FileManager:
     """
     Manages file paths and temporary files for the application
@@ -161,31 +215,6 @@ class FileManager:
 
         return success
 
-    def get_default_base_dir(self):
-        """
-        Get default base directory for test results
-        
-        Returns:
-            Default base directory path
-        """
-        # If base_dir is already set, use it
-        if self.base_dir:
-            return self.base_dir
-
-        # Otherwise, create default in project tests/test_results folder
-        try:
-            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            base_path = os.path.join(script_dir, "tests", "test_results")
-
-            # Ensure it exists
-            os.makedirs(base_path, exist_ok=True)
-            return base_path
-        except Exception as e:
-            # Fallback to current directory
-            fallback_path = os.path.join(os.getcwd(), 'test_results')
-            os.makedirs(fallback_path, exist_ok=True)
-            return fallback_path
-
     def __del__(self):
         """Cleanup on object destruction"""
         try:
@@ -282,13 +311,19 @@ def get_video_info(video_path):
         Dictionary with video information or None on error
     """
     try:
+        # Get FFprobe executable path
+        ffmpeg_exe, ffprobe_exe, ffplay_exe = get_ffmpeg_path()
+        
+        # Normalize path for FFprobe
+        video_path_ffmpeg = video_path.replace("\\", "/")
+        
         cmd = [
-            "ffprobe",
+            ffprobe_exe,
             "-v", "quiet",
             "-print_format", "json",
             "-show_format", 
             "-show_streams",
-            video_path
+            video_path_ffmpeg
         ]
         
         result = subprocess.run(cmd, capture_output=True, text=True)
