@@ -349,7 +349,7 @@ class VMAFAnalyzer(QObject):
             return False
     
     def _parse_vmaf_results(self, json_path, psnr_path, ssim_path, distorted_path, reference_path, current_dir):
-        """Parse VMAF results from the output files"""
+        """Parse VMAF results from the output files, with additional parsing for PSNR and SSIM from separate files"""
         try:
             # Check if output files exist
             if not os.path.exists(json_path.replace("/", "\\")):
@@ -412,6 +412,48 @@ class VMAFAnalyzer(QObject):
                             psnr_score = sum(psnr_values) / len(psnr_values)
                         if ssim_values:
                             ssim_score = sum(ssim_values) / len(ssim_values)
+
+                # Try to parse PSNR from separate file if not found in VMAF data
+                if psnr_score is None and os.path.exists(psnr_path.replace("/", "\\")):
+                    try:
+                        with open(psnr_path.replace("/", "\\"), 'r') as f:
+                            psnr_data = f.read()
+                        
+                        # Extract average PSNR value
+                        psnr_match = re.search(r'average:(\d+\.\d+)', psnr_data)
+                        if psnr_match:
+                            psnr_score = float(psnr_match.group(1))
+                            logger.info(f"Parsed PSNR from separate file: {psnr_score}")
+                        
+                        # Alternative format parsing
+                        if not psnr_match:
+                            psnr_match = re.search(r'PSNR\s+average:\s+(\d+\.\d+)', psnr_data)
+                            if psnr_match:
+                                psnr_score = float(psnr_match.group(1))
+                                logger.info(f"Parsed PSNR from separate file (alt format): {psnr_score}")
+                    except Exception as e:
+                        logger.warning(f"Error parsing PSNR file: {str(e)}")
+                
+                # Try to parse SSIM from separate file if not found in VMAF data
+                if ssim_score is None and os.path.exists(ssim_path.replace("/", "\\")):
+                    try:
+                        with open(ssim_path.replace("/", "\\"), 'r') as f:
+                            ssim_data = f.read()
+                        
+                        # Extract average SSIM value - common patterns
+                        ssim_match = re.search(r'All:(\d+\.\d+)', ssim_data)
+                        if ssim_match:
+                            ssim_score = float(ssim_match.group(1))
+                            logger.info(f"Parsed SSIM from separate file: {ssim_score}")
+                        
+                        # Alternative format parsing
+                        if not ssim_match:
+                            ssim_match = re.search(r'SSIM\s+average:\s+(\d+\.\d+)', ssim_data)
+                            if ssim_match:
+                                ssim_score = float(ssim_match.group(1))
+                                logger.info(f"Parsed SSIM from separate file (alt format): {ssim_score}")
+                    except Exception as e:
+                        logger.warning(f"Error parsing SSIM file: {str(e)}")
 
                 # Log results
                 logger.info(f"VMAF Score: {vmaf_score}")

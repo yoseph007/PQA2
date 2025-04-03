@@ -237,16 +237,17 @@ class MainWindow(QMainWindow):
         self.lbl_capture_status = QLabel("Ready to capture")
         capture_layout.addWidget(self.lbl_capture_status)
 
-        # Progress bar and frame counter in same row
+        # Progress bar without frame counter
         progress_layout = QHBoxLayout()
         self.pb_capture_progress = QProgressBar()
         self.pb_capture_progress.setTextVisible(True)
         self.pb_capture_progress.setAlignment(Qt.AlignCenter)
+        self.pb_capture_progress.setMinimumWidth(300)
         progress_layout.addWidget(self.pb_capture_progress)
-
-        # Add frame counter label
-        self.lbl_capture_frame_counter = QLabel("Frames: 0 / 0")
-        progress_layout.addWidget(self.lbl_capture_frame_counter)
+        
+        # Keep frame counter for internal use, but don't display it
+        self.lbl_capture_frame_counter = QLabel("")
+        self.lbl_capture_frame_counter.setVisible(False)
 
         capture_layout.addLayout(progress_layout)
 
@@ -334,10 +335,14 @@ class MainWindow(QMainWindow):
         log_group.setLayout(log_layout)
         right_layout.addWidget(log_group)
 
-        # Add widgets to splitter
+        # Add widgets to splitter with 50/50 split
         splitter.addWidget(left_widget)
         splitter.addWidget(right_widget)
-        splitter.setSizes([350, 650])
+        splitter.setSizes([500, 500])  # 50/50 split
+        
+        # Set a minimum width for both panes to prevent unwanted resizing
+        left_widget.setMinimumWidth(400)
+        right_widget.setMinimumWidth(400)
 
         # Add splitter to layout
         layout.addWidget(splitter)
@@ -1113,31 +1118,67 @@ class MainWindow(QMainWindow):
             self._show_placeholder_image(f"Preview error: {str(e)}")
 
     def _show_placeholder_image(self, message="No video feed"):
-        """Show a placeholder image with text when no video is available"""
+        """Show an enhanced status display with text when no video is available"""
         try:
-            # Create a blank image
+            # Create a blank image with better styling
             placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
-            placeholder[:] = (224, 224, 224)  # Light gray background
-
-            # Add text
+            placeholder[:] = (240, 240, 240)  # Lighter gray background
+            
+            # Add a header bar
+            cv2.rectangle(placeholder, (0, 0), (480, 40), (70, 130, 180), -1)  # Blue header
+            
+            # Add header text
             font = cv2.FONT_HERSHEY_SIMPLEX
-            text_size = cv2.getTextSize(message, font, 0.7, 2)[0]
-            text_x = (placeholder.shape[1] - text_size[0]) // 2
-            text_y = (placeholder.shape[0] + text_size[1]) // 2
-            cv2.putText(placeholder, message, (text_x, text_y), font, 0.7, (0, 0, 0), 2)
-
+            cv2.putText(placeholder, "STATUS MONITOR", (160, 27), font, 0.7, (255, 255, 255), 2)
+            
+            # Split message into multiple lines if needed
+            max_line_length = 40
+            words = message.split()
+            lines = []
+            current_line = ""
+            
+            for word in words:
+                if len(current_line + " " + word) <= max_line_length:
+                    current_line += " " + word if current_line else word
+                else:
+                    lines.append(current_line)
+                    current_line = word
+            
+            if current_line:
+                lines.append(current_line)
+            
+            # Add each line of text
+            y_position = 80
+            for line in lines:
+                text_size = cv2.getTextSize(line, font, 0.6, 1)[0]
+                x_position = (placeholder.shape[1] - text_size[0]) // 2
+                cv2.putText(placeholder, line, (x_position, y_position), font, 0.6, (0, 0, 0), 1)
+                y_position += 30
+            
+            # Add a footer with timestamp
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            footer_text = f"Updated: {timestamp}"
+            cv2.putText(placeholder, footer_text, (10, 250), font, 0.5, (100, 100, 100), 1)
+            
+            # Add a border around the image
+            cv2.rectangle(placeholder, (0, 0), (479, 269), (200, 200, 200), 1)
+            
             # Convert to QImage and display
             rgb_image = cv2.cvtColor(placeholder, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
             q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
             self.lbl_preview.setPixmap(QPixmap.fromImage(q_img))
+            
+            # Also update status text
+            if hasattr(self, 'lbl_preview_status'):
+                self.lbl_preview_status.setText(f"Status: {message.split('.')[0]}")
 
         except Exception as e:
-            logger.error(f"Error creating placeholder: {str(e)}")
+            logger.error(f"Error creating status display: {str(e)}")
             # Fallback to text-only label
             self.lbl_preview.setText(message)
-            self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black;")
+            self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black; padding: 10px;")
 
     def run_combined_analysis(self):
         """Run video alignment and VMAF analysis in sequence"""
