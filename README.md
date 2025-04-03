@@ -1,13 +1,15 @@
 # VMAF Test Application
 
+⚠️ **NOTE: This application requires local hardware (Blackmagic capture device) and is designed to run on your local machine, not in cloud environments like Replit.**
+
 ## Features
-- Blackmagic capture device support
+- Blackmagic capture device support (requires local hardware connection)
 - Frame-perfect video alignment
 - VMAF quality analysis
 - Cross-platform GUI
 - Automated video analysis with PSNR and SSIM metrics
 
-## Installation & Usage
+## Installation & Usage (Local Machine Only)
 
 ### Quick Start
 ```bash
