@@ -2,8 +2,9 @@
 import logging
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                            QLabel, QComboBox, QProgressBar, QGroupBox, QMessageBox,
-                           QTextEdit)
+                           QTextEdit, QStyle)
 from PyQt5.QtCore import Qt
+import os  # Required for file path operations
 
 logger = logging.getLogger(__name__)
 
