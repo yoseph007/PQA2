@@ -145,7 +145,7 @@ class ResultsTab(QWidget):
     def update_with_results(self, results):
         """Update UI with VMAF analysis results"""
         # Update test name in header
-        test_name = self.parent.setup_tab.txt_test_name.currentText()
+        test_name = self.parent.setup_tab.txt_test_name.text()
         self.lbl_results_summary.setText(f"VMAF Analysis Results for {test_name}")
 
         # Update metrics display
@@ -724,10 +724,10 @@ class ResultsTab(QWidget):
         self.lbl_results_summary.setText("No VMAF analysis results yet")
 
         # Increment test number
-        test_name = self.parent.setup_tab.txt_test_name.currentText()
+        test_name = self.parent.setup_tab.txt_test_name.text()
         if test_name.startswith("Test_") and len(test_name) > 5 and test_name[5:].isdigit():
             next_num = int(test_name[5:]) + 1
-            self.parent.setup_tab.txt_test_name.setCurrentText(f"Test_{next_num:02d}")
+            self.parent.setup_tab.txt_test_name.setText(f"Test_{next_num:02d}")
 
         # Go back to capture tab
         self.parent.tabs.setCurrentIndex(1)

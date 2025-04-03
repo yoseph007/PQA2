@@ -1,8 +1,10 @@
 import os
 import logging
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                            QLabel, QComboBox, QGroupBox, QFileDialog, QMessageBox)
+                            QLabel, QComboBox, QGroupBox, QFileDialog, QMessageBox,
+                            QLineEdit)
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QImage, QPixmap
 import threading
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,18 @@ class SetupTab(QWidget):
         # Reference details
         self.lbl_reference_details = QLabel("Reference details: None")
         reference_layout.addWidget(self.lbl_reference_details)
+        
+        # Video preview area
+        preview_layout = QVBoxLayout()
+        preview_layout.addWidget(QLabel("Reference Video Preview:"))
+        self.video_preview = QLabel()
+        self.video_preview.setMinimumSize(320, 180)
+        self.video_preview.setMaximumSize(640, 360)
+        self.video_preview.setAlignment(Qt.AlignCenter)
+        self.video_preview.setStyleSheet("background-color: #000000;")
+        self.video_preview.setText("No video selected")
+        preview_layout.addWidget(self.video_preview)
+        reference_layout.addLayout(preview_layout)
 
         # Add to group
         reference_group.setLayout(reference_layout)
@@ -61,11 +75,8 @@ class SetupTab(QWidget):
         # Test name
         test_name_layout = QHBoxLayout()
         test_name_layout.addWidget(QLabel("Test Name:"))
-        self.txt_test_name = QComboBox()
-        self.txt_test_name.setEditable(True)
-        self.txt_test_name.addItem("Test_01")
-        self.txt_test_name.addItem("Test_02")
-        self.txt_test_name.addItem("Test_03")
+        self.txt_test_name = QLineEdit("Test_01")
+        self.txt_test_name.setPlaceholderText("Enter test name...")
         test_name_layout.addWidget(self.txt_test_name)
         output_layout.addLayout(test_name_layout)
 
@@ -247,6 +258,9 @@ class SetupTab(QWidget):
             details += "\nWhite bookend frames detected at beginning"
 
         self.lbl_reference_details.setText(details)
+        
+        # Load video preview
+        self.load_video_preview(info['path'])
 
         # Update setup status
         self.lbl_setup_status.setText("Reference video loaded successfully")
@@ -328,3 +342,70 @@ class SetupTab(QWidget):
                 logger.warning("Reference thread didn't respond to quit - forcing termination")
                 self.reference_thread.terminate()
                 self.reference_thread.wait(1000)
+
+    def load_video_preview(self, video_path):
+        """Load and display a preview frame from the video"""
+        try:
+            import cv2
+            from PyQt5.QtGui import QImage, QPixmap
+            
+            # Open the video file
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                self.video_preview.setText("Error: Could not open video")
+                return
+                
+            # Read the first frame
+            ret, frame = cap.read()
+            if not ret:
+                self.video_preview.setText("Error: Could not read video frame")
+                cap.release()
+                return
+                
+            # Get the middle frame for preview
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if total_frames > 10:
+                # Seek to middle frame
+                cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
+                ret, frame = cap.read()
+                if not ret:
+                    # Fall back to first frame if middle frame fails
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    ret, frame = cap.read()
+            
+            # Convert frame to RGB format (OpenCV uses BGR)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Calculate scaled dimensions to fit the preview area
+            h, w, ch = frame_rgb.shape
+            preview_w = self.video_preview.width()
+            preview_h = self.video_preview.height()
+            
+            # Calculate aspect ratio-preserving dimensions
+            if w/h > preview_w/preview_h:  # Width-limited
+                new_w = preview_w
+                new_h = int(h * (preview_w / w))
+            else:  # Height-limited
+                new_h = preview_h
+                new_w = int(w * (preview_h / h))
+            
+            # Resize the frame
+            resized = cv2.resize(frame_rgb, (new_w, new_h))
+            
+            # Convert the resized frame to QImage and then to QPixmap
+            bytes_per_line = ch * new_w
+            q_img = QImage(resized.data, new_w, new_h, bytes_per_line, QImage.Format_RGB888)
+            pixmap = QPixmap.fromImage(q_img)
+            
+            # Set the pixmap to the QLabel
+            self.video_preview.setPixmap(pixmap)
+            self.video_preview.setAlignment(Qt.AlignCenter)
+            
+            # Release the video capture
+            cap.release()
+            
+        except Exception as e:
+            logger.error(f"Error creating video preview: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            self.video_preview.setText(f"Error loading preview: {str(e)}")
