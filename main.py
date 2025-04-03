@@ -1,8 +1,8 @@
-
 import os
 import sys
 import logging
 import argparse
+import platform
 from PyQt5.QtWidgets import QApplication
 
 # Set Python path to include current directory
@@ -47,11 +47,15 @@ def main():
 
     # Check if running in headless environment (like Replit)
     headless = False
-    if 'REPLIT_ENVIRONMENT' in os.environ or not os.environ.get('DISPLAY'):
-        logger.info("Running in Replit environment, set QT_QPA_PLATFORM to vnc")
-        os.environ["QT_QPA_PLATFORM"] = "vnc"  # Use VNC instead of offscreen for preview
+    # Only use headless mode in Replit environment, not on local machines
+    if 'REPLIT_ENVIRONMENT' in os.environ:
+        logger.info("Running in Replit environment, setting QT_QPA_PLATFORM to offscreen")
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"  # Use offscreen platform which is available
         os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
         headless = True
+    # For local machines on Windows, force GUI mode
+    elif platform.system() == 'Windows':
+        logger.info("Running on Windows local machine, forcing GUI mode")
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="VMAF Test App")
@@ -65,7 +69,7 @@ def main():
     # Create managers
     options_manager = OptionsManager()
     file_manager = FileManager()
-    
+
     # Initialize capture manager with proper parameters
     capture_manager = CaptureManager()
     # Set options_manager and file_manager after initialization
