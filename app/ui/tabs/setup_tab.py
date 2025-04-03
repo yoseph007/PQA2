@@ -93,6 +93,22 @@ class SetupTab(QWidget):
         self.txt_test_name.setValidator(validator)
         test_name_layout.addWidget(self.txt_test_name)
         output_layout.addLayout(test_name_layout)
+        
+        # Tester name field
+        tester_name_layout = QHBoxLayout()
+        tester_name_layout.addWidget(QLabel("Tester Name:"))
+        self.txt_tester_name = QLineEdit()
+        self.txt_tester_name.setPlaceholderText("Enter tester's name")
+        tester_name_layout.addWidget(self.txt_tester_name)
+        output_layout.addLayout(tester_name_layout)
+        
+        # Test location field
+        test_location_layout = QHBoxLayout()
+        test_location_layout.addWidget(QLabel("Test Location:"))
+        self.txt_test_location = QLineEdit()
+        self.txt_test_location.setPlaceholderText("Enter test location")
+        test_location_layout.addWidget(self.txt_test_location)
+        output_layout.addLayout(test_location_layout)
 
         output_group.setLayout(output_layout)
         left_column.addWidget(output_group)

@@ -1,5 +1,6 @@
 
 import logging
+import json
 from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                            QLabel, QComboBox, QProgressBar, QGroupBox, QMessageBox,
@@ -266,12 +267,24 @@ class AnalysisTab(QWidget):
         # Reset VMAF progress
         self.pb_vmaf_progress.setValue(0)
 
-        # Get test name and output directory
+        # Get test metadata from setup tab
         # Check if txt_test_name is a QComboBox or QLineEdit
         if hasattr(self.parent.setup_tab.txt_test_name, 'currentText') and callable(self.parent.setup_tab.txt_test_name.currentText):
             test_name = self.parent.setup_tab.txt_test_name.currentText()
         else:
             test_name = self.parent.setup_tab.txt_test_name.text()
+            
+        # Get tester name and location
+        tester_name = self.parent.setup_tab.txt_tester_name.text()
+        test_location = self.parent.setup_tab.txt_test_location.text()
+        
+        # Save test metadata to file after VMAF analysis
+        self.test_metadata = {
+            "test_name": test_name,
+            "tester_name": tester_name,
+            "test_location": test_location,
+            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
 
         # Get output directory
         output_dir = self.parent.setup_tab.txt_output_dir.text()
@@ -327,6 +340,33 @@ class AnalysisTab(QWidget):
         vmaf_score = results.get('vmaf_score')
         psnr = results.get('psnr')
         ssim = results.get('ssim')
+        
+        # Save test metadata to JSON file in the test directory
+        try:
+            if hasattr(self, 'test_metadata') and results.get('json_path'):
+                # Get the test directory from the VMAF results
+                test_dir = os.path.dirname(results.get('json_path'))
+                
+                # Add results to metadata
+                metadata = self.test_metadata.copy()
+                metadata.update({
+                    "vmaf_score": vmaf_score,
+                    "psnr_score": psnr,
+                    "ssim_score": ssim,
+                    "reference_path": results.get('reference_path'),
+                    "distorted_path": results.get('distorted_path')
+                })
+                
+                # Save metadata to JSON file
+                metadata_path = os.path.join(test_dir, f"{self.test_metadata['test_name']}_{self.test_metadata['timestamp']}_metadata.json")
+                with open(metadata_path, 'w') as f:
+                    json.dump(metadata, f, indent=4)
+                
+                logger.info(f"Test metadata saved to: {metadata_path}")
+                self.log_to_analysis(f"Test metadata saved to test directory")
+        except Exception as e:
+            logger.error(f"Error saving test metadata: {str(e)}")
+            self.log_to_analysis(f"Error saving test metadata: {str(e)}")
 
         # Ensure progress bar shows 100% when complete
         self.pb_vmaf_progress.setValue(100)

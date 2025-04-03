@@ -215,11 +215,10 @@ class VMAFAnalyzer(QObject):
                     else:
                         logger.warning(f"Enhanced VMAF command failed: {error}, falling back to original method")
                         # Continue with original method
-                else:
-                    logger.warning("Could not generate enhanced VMAF command, falling back to original method")
+                logger.warning("Could not generate enhanced VMAF command, falling back to original method")
                     # Continue with original method
-            else:
-                logger.warning("Enhanced preprocessing failed, falling back to original method")
+            except Exception as e:
+                logger.warning(f"Enhanced preprocessing failed: {str(e)}, falling back to original method")
                 # Continue with original method
 
             except Exception as e:
