@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, 
     QLabel, QPushButton, QComboBox, QCheckBox,
     QSpinBox, QDoubleSpinBox, QTabWidget, QLineEdit,
-    QFormLayout, QFileDialog, QMessageBox, QGridLayout
+    QFormLayout, QFileDialog, QMessageBox, QGridLayout, QSlider
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -140,7 +140,7 @@ class OptionsTab(QWidget):
         # Format settings in a grid layout for better organization
         format_group = QGroupBox("Format Settings")
         format_grid = QGridLayout()
-        
+
         # Format code/resolution with integrated frame rate
         format_grid.addWidget(QLabel("Format Code / Resolution:"), 0, 0)
         self.combo_default_resolution = QComboBox()
@@ -152,7 +152,7 @@ class OptionsTab(QWidget):
             "720p60 (1280x720 @ 60 fps)"
         ])
         format_grid.addWidget(self.combo_default_resolution, 0, 1)
-        
+
         # Pixel format with comprehensive options
         format_grid.addWidget(QLabel("Pixel Format:"), 1, 0)
         self.combo_pixel_format = QComboBox()
@@ -168,12 +168,12 @@ class OptionsTab(QWidget):
         ]
         self.combo_pixel_format.addItems(pixel_formats)
         format_grid.addWidget(self.combo_pixel_format, 1, 1)
-        
+
         # Information label
         info_label = QLabel("Note: Use 'Auto-Detect Formats' to discover available formats for your device.")
         info_label.setStyleSheet("font-style: italic; color: #666;")
         format_grid.addWidget(info_label, 2, 0, 1, 2)
-        
+
         format_group.setLayout(format_grid)
         device_layout.addWidget(format_group)
         device_group.setLayout(device_layout)
@@ -204,6 +204,21 @@ class OptionsTab(QWidget):
         self.spin_bookend_threshold.setValue(230)
         bookend_layout.addRow("Brightness Threshold:", self.spin_bookend_threshold)
 
+        # Add frame sampling controls
+        frame_sampling_layout = QHBoxLayout()
+        frame_sampling_layout.addWidget(QLabel("Frame Sampling Rate:"))
+        self.frame_sampling_slider = QSlider(Qt.Horizontal)
+        self.frame_sampling_slider.setRange(1, 30)
+        self.frame_sampling_slider.setValue(5) # Default value
+        self.frame_sampling_slider.setTickPosition(QSlider.TicksBelow)
+        self.frame_sampling_slider.setTickInterval(1)
+        frame_sampling_layout.addWidget(self.frame_sampling_slider)
+        self.frame_sampling_label = QLabel("5 frames")
+        frame_sampling_layout.addWidget(self.frame_sampling_label)
+        self.frame_sampling_slider.valueChanged.connect(self._update_frame_sampling_label)
+        bookend_layout.addRow("", frame_sampling_layout)
+
+
         bookend_group.setLayout(bookend_layout)
         capture_layout.addWidget(bookend_group)
 
@@ -218,7 +233,7 @@ class OptionsTab(QWidget):
         # Tester information
         self.txt_tester_name = QLineEdit()
         vmaf_layout.addRow("Tester Name:", self.txt_tester_name)
-        
+
         self.txt_test_location = QLineEdit()
         vmaf_layout.addRow("Test Location:", self.txt_test_location)
 
@@ -249,7 +264,7 @@ class OptionsTab(QWidget):
         self.spin_vmaf_threads.setValue(4)
         self.spin_vmaf_threads.setToolTip("0 = Auto (use all available cores)")
         vmaf_layout.addRow("VMAF Threads:", self.spin_vmaf_threads)
-        
+
         # Add default VMAF model selection
         self.combo_default_vmaf_model = QComboBox()
         self._populate_vmaf_models()
@@ -321,11 +336,11 @@ class OptionsTab(QWidget):
         # Custom branding settings
         branding_group = QGroupBox("Company Branding")
         branding_main_layout = QHBoxLayout()
-        
+
         # Left column - Company details
         company_details_layout = QVBoxLayout()
         company_form_layout = QFormLayout()
-        
+
         self.txt_app_name = QLineEdit("VMAF Test App")
         company_form_layout.addRow("Application Title:", self.txt_app_name)
 
@@ -334,14 +349,14 @@ class OptionsTab(QWidget):
 
         self.txt_footer_text = QLineEdit("© 2025 Chroma")
         company_form_layout.addRow("Report Footer Text:", self.txt_footer_text)
-        
+
         # Add new company contact details
         self.txt_contact_phone = QLineEdit("+1 (555) 123-4567")
         company_form_layout.addRow("Contact Phone:", self.txt_contact_phone)
-        
+
         self.txt_contact_email = QLineEdit("info@chroma.com")
         company_form_layout.addRow("Contact Email:", self.txt_contact_email)
-        
+
         self.txt_contact_address = QLineEdit("123 Tech Plaza, Suite 400, San Francisco, CA 94105")
         company_form_layout.addRow("Physical Address:", self.txt_contact_address)
 
@@ -353,17 +368,17 @@ class OptionsTab(QWidget):
         self.btn_pick_primary.clicked.connect(lambda: self.pick_color(self.color_primary))
         color_layout.addWidget(self.btn_pick_primary)
         company_form_layout.addRow("Brand Accent Color:", color_layout)
-        
+
         company_details_layout.addLayout(company_form_layout)
-        
+
         # Right column - Logo
         logo_column_layout = QVBoxLayout()
         logo_column_layout.setAlignment(Qt.AlignCenter)
-        
+
         logo_header = QLabel("Company Logo")
         logo_header.setAlignment(Qt.AlignCenter)
         logo_column_layout.addWidget(logo_header)
-        
+
         # Logo preview label
         self.lbl_logo_preview = QLabel("No logo selected")
         self.lbl_logo_preview.setMinimumHeight(150)
@@ -371,21 +386,21 @@ class OptionsTab(QWidget):
         self.lbl_logo_preview.setAlignment(Qt.AlignCenter)
         self.lbl_logo_preview.setStyleSheet("border: 1px solid #CCCCCC; background-color: #F9F9F9;")
         logo_column_layout.addWidget(self.lbl_logo_preview)
-        
+
         # Upload button
         self.btn_upload_logo = QPushButton("Upload Logo")
         self.btn_upload_logo.clicked.connect(self.upload_logo)
         logo_column_layout.addWidget(self.btn_upload_logo)
-        
+
         # Hidden field to store logo path
         self.txt_logo_path = QLineEdit()
         self.txt_logo_path.setVisible(False)
         logo_column_layout.addWidget(self.txt_logo_path)
-        
+
         # Add both columns to the main layout
         branding_main_layout.addLayout(company_details_layout, 3)  # 3:1 ratio
         branding_main_layout.addLayout(logo_column_layout, 1)
-        
+
         branding_group.setLayout(branding_main_layout)
         theme_layout.addWidget(branding_group)
 
@@ -413,145 +428,153 @@ class OptionsTab(QWidget):
         self.load_settings()
 
     def load_settings(self):
-        """Load current settings from options manager"""
-        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-            try:
-                settings = self.parent.options_manager.get_settings()
+        """Load settings from options manager"""
+        try:
+            if not hasattr(self, 'options_manager') or not self.options_manager:
+                logger.warning("Options manager not available, cannot load settings")
+                return
 
-                # Populate directories
-                paths = settings.get('paths', {})
-                self.txt_ref_dir.setText(paths.get('reference_video_dir', ''))
-                self.txt_output_dir.setText(paths.get('default_output_dir', ''))
-                self.txt_vmaf_dir.setText(paths.get('models_dir', ''))
-                self.txt_ffmpeg_path.setText(paths.get('ffmpeg_path', ''))
+            # Load frame sampling rate
+            frame_sampling_rate = self.options_manager.get_option('frame_sampling_rate', 5)
+            self.frame_sampling_slider.setValue(frame_sampling_rate)
+            self._update_frame_sampling_label()
 
-                # Populate capture settings
-                capture = settings.get('capture', {})
-                # Pixel format handling - find matching entry or first one
-                pixel_format = capture.get('pixel_format', 'uyvy422')
-                pixel_format_index = -1
-                for i in range(self.combo_pixel_format.count()):
-                    if self.combo_pixel_format.itemText(i).startswith(pixel_format):
-                        pixel_format_index = i
-                        break
-                
-                if pixel_format_index >= 0:
-                    self.combo_pixel_format.setCurrentIndex(pixel_format_index)
-                
-                # Resolution/format handling
-                resolution = capture.get('resolution', '1920x1080 @ 29.97 fps')
-                resolution_index = self.combo_default_resolution.findText(resolution, Qt.MatchContains)
-                if resolution_index >= 0:
-                    self.combo_default_resolution.setCurrentIndex(resolution_index)
+            settings = self.parent.options_manager.get_settings()
 
-                # Populate bookend settings
-                bookend = settings.get('bookend', {})
-                self.spin_bookend_duration.setValue(float(bookend.get('bookend_duration', 0.5)))
-                self.spin_min_loops.setValue(int(bookend.get('min_loops', 3)))
-                self.spin_max_loops.setValue(int(bookend.get('max_loops', 5)))
-                self.spin_bookend_threshold.setValue(int(bookend.get('white_threshold', 230)))
+            # Populate directories
+            paths = settings.get('paths', {})
+            self.txt_ref_dir.setText(paths.get('reference_video_dir', ''))
+            self.txt_output_dir.setText(paths.get('default_output_dir', ''))
+            self.txt_vmaf_dir.setText(paths.get('models_dir', ''))
+            self.txt_ffmpeg_path.setText(paths.get('ffmpeg_path', ''))
 
-                # Populate encoder settings
-                encoder = settings.get('encoder', {})
-                self.combo_default_encoder.setCurrentText(encoder.get('default_encoder', 'libx264'))
-                self.spin_default_crf.setValue(int(encoder.get('default_crf', 23)))
-                self.spin_default_preset.setCurrentText(encoder.get('default_preset', 'medium'))
+            # Populate capture settings
+            capture = settings.get('capture', {})
+            # Pixel format handling - find matching entry or first one
+            pixel_format = capture.get('pixel_format', 'uyvy422')
+            pixel_format_index = -1
+            for i in range(self.combo_pixel_format.count()):
+                if self.combo_pixel_format.itemText(i).startswith(pixel_format):
+                    pixel_format_index = i
+                    break
 
-                # Populate analysis settings
-                vmaf = settings.get('vmaf', {})
-                self.check_use_temp_files.setChecked(settings.get('use_temp_files', True))
-                self.check_save_json.setChecked(vmaf.get('save_json', True))
-                self.check_save_plots.setChecked(vmaf.get('save_plots', True))
-                self.check_auto_alignment.setChecked(settings.get('auto_alignment', True))
-                self.combo_alignment_method.setCurrentText(settings.get('alignment_method', 'Bookend Detection'))
-                
-                # Load tester information
-                if hasattr(self, 'txt_tester_name'):
-                    self.txt_tester_name.setText(vmaf.get('tester_name', ''))
-                    self.txt_test_location.setText(vmaf.get('test_location', ''))
-                
-                # Load thread count
-                if hasattr(self, 'spin_vmaf_threads'):
-                    self.spin_vmaf_threads.setValue(vmaf.get('threads', 4))
+            if pixel_format_index >= 0:
+                self.combo_pixel_format.setCurrentIndex(pixel_format_index)
 
-                # Populate VMAF models and set default
-                self._populate_vmaf_models()
-                default_model = vmaf.get('default_model', 'vmaf_v0.6.1')
-                index = self.combo_default_vmaf_model.findText(default_model)
-                if index >= 0:
-                    self.combo_default_vmaf_model.setCurrentIndex(index)
+            # Resolution/format handling
+            resolution = capture.get('resolution', '1920x1080 @ 29.97 fps')
+            resolution_index = self.combo_default_resolution.findText(resolution, Qt.MatchContains)
+            if resolution_index >= 0:
+                self.combo_default_resolution.setCurrentIndex(resolution_index)
 
-                # Populate debug settings
-                debug = settings.get('debug', {})
-                self.combo_log_level.setCurrentText(debug.get('log_level', 'INFO'))
-                self.check_save_logs.setChecked(debug.get('save_logs', True))
-                self.check_show_commands.setChecked(debug.get('show_commands', True))
+            # Populate bookend settings
+            bookend = settings.get('bookend', {})
+            self.spin_bookend_duration.setValue(float(bookend.get('bookend_duration', 0.5)))
+            self.spin_min_loops.setValue(int(bookend.get('min_loops', 3)))
+            self.spin_max_loops.setValue(int(bookend.get('max_loops', 5)))
+            self.spin_bookend_threshold.setValue(int(bookend.get('white_threshold', 230)))
 
-                # Populate theme settings
-                theme = settings.get('theme', {})
-                if isinstance(theme, dict):
-                    self.combo_theme.setCurrentText(theme.get('selected_theme', 'System'))
+            # Populate encoder settings
+            encoder = settings.get('encoder', {})
+            self.combo_default_encoder.setCurrentText(encoder.get('default_encoder', 'libx264'))
+            self.spin_default_crf.setValue(int(encoder.get('default_crf', 23)))
+            self.spin_default_preset.setCurrentText(encoder.get('default_preset', 'medium'))
 
-                    # Load custom theme settings if they exist
-                    if hasattr(self, 'combo_theme_selection'):
-                        self.combo_theme_selection.setCurrentText(theme.get('selected_theme', 'System'))
-                        self.color_bg.setText(theme.get('bg_color', '#2D2D30'))
-                        self.color_text.setText(theme.get('text_color', '#FFFFFF'))
-                        self.color_accent.setText(theme.get('accent_color', '#007ACC'))
+            # Populate analysis settings
+            vmaf = settings.get('vmaf', {})
+            self.check_use_temp_files.setChecked(settings.get('use_temp_files', True))
+            self.check_save_json.setChecked(vmaf.get('save_json', True))
+            self.check_save_plots.setChecked(vmaf.get('save_plots', True))
+            self.check_auto_alignment.setChecked(settings.get('auto_alignment', True))
+            self.combo_alignment_method.setCurrentText(settings.get('alignment_method', 'Bookend Detection'))
 
-                        # Set the logo path if it exists
-                        logo_path = theme.get('logo_path', '')
-                        if logo_path:
-                            self.txt_logo_path.setText(logo_path)
-                            self.logo_path = logo_path
+            # Load tester information
+            if hasattr(self, 'txt_tester_name'):
+                self.txt_tester_name.setText(vmaf.get('tester_name', ''))
+                self.txt_test_location.setText(vmaf.get('test_location', ''))
 
-                            # Try to load the logo preview
-                            try:
-                                full_logo_path = os.path.join(
-                                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                                    logo_path
-                                )
-                                if os.path.exists(full_logo_path):
-                                    from PyQt5.QtGui import QPixmap
-                                    pixmap = QPixmap(full_logo_path)
-                                    if not pixmap.isNull():
-                                        pixmap = pixmap.scaledToHeight(50, Qt.SmoothTransformation)
-                                        self.lbl_logo_preview.setPixmap(pixmap)
-                            except Exception as e:
-                                logger.error(f"Error loading logo preview: {e}")
-                else:
-                    # If theme is a string (legacy format)
-                    self.combo_theme.setCurrentText(theme if theme else 'System')
-                    if hasattr(self, 'combo_theme_selection'):
-                        self.combo_theme_selection.setCurrentText(theme if theme else 'System')
+            # Load thread count
+            if hasattr(self, 'spin_vmaf_threads'):
+                self.spin_vmaf_threads.setValue(vmaf.get('threads', 4))
 
-                # Populate branding settings
-                branding = settings.get('branding', {})
-                if hasattr(self, 'txt_app_name'):
-                    self.txt_app_name.setText(branding.get('app_name', 'VMAF Test App'))
-                    self.txt_company_name.setText(branding.get('company_name', 'Chroma'))
-                    self.txt_footer_text.setText(branding.get('footer_text', '© 2025 Chroma'))
-                    self.color_primary.setText(branding.get('primary_color', '#4CAF50'))
-                    
-                    # Handle new contact fields
-                    if hasattr(self, 'txt_contact_phone'):
-                        self.txt_contact_phone.setText(branding.get('contact_phone', '+1 (555) 123-4567'))
-                        self.txt_contact_email.setText(branding.get('contact_email', 'info@chroma.com'))
-                        self.txt_contact_address.setText(branding.get('contact_address', '123 Tech Plaza, Suite 400, San Francisco, CA 94105'))
+            # Populate VMAF models and set default
+            self._populate_vmaf_models()
+            default_model = vmaf.get('default_model', 'vmaf_v0.6.1')
+            index = self.combo_default_vmaf_model.findText(default_model)
+            if index >= 0:
+                self.combo_default_vmaf_model.setCurrentIndex(index)
 
-                # Populate device dropdown
-                if hasattr(self, 'combo_device_for_formats'):
-                    devices = self.parent.options_manager.get_decklink_devices()
-                    self.combo_device_for_formats.clear()
-                    for device in devices:
-                        self.combo_device_for_formats.addItem(device)
+            # Populate debug settings
+            debug = settings.get('debug', {})
+            self.combo_log_level.setCurrentText(debug.get('log_level', 'INFO'))
+            self.check_save_logs.setChecked(debug.get('save_logs', True))
+            self.check_show_commands.setChecked(debug.get('show_commands', True))
 
-                logger.info("Settings loaded successfully")
-            except Exception as e:
-                logger.error(f"Error loading settings: {e}")
-                # Print traceback for debugging
-                import traceback
-                logger.error(traceback.format_exc())
+            # Populate theme settings
+            theme = settings.get('theme', {})
+            if isinstance(theme, dict):
+                self.combo_theme.setCurrentText(theme.get('selected_theme', 'System'))
+
+                # Load custom theme settings if they exist
+                if hasattr(self, 'combo_theme_selection'):
+                    self.combo_theme_selection.setCurrentText(theme.get('selected_theme', 'System'))
+                    self.color_bg.setText(theme.get('bg_color', '#2D2D30'))
+                    self.color_text.setText(theme.get('text_color', '#FFFFFF'))
+                    self.color_accent.setText(theme.get('accent_color', '#007ACC'))
+
+                    # Set the logo path if it exists
+                    logo_path = theme.get('logo_path', '')
+                    if logo_path:
+                        self.txt_logo_path.setText(logo_path)
+                        self.logo_path = logo_path
+
+                        # Try to load the logo preview
+                        try:
+                            full_logo_path = os.path.join(
+                                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                logo_path
+                            )
+                            if os.path.exists(full_logo_path):
+                                from PyQt5.QtGui import QPixmap
+                                pixmap = QPixmap(full_logo_path)
+                                if not pixmap.isNull():
+                                    pixmap = pixmap.scaledToHeight(50, Qt.SmoothTransformation)
+                                    self.lbl_logo_preview.setPixmap(pixmap)
+                        except Exception as e:
+                            logger.error(f"Error loading logo preview: {e}")
+            else:
+                # If theme is a string (legacy format)
+                self.combo_theme.setCurrentText(theme if theme else 'System')
+                if hasattr(self, 'combo_theme_selection'):
+                    self.combo_theme_selection.setCurrentText(theme if theme else 'System')
+
+            # Populate branding settings
+            branding = settings.get('branding', {})
+            if hasattr(self, 'txt_app_name'):
+                self.txt_app_name.setText(branding.get('app_name', 'VMAF Test App'))
+                self.txt_company_name.setText(branding.get('company_name', 'Chroma'))
+                self.txt_footer_text.setText(branding.get('footer_text', '© 2025 Chroma'))
+                self.color_primary.setText(branding.get('primary_color', '#4CAF50'))
+
+                # Handle new contact fields
+                if hasattr(self, 'txt_contact_phone'):
+                    self.txt_contact_phone.setText(branding.get('contact_phone', '+1 (555) 123-4567'))
+                    self.txt_contact_email.setText(branding.get('contact_email', 'info@chroma.com'))
+                    self.txt_contact_address.setText(branding.get('contact_address', '123 Tech Plaza, Suite 400, San Francisco, CA 94105'))
+
+            # Populate device dropdown
+            if hasattr(self, 'combo_device_for_formats'):
+                devices = self.parent.options_manager.get_decklink_devices()
+                self.combo_device_for_formats.clear()
+                for device in devices:
+                    self.combo_device_for_formats.addItem(device)
+
+            logger.info("Settings loaded successfully")
+        except Exception as e:
+            logger.error(f"Error loading settings: {e}")
+            # Print traceback for debugging
+            import traceback
+            logger.error(traceback.format_exc())
 
     def save_settings(self):
         """Save current settings to options manager"""
@@ -581,6 +604,7 @@ class OptionsTab(QWidget):
                         'min_loops': self.spin_min_loops.value(),
                         'max_loops': self.spin_max_loops.value(),
                         'white_threshold': self.spin_bookend_threshold.value(),
+                        'frame_sampling_rate': self.frame_sampling_slider.value()
                     },
 
                     # Encoder settings
@@ -634,7 +658,7 @@ class OptionsTab(QWidget):
                     'app_name': self.txt_app_name.text(),
                     'company_name': self.txt_company_name.text(),
                     'footer_text': self.txt_footer_text.text(),
-                    'primary_color': self.color_primary.text(),
+                    ''primary_color': self.color_primary.text(),
                     'logo_path': getattr(self, 'logo_path', ''),
                     'contact_phone': self.txt_contact_phone.text(),
                     'contact_email': self.txt_contact_email.text(),
@@ -872,19 +896,19 @@ class OptionsTab(QWidget):
                     import subprocess
                     cmd = ["ffmpeg", "-hide_banner", "-f", "decklink", "-list_formats", "1", "-i", f'"{device}"']
                     logger.info(f"Getting device formats using command: {' '.join(cmd)}")
-                    
+
                     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                     stdout, stderr = process.communicate(timeout=15)
                     combined_output = stdout + stderr
-                    
+
                     # Parse the output lines directly
                     import re
-                    
+
                     # Format pattern for decklink formats
                     format_pattern = r'format_code\s+:\s+(\w+)\s+\(([^)]+)\)'
                     resolution_pattern = r'(\d+)x(\d+)'
                     fps_pattern = r'(\d+(?:\.\d+)?)(p|i)'
-                    
+
                     format_list = []
                     pixel_formats = [
                         "uyvy422 - Packed YUV 4:2:2 (DeckLink default)",
@@ -896,29 +920,29 @@ class OptionsTab(QWidget):
                         "rgba - 32-bit RGB with alpha",
                         "bgra - 32-bit BGR with alpha"
                     ]
-                    
+
                     # Process all the lines in the output
                     for line in combined_output.splitlines():
                         # Try to match format pattern
                         format_match = re.search(format_pattern, line)
                         if format_match:
                             format_code, format_desc = format_match.groups()
-                            
+
                             # Extract resolution if present
                             res_match = re.search(resolution_pattern, format_desc)
                             resolution = f"{res_match.group(1)}x{res_match.group(2)}" if res_match else "Unknown"
-                            
+
                             # Extract frame rate if present
                             fps_match = re.search(fps_pattern, format_code)
                             frame_rate = fps_match.group(1) if fps_match else ""
                             scan_type = fps_match.group(2) if fps_match else ""
-                            
+
                             # Create display name
                             if scan_type == 'i':
                                 display = f"{format_code} ({resolution} @ {frame_rate}i - Interlaced)"
                             else:
                                 display = f"{format_code} ({resolution} @ {frame_rate}p)"
-                                
+
                             # Add format info
                             format_info = {
                                 'format_code': format_code,
@@ -928,13 +952,13 @@ class OptionsTab(QWidget):
                                 'display': display
                             }
                             format_list.append(format_info)
-                    
+
                     # Update the resolution/format dropdown with the detected formats
                     self.combo_default_resolution.clear()
                     if format_list:
                         for fmt in sorted(format_list, key=lambda x: x['display']):
                             self.combo_default_resolution.addItem(fmt['display'], fmt)
-                        
+
                         logger.info(f"Parsed {len(format_list)} formats from FFmpeg output")
                     else:
                         # Add default formats if none detected
@@ -946,20 +970,20 @@ class OptionsTab(QWidget):
                         ]
                         for fmt in default_formats:
                             self.combo_default_resolution.addItem(fmt)
-                        
+
                         logger.warning("No formats found in FFmpeg output, using defaults")
-                        
+
                     # Update the pixel format dropdown with comprehensive options
                     self.combo_pixel_format.clear()
                     for pix_fmt in pixel_formats:
                         self.combo_pixel_format.addItem(pix_fmt)
-                    
+
                     QMessageBox.information(
                         self, 
                         "Auto-Detect Complete", 
                         f"Found {len(format_list)} format codes for your DeckLink device."
                     )
-                    
+
                 except subprocess.TimeoutExpired:
                     process.kill()
                     logger.warning("Timeout getting device formats")
@@ -982,3 +1006,7 @@ class OptionsTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error detecting formats: {e}")
             logger.error(f"Error auto-detecting formats: {e}")
+
+    def _update_frame_sampling_label(self):
+        """Updates the label displaying the current frame sampling rate."""
+        self.frame_sampling_label.setText(str(self.frame_sampling_slider.value()) + " frames")

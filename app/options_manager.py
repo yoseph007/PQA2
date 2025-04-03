@@ -39,7 +39,11 @@ class OptionsManager(QObject):
                 "min_loops": 3,
                 "max_capture_time": 120,  # seconds
                 "bookend_duration": 0.5,  # seconds
-                "white_threshold": 240    # 0-255 for white detection
+                "white_threshold": 240,    # 0-255 for white detection
+                "frame_sampling_rate": 5, #Added frame sampling rate
+                "min_frame_sampling_rate": 1, #Added minimum frame sampling rate
+                "max_frame_sampling_rate": 30 #Added maximum frame sampling rate
+
             },
             # VMAF settings
             "vmaf": {

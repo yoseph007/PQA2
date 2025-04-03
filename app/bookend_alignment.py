@@ -623,8 +623,14 @@ class BookendAligner(QObject):
                 # Reset video position
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-                # Set sampling rate - check more frames for the lower thresholds
-                sample_rate = 5 if threshold_idx < 2 else 3
+                # Get configurable frame sampling rate from options or use defaults
+                # Use lower sampling rates (check more frames) for stricter thresholds
+                if hasattr(self, 'frame_sampling_rate') and self.frame_sampling_rate is not None:
+                    # Use user-configured sampling rate (1-30)
+                    sample_rate = min(30, max(1, self.frame_sampling_rate))
+                else:
+                    # Default behavior - check more frames for stricter thresholds
+                    sample_rate = 5 if threshold_idx < 2 else 3
 
                 # Minimum frames to consider as bookend
                 min_white_frames = max(1, int(0.15 * fps / sample_rate))  # At least 0.15 seconds
@@ -750,7 +756,7 @@ class BookendAlignmentThread(QThread):
         self.aligner.alignment_complete.connect(self.alignment_complete, Qt.DirectConnection)
         self.aligner.error_occurred.connect(self.error_occurred, Qt.DirectConnection)
         self.aligner.status_update.connect(self.status_update, Qt.DirectConnection)
-        
+
     def __del__(self):
         """Clean up resources when thread is destroyed"""
         self.wait()  # Wait for thread to finish before destroying
@@ -761,7 +767,7 @@ class BookendAlignmentThread(QThread):
         try:
             if not self._running:
                 return
-                
+
             self.status_update.emit("Starting bookend alignment process...")
 
             # Report initial progress
@@ -785,7 +791,7 @@ class BookendAlignmentThread(QThread):
             # Check if thread is still running before emitting signals
             if not self._running:
                 return
-                
+
             if result:
                 # After successful alignment, we can delete the primary capture file
                 if self.delete_primary and os.path.exists(self.captured_path):
@@ -809,7 +815,7 @@ class BookendAlignmentThread(QThread):
                 logger.error(error_msg)
                 import traceback
                 logger.error(traceback.format_exc())
-                
+
     def quit(self):
         """Override quit to properly clean up resources"""
         self._running = False
