@@ -104,8 +104,8 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pip install PyQt5 opencv-python numpy psutil pytesseract"
+args = "pip install PyQt5 opencv-python numpy psutil pytesseract Pillow qdarkstyle"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python main.py"
+args = "python main.py --headless"

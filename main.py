@@ -1,8 +1,12 @@
+
 import os
 import sys
 import logging
 import argparse
 from PyQt5.QtWidgets import QApplication
+
+# Set Python path to include current directory
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import managers
 from app.capture import CaptureManager
@@ -41,10 +45,13 @@ def main():
     logger = setup_logging()
     logger.info("Starting VMAF Test App")
 
-    # Check platform and configure font paths for Windows
-    if sys.platform == "win32":
-        logger.info("Running on Windows, configuring font paths")
-        # Configure font paths if needed
+    # Check if running in headless environment (like Replit)
+    headless = False
+    if 'REPLIT_ENVIRONMENT' in os.environ or not os.environ.get('DISPLAY'):
+        logger.info("Running in Replit environment, set QT_QPA_PLATFORM to vnc")
+        os.environ["QT_QPA_PLATFORM"] = "vnc"  # Use VNC instead of offscreen for preview
+        os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
+        headless = True
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="VMAF Test App")
@@ -65,11 +72,18 @@ def main():
     capture_manager.options_manager = options_manager
     capture_manager.path_manager = file_manager
 
+    # Apply dark theme by default for better appearance
+    try:
+        import qdarkstyle
+        app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+    except ImportError:
+        logger.warning("QDarkStyle not installed, using default theme")
+
     # Create and show main window
     window = MainWindow(capture_manager, file_manager, options_manager)
 
-    # Set headless mode if requested
-    if args.headless:
+    # Set headless mode if requested or running in Replit
+    if args.headless or headless:
         window.headless_mode = True
         logger.info("Running in headless mode")
     else:

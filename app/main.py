@@ -45,6 +45,7 @@ def main():
         file_manager = FileManager()
         
         # Create and configure options manager
+        from app.options_manager import OptionsManager
         options_manager = OptionsManager()
         
         # Create and configure capture manager

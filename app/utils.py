@@ -15,6 +15,11 @@ def get_ffmpeg_path():
     Returns:
         Tuple of (ffmpeg_exe, ffprobe_exe, ffplay_exe) paths
     """
+    import os
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
     # Find the root directory of the application
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
@@ -38,13 +43,28 @@ def get_ffmpeg_path():
     
     logger.info(f"Using FFmpeg bin directory: {ffmpeg_bin_dir}")
     
-    ffmpeg_exe = os.path.join(ffmpeg_bin_dir, "ffmpeg.exe")
-    ffprobe_exe = os.path.join(ffmpeg_bin_dir, "ffprobe.exe") 
+    ffmpeg_exe = os.path.join(ffmpeg_bin_dir, "ffmpeg.exe") 
+    ffprobe_exe = os.path.join(ffmpeg_bin_dir, "ffprobe.exe")
     ffplay_exe = os.path.join(ffmpeg_bin_dir, "ffplay.exe")
     
     # Check if files exist
     if not os.path.exists(ffmpeg_exe):
         logger.warning(f"FFmpeg executable not found at {ffmpeg_exe}")
+        # Try to find ffmpeg.exe in PATH
+        ffmpeg_exe = "ffmpeg"
+    if not os.path.exists(ffprobe_exe):
+        logger.warning(f"FFprobe executable not found at {ffprobe_exe}")
+        # Try to find ffprobe.exe in PATH
+        ffprobe_exe = "ffprobe"
+    if not os.path.exists(ffplay_exe):
+        logger.warning(f"FFplay executable not found at {ffplay_exe}")
+        # Try to find ffplay.exe in PATH  
+        ffplay_exe = "ffplay"
+    
+    logger.info(f"FFmpeg path: {ffmpeg_exe}")
+    logger.info(f"FFprobe path: {ffprobe_exe}")
+    
+    return (ffmpeg_exe, ffprobe_exe, ffplay_exe)
         # Try to find ffmpeg.exe in PATH
         ffmpeg_exe = "ffmpeg.exe"
     if not os.path.exists(ffprobe_exe):
