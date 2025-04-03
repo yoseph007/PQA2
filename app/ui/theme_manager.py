@@ -31,13 +31,13 @@ class ThemeManager:
         """Apply the current theme stored in settings to the application"""
         try:
             # Get theme settings
-            theme_settings = self.options_manager.get_setting("theme", {})
+            theme_settings = self.options_manager.get_setting("theme")
             # Handle both dictionary and string theme settings
             theme = "System"  # Default
             
             if isinstance(theme_settings, dict):
                 theme = theme_settings.get("selected_theme", "System")
-            else:
+            elif isinstance(theme_settings, str):
                 # If theme_settings is a string, it's the theme name
                 theme = theme_settings
             
@@ -93,6 +93,8 @@ class ThemeManager:
             
         except Exception as e:
             logger.error(f"Error applying theme: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             # Apply default theme as fallback
             app = QApplication.instance()
             if app:

@@ -486,11 +486,60 @@ class OptionsManager(QObject):
         except Exception as e:
             logger.error(f"Error getting dshow formats: {str(e)}")
             return {"formats": [], "format_map": {}}
+            
+    def get_device_formats(self, device):
+        """Get available formats for the specified device - adapter method"""
+        try:
+            logger.info(f"Getting formats for device: {device}")
+            
+            # Try to use decklink format detection first
+            formats_data = self.get_decklink_formats(device)
+            
+            # Extract just the format list
+            formats = formats_data.get("formats", [])
+            
+            if formats:
+                logger.info(f"Found {len(formats)} formats for device {device}")
+                return formats
+            else:
+                # If no formats found with decklink, try using default presets
+                default_formats = []
+                
+                # Common formats for HD capture devices
+                resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
+                frame_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
+                pixel_formats = ["uyvy422", "yuyv422", "rgb24"]
+                
+                # Generate format combinations
+                format_id = 1
+                for res in resolutions:
+                    for fps in frame_rates:
+                        for pix_fmt in pixel_formats[:1]:  # Just use first pixel format to avoid too many combinations
+                            default_formats.append({
+                                "id": f"fmt{format_id}",
+                                "resolution": res,
+                                "frame_rate": fps,
+                                "pixel_format": pix_fmt,
+                                "display": f"{res} @ {fps} fps ({pix_fmt})"
+                            })
+                            format_id += 1
+                
+                logger.info(f"Using {len(default_formats)} default formats for device {device}")
+                return default_formats
+                
+        except Exception as e:
+            logger.error(f"Error in get_device_formats: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            # Return some default formats as fallback
+            return [
+                {"id": "fmt1", "resolution": "1920x1080", "frame_rate": 29.97, "pixel_format": "uyvy422", "display": "1920x1080 @ 29.97 fps (uyvy422)"},
+                {"id": "fmt2", "resolution": "1280x720", "frame_rate": 59.94, "pixel_format": "uyvy422", "display": "1280x720 @ 59.94 fps (uyvy422)"}
+            ]
 
     def _find_ffmpeg(self):
         """Find the path to ffmpeg"""
         # Add your ffmpeg detection logic here if needed
         # For now, assume it's in the system PATH
         return "ffmpeg" # Replace with your actual ffmpeg path detection
-
-    # This was a duplicate __init__ method - removed
