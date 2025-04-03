@@ -1,0 +1,13 @@
+F/VB01-vmaf-app/tests/test_results/Test_01_20250403_022803/REF03_capture_022803_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250403_022803/REF03_022803_aligned.mp4 -lavfi libvmaf=log_path=Test_01_20250403_022910_vmaf.json:log_fmt=json -f null -
+2025-04-03 02:29:29,296 - app.vmaf_analyzer - INFO - Basic VMAF command succeeded!
+2025-04-03 02:29:29,297 - app.vmaf_analyzer - INFO - Running PSNR analysis...
+2025-04-03 02:29:29,297 - app.vmaf_analyzer - INFO - PSNR command: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250403_022803/REF03_capture_022803_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250403_022803/REF03_022803_aligned.mp4 -lavfi psnr=stats_file=Test_01_20250403_022910_psnr.txt -f null -
+2025-04-03 02:29:30,233 - app.vmaf_analyzer - INFO - Running SSIM analysis...
+2025-04-03 02:29:30,233 - app.vmaf_analyzer - INFO - SSIM command: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250403_022803/REF03_capture_022803_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_results/Test_01_20250403_022803/REF03_022803_aligned.mp4 -lavfi ssim=stats_file=Test_01_20250403_022910_ssim.txt -f null -
+2025-04-03 02:29:31,223 - app.vmaf_analyzer - INFO - Parsed SSIM from separate file: 0.996029
+2025-04-03 02:29:31,223 - app.vmaf_analyzer - INFO - VMAF Score: 72.059617
+2025-04-03 02:29:31,224 - app.vmaf_analyzer - INFO - PSNR Score: None
+2025-04-03 02:29:31,224 - app.vmaf_analyzer - INFO - SSIM Score: 0.996029
+2025-04-03 02:29:31,225 - app.vmaf_analyzer - INFO - Deleting primary capture file: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250403_022803\REF03_capture_022803_aligned.mp4
+2025-04-03 02:29:31,228 - app.vmaf_analyzer - INFO - Set output directory to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results
+2025-04-03 02:29:31,228 - app.vmaf_analyzer - INFO - Set test name to: Test_01
