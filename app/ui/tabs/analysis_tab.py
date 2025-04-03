@@ -1,4 +1,3 @@
-
 import logging
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                            QLabel, QComboBox, QProgressBar, QGroupBox, QMessageBox,
@@ -10,14 +9,14 @@ logger = logging.getLogger(__name__)
 
 class AnalysisTab(QWidget):
     """Analysis tab for video alignment and VMAF analysis"""
-    
+
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
         self.alignment_thread = None
         self.vmaf_thread = None
         self._setup_ui()
-        
+
     def _setup_ui(self):
         """Set up the Analysis tab with improved layout and combined workflow"""
         layout = QVBoxLayout(self)
@@ -134,7 +133,7 @@ class AnalysisTab(QWidget):
         nav_layout.addWidget(self.btn_next_to_results)
 
         layout.addLayout(nav_layout)
-        
+
     def run_combined_analysis(self):
         """Run video alignment and VMAF analysis in sequence"""
         if not self.parent.reference_info or not self.parent.capture_path:
@@ -172,7 +171,7 @@ class AnalysisTab(QWidget):
 
         # Start the alignment process
         self.align_videos_for_combined_workflow()
-        
+
     def align_videos_for_combined_workflow(self):
         """Start video alignment as part of the combined workflow using bookend method"""
         self.log_to_analysis("Starting video alignment using bookend method...")
@@ -194,7 +193,7 @@ class AnalysisTab(QWidget):
 
         # Start alignment
         self.alignment_thread.start()
-        
+
     def handle_alignment_for_combined_workflow(self, results):
         """Handle completion of video alignment in combined workflow"""
         # Process alignment results
@@ -237,7 +236,7 @@ class AnalysisTab(QWidget):
 
             # Show error to user
             QMessageBox.critical(self, "VMAF Error", error_msg)
-            
+
     def start_vmaf_for_combined_workflow(self):
         """Start VMAF analysis as part of combined workflow"""
         # Reset VMAF progress
@@ -272,7 +271,7 @@ class AnalysisTab(QWidget):
 
         # Start analysis
         self.vmaf_thread.start()
-        
+
     def handle_alignment_error(self, error_msg):
         """Handle error in video alignment"""
         self.lbl_alignment_status.setText(f"Alignment failed")
@@ -281,17 +280,17 @@ class AnalysisTab(QWidget):
 
         # Re-enable button
         self.btn_run_combined_analysis.setEnabled(True)
-        
+
     def handle_vmaf_complete(self, results):
         """Handle completion of VMAF analysis"""
         # Check if we've already processed this result (prevent duplicate processing)
         if hasattr(self, '_last_result_id') and self._last_result_id == id(results):
             logger.warning("Ignoring duplicate VMAF analysis result")
             return
-            
+
         # Store the ID of this result object to prevent duplicate processing
         self._last_result_id = id(results)
-        
+
         self.parent.vmaf_results = results
 
         vmaf_score = results.get('vmaf_score')
@@ -300,7 +299,7 @@ class AnalysisTab(QWidget):
 
         # Ensure progress bar shows 100% when complete
         self.pb_vmaf_progress.setValue(100)
-        
+
         # Re-enable analysis button
         self.btn_run_combined_analysis.setEnabled(True)
         self.parent.vmaf_running = False # Reset vmaf_running flag
@@ -340,7 +339,7 @@ class AnalysisTab(QWidget):
 
         # Switch to results tab
         self.parent.tabs.setCurrentIndex(3)
-        
+
     def handle_vmaf_error(self, error_msg):
         """Handle error in VMAF analysis"""
         self.lbl_vmaf_status.setText(f"VMAF analysis failed")
@@ -352,7 +351,7 @@ class AnalysisTab(QWidget):
 
         # Re-enable analysis button
         self.btn_run_combined_analysis.setEnabled(True)
-        
+
     def log_to_analysis(self, message):
         """Add message to analysis log"""
         self.txt_analysis_log.append(message)
@@ -360,18 +359,18 @@ class AnalysisTab(QWidget):
             self.txt_analysis_log.verticalScrollBar().maximum()
         )
         self.parent.statusBar().showMessage(message)
-        
+
     def _populate_vmaf_models(self):
         """Scan models directory and populate the VMAF model dropdown"""
         try:
             # Clear current items
             self.combo_vmaf_model.clear()
-            
+
             # Find models directory
             import os
             root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             models_dir = os.path.join(root_dir, "models")
-            
+
             # Get custom models directory from options if available
             vmaf_models_dir = None
             if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
@@ -382,13 +381,13 @@ class AnalysisTab(QWidget):
                         vmaf_models_dir = paths_settings['models_dir']
                 except Exception as e:
                     logger.warning(f"Error accessing models directory from settings: {e}")
-            
+
             # Use custom directory if specified, otherwise use default
             if vmaf_models_dir and os.path.exists(vmaf_models_dir):
                 models_dir = vmaf_models_dir
-                
+
             logger.info(f"Scanning for VMAF models in: {models_dir}")
-                
+
             # Get default model from settings if available
             default_model = "vmaf_v0.6.1"
             if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
@@ -398,7 +397,7 @@ class AnalysisTab(QWidget):
                         default_model = vmaf_settings['default_model']
                 except Exception as e:
                     logger.warning(f"Error getting default VMAF model from settings: {e}")
-            
+
             # Scan directory for .json model files
             model_files = []
             if os.path.exists(models_dir):
@@ -407,26 +406,26 @@ class AnalysisTab(QWidget):
                         # Remove .json extension for display
                         model_name = os.path.splitext(file)[0]
                         model_files.append(model_name)
-            
+
             # Sort models alphabetically
             model_files.sort()
-            
+
             # If no models found, add defaults
             if not model_files:
                 model_files = ["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"]
                 logger.warning(f"No VMAF models found in {models_dir}, using defaults")
-            
+
             # Add models to dropdown
             for model in model_files:
                 self.combo_vmaf_model.addItem(model, model)
-            
+
             # Set default model if found
             default_index = self.combo_vmaf_model.findData(default_model)
             if default_index >= 0:
                 self.combo_vmaf_model.setCurrentIndex(default_index)
-                
+
             logger.info(f"Populated VMAF model dropdown with {len(model_files)} models")
-            
+
         except Exception as e:
             logger.error(f"Error populating VMAF models: {e}")
             import traceback
@@ -436,7 +435,7 @@ class AnalysisTab(QWidget):
             self.combo_vmaf_model.addItem("vmaf_v0.6.1", "vmaf_v0.6.1")
             self.combo_vmaf_model.addItem("vmaf_4k_v0.6.1", "vmaf_4k_v0.6.1")
             self.combo_vmaf_model.addItem("vmaf_b_v0.6.3", "vmaf_b_v0.6.3")
-    
+
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated"""
         # Check for vmaf_thread

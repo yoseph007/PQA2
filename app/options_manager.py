@@ -178,11 +178,11 @@ class OptionsManager(QObject):
             default_value = self.default_settings[category][key]
 
         return self.settings[category].get(key, default_value)
-        
+
     def get_settings(self):
         """Get all settings"""
         return self.settings
-        
+
     # Alias for get_settings to maintain compatibility
     def get_setting(self, category, key=None):
         """Get a setting value by category and key"""
@@ -231,7 +231,7 @@ class OptionsManager(QObject):
         """Reset all settings to defaults"""
         self.settings = self.default_settings.copy()
         return self.save_settings()
-        
+
     def update_settings(self, settings):
         """Update multiple settings at once"""
         # Update each category with provided values
@@ -246,7 +246,7 @@ class OptionsManager(QObject):
             else:
                 # Add new setting category
                 self.settings[key] = value
-                
+
         # Save the updated settings
         return self.save_settings()
 
@@ -486,16 +486,16 @@ class OptionsManager(QObject):
         except Exception as e:
             logger.error(f"Error getting dshow formats: {str(e)}")
             return {"formats": [], "format_map": {}}
-            
+
     def get_device_formats(self, device):
         """Get available formats for the specified device directly from ffmpeg output"""
         try:
             logger.info(f"Getting formats for device: {device}")
-            
+
             # Use DirectShow to get actual device formats on Windows
             cmd = ["ffmpeg", "-hide_banner", "-f", "dshow", "-list_options", "true", "-i", f"video=Decklink Video Capture"]
             logger.info(f"Getting formats using dshow command: {' '.join(cmd)}")
-            
+
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             try:
                 stdout, stderr = process.communicate(timeout=10)  # 10 second timeout
@@ -504,24 +504,24 @@ class OptionsManager(QObject):
                 process.kill()
                 logger.warning("Timeout getting dshow formats")
                 combined_output = ""
-            
+
             # Parse the output to extract formats
             formats = []
             format_id = 1
-            
+
             # Parse format using regex pattern that matches ffmpeg output format
             format_pattern = r'pixel_format=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
-            
+
             # Also look for v210 codec formats
             vcodec_pattern = r'vcodec=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
-            
+
             for line in combined_output.splitlines():
                 # Try pixel_format pattern first
                 match = re.search(format_pattern, line)
                 if match:
                     pixel_format, resolution, fps = match.groups()
                     fps_float = float(fps)
-                    
+
                     # Format the rate nicely
                     if abs(fps_float - 23.976) < 0.01:
                         nice_rate = 23.98
@@ -531,7 +531,7 @@ class OptionsManager(QObject):
                         nice_rate = 59.94
                     else:
                         nice_rate = round(fps_float, 2)
-                    
+
                     format_item = {
                         "id": f"fmt{format_id}",
                         "resolution": resolution,
@@ -542,13 +542,13 @@ class OptionsManager(QObject):
                     formats.append(format_item)
                     format_id += 1
                     continue
-                
+
                 # Try vcodec pattern if pixel_format didn't match
                 match = re.search(vcodec_pattern, line)
                 if match:
                     vcodec, resolution, fps = match.groups()
                     fps_float = float(fps)
-                    
+
                     # Format the rate nicely
                     if abs(fps_float - 23.976) < 0.01:
                         nice_rate = 23.98
@@ -558,7 +558,7 @@ class OptionsManager(QObject):
                         nice_rate = 59.94
                     else:
                         nice_rate = round(fps_float, 2)
-                    
+
                     format_item = {
                         "id": f"fmt{format_id}",
                         "resolution": resolution,
@@ -568,11 +568,11 @@ class OptionsManager(QObject):
                     }
                     formats.append(format_item)
                     format_id += 1
-            
+
             if formats:
                 logger.info(f"Found {len(formats)} formats for device {device}")
                 return formats
-            
+
             # If no formats found or parsing failed, use default formats
             logger.warning("Failed to parse formats from ffmpeg output, using defaults")
             default_formats = [
@@ -584,14 +584,14 @@ class OptionsManager(QObject):
                 {"id": "fmt6", "resolution": "720x576", "frame_rate": 25, "pixel_format": "uyvy422", "display": "720x576 @ 25 fps (uyvy422)"},
                 {"id": "fmt7", "resolution": "720x486", "frame_rate": 29.97, "pixel_format": "uyvy422", "display": "720x486 @ 29.97 fps (uyvy422)"}
             ]
-            
+
             return default_formats
-                
+
         except Exception as e:
             logger.error(f"Error in get_device_formats: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            
+
             # Return some default formats as fallback
             return [
                 {"id": "fmt1", "resolution": "1920x1080", "frame_rate": 29.97, "pixel_format": "uyvy422", "display": "1920x1080 @ 29.97 fps (uyvy422)"},
@@ -603,3 +603,50 @@ class OptionsManager(QObject):
         # Add your ffmpeg detection logic here if needed
         # For now, assume it's in the system PATH
         return "ffmpeg" # Replace with your actual ffmpeg path detection
+
+    def get_capture_formats(self, device_name):
+        """Get available capture formats for a device using ffmpeg -list_options"""
+        formats = []
+
+        try:
+            # Build ffmpeg command to list device options
+            cmd = [
+                self.get_ffmpeg_path(),
+                "-f", "dshow",
+                "-hide_banner",
+                "-list_options", "true",
+                "-i", f"video={device_name}"
+            ]
+
+            # Run the command and capture output
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate()
+
+            # Combine stdout and stderr as ffmpeg outputs to stderr
+            output = stderr.decode() if stderr else stdout.decode()
+
+            # Extract format lines matching both pixel_format and vcodec patterns
+            # Example: pixel_format=uyvy422  min s=1920x1080 fps=29.97 max s=1920x1080 fps=29.97
+            format_pattern = r'(?:pixel_format|vcodec)=\w+\s+min\s+s=(\d+x\d+)\s+fps=(\d+\.?\d*)\s+max\s+s=\1\s+fps=\2'
+            matches = re.findall(format_pattern, output)
+
+            # Process all matches
+            seen_formats = set()
+            for resolution, fps in matches:
+                # Create a format string that exactly matches the device output
+                format_str = f"{resolution} fps={fps}"
+                # Avoid duplicates but preserve order
+                if format_str not in seen_formats:
+                    seen_formats.add(format_str)
+                    formats.append(format_str)
+                    logger.info(f"Format line: {format_str}")
+        except Exception as e:
+            logger.error(f"Error getting capture formats: {e}")
+
+        return formats
+
+    def get_ffmpeg_path(self):
+        """Get the path to the ffmpeg executable."""
+        # Implement your ffmpeg path detection logic here if needed.
+        # This example assumes ffmpeg is in the system PATH.
+        return "ffmpeg"

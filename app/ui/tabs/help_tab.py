@@ -1,4 +1,3 @@
-
 import logging
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTabWidget, QTextBrowser, 
                             QLabel, QScrollArea, QHBoxLayout, QPushButton)
@@ -9,77 +8,77 @@ logger = logging.getLogger(__name__)
 
 class HelpTab(QWidget):
     """Help tab with user guide and documentation"""
-    
+
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
         self._setup_ui()
-        
+
     def _setup_ui(self):
         """Set up the Help tab UI"""
         layout = QVBoxLayout(self)
-        
+
         # Create tabbed interface for different help sections
         help_tabs = QTabWidget()
-        
+
         # Quick Start Guide tab
         quick_start_tab = QWidget()
         quick_start_layout = QVBoxLayout(quick_start_tab)
-        
+
         quick_start_browser = QTextBrowser()
         quick_start_browser.setOpenExternalLinks(True)
         quick_start_browser.setHtml(self._get_quick_start_content())
         quick_start_layout.addWidget(quick_start_browser)
-        
+
         help_tabs.addTab(quick_start_tab, "Quick Start Guide")
-        
+
         # Full User Guide tab
         user_guide_tab = QWidget()
         user_guide_layout = QVBoxLayout(user_guide_tab)
-        
+
         user_guide_browser = QTextBrowser()
         user_guide_browser.setOpenExternalLinks(True)
         user_guide_browser.setHtml(self._get_user_guide_content())
         user_guide_layout.addWidget(user_guide_browser)
-        
+
         help_tabs.addTab(user_guide_tab, "User Guide")
-        
+
         # Installation & Setup tab
         setup_tab = QWidget()
         setup_layout = QVBoxLayout(setup_tab)
-        
+
         setup_browser = QTextBrowser()
         setup_browser.setOpenExternalLinks(True)
         setup_browser.setHtml(self._get_installation_content())
         setup_layout.addWidget(setup_browser)
-        
+
         help_tabs.addTab(setup_tab, "Installation & Setup")
-        
+
         # VMAF Standards tab
         standards_tab = QWidget()
         standards_layout = QVBoxLayout(standards_tab)
-        
+
         standards_browser = QTextBrowser()
         standards_browser.setOpenExternalLinks(True)
         standards_browser.setHtml(self._get_standards_content())
         standards_layout.addWidget(standards_browser)
-        
+
         help_tabs.addTab(standards_tab, "VMAF Standards")
-        
+
         # Troubleshooting tab
         troubleshooting_tab = QWidget()
         troubleshooting_layout = QVBoxLayout(troubleshooting_tab)
-        
+
         troubleshooting_browser = QTextBrowser()
         troubleshooting_browser.setOpenExternalLinks(True)
         troubleshooting_browser.setHtml(self._get_troubleshooting_content())
         troubleshooting_layout.addWidget(troubleshooting_browser)
-        
+
         help_tabs.addTab(troubleshooting_tab, "Troubleshooting")
-        
+
         # Add the tabs to the main layout
         layout.addWidget(help_tabs)
-        
+
     def _get_quick_start_content(self):
         """Get the HTML content for the Quick Start Guide"""
         return """
@@ -97,11 +96,11 @@ class HelpTab(QWidget):
         </head>
         <body>
             <h1>VMAF Test App - Quick Start Guide</h1>
-            
+
             <p>This guide provides a quick overview of how to perform video quality testing using the VMAF Test App.</p>
-            
+
             <h2>Basic Workflow</h2>
-            
+
             <div class="step">
                 <h3>Step 1: Configure Setup</h3>
                 <p>In the <b>Setup</b> tab:</p>
@@ -111,7 +110,7 @@ class HelpTab(QWidget):
                     <li>Choose an output directory for results</li>
                 </ul>
             </div>
-            
+
             <div class="step">
                 <h3>Step 2: Capture Video</h3>
                 <p>In the <b>Capture</b> tab:</p>
@@ -121,7 +120,7 @@ class HelpTab(QWidget):
                     <li>Click "Start Capture" to record the video to be tested</li>
                 </ul>
             </div>
-            
+
             <div class="step">
                 <h3>Step 3: Run Analysis</h3>
                 <p>In the <b>Analysis</b> tab:</p>
@@ -131,7 +130,7 @@ class HelpTab(QWidget):
                     <li>Click "Run Analysis" to start the alignment and VMAF processing</li>
                 </ul>
             </div>
-            
+
             <div class="step">
                 <h3>Step 4: View Results</h3>
                 <p>In the <b>Results</b> tab:</p>
@@ -141,22 +140,22 @@ class HelpTab(QWidget):
                     <li>Export results as needed for reporting</li>
                 </ul>
             </div>
-            
+
             <div class="tip">
                 <h3>Tip: Using Bookend Alignment</h3>
                 <p>For the most accurate analysis, use "bookend" alignment method which places bright white flashes at the start and end of your reference video.</p>
             </div>
-            
+
             <div class="warning">
                 <h3>Important Note</h3>
                 <p>This application is designed to work specifically with BlackMagic capture devices. Other capture hardware may not be compatible.</p>
             </div>
-            
+
             <p>For more detailed information, please see the <b>User Guide</b> tab.</p>
         </body>
         </html>
         """
-    
+
     def _get_user_guide_content(self):
         """Get the HTML content for the User Guide"""
         return """
@@ -177,13 +176,13 @@ class HelpTab(QWidget):
         </head>
         <body>
             <h1>VMAF Test App - Complete User Guide</h1>
-            
+
             <p>This comprehensive guide explains all features and workflows of the VMAF Test App for video quality testing.</p>
-            
+
             <h2>1. Application Overview</h2>
-            
+
             <p>The VMAF (Video Multi-Method Assessment Fusion) Test App is designed to measure the perceived video quality of processed/compressed video compared to original source content. The application uses the following workflow:</p>
-            
+
             <ol>
                 <li>Configure test parameters and select a reference video</li>
                 <li>Capture the processed/output video using a BlackMagic capture device</li>
@@ -191,71 +190,71 @@ class HelpTab(QWidget):
                 <li>Run VMAF, PSNR, and SSIM analysis to measure quality</li>
                 <li>Present results and export reports</li>
             </ol>
-            
+
             <h2>2. Setup Tab</h2>
-            
+
             <div class="section">
                 <h3>Test Configuration</h3>
                 <p><b>Test Name:</b> Enter a descriptive name for your test. This will be used in file naming and reports.</p>
                 <p><b>Reference Video:</b> Select the original source video for quality comparison.</p>
                 <p><b>Output Directory:</b> Choose where test results and reports will be saved.</p>
-                
+
                 <h3>Reference Video Preview</h3>
                 <p>Once a reference video is selected, you can preview it to ensure it's the correct content.</p>
                 <p>The "Generate Bookends" button will create a version of your reference video with white flashes at the beginning and end, which helps with precise alignment.</p>
-                
+
                 <h3>Video Information</h3>
                 <p>After selecting a reference video, detailed information about the video will be displayed, including resolution, frame rate, duration, and codec details.</p>
             </div>
-            
+
             <h2>3. Capture Tab</h2>
-            
+
             <div class="section">
                 <h3>Capture Device Settings</h3>
                 <p><b>Capture Device:</b> Select your BlackMagic capture device from the dropdown.</p>
                 <p><b>Format:</b> Choose the capture format (resolution and frame rate).</p>
                 <p><b>Duration:</b> Set how long to record (in seconds).</p>
-                
+
                 <h3>Capture Controls</h3>
                 <p><b>Start Capture:</b> Begin recording video from the selected device.</p>
                 <p><b>Preview:</b> View the live input from the capture device.</p>
                 <p><b>Stop Capture:</b> End the current recording session.</p>
-                
+
                 <h3>Captured Video Preview</h3>
                 <p>After capture is complete, you can preview the captured video to ensure proper recording.</p>
                 <p>The captured video file path will be displayed for reference.</p>
             </div>
-            
+
             <h2>4. Analysis Tab</h2>
-            
+
             <div class="section">
                 <h3>Analysis Settings</h3>
                 <p><b>VMAF Model:</b> Select the VMAF model to use for analysis. The standard model is vmaf_v0.6.1, but specialized models like vmaf_4k_v0.6.1 are available for specific use cases.</p>
                 <p><b>Analysis Duration:</b> Choose how much of the video to analyze (full duration or a specific time period).</p>
-                
+
                 <h3>Analysis Process</h3>
                 <p>The analysis process consists of two main steps:</p>
                 <ol>
                     <li><b>Alignment:</b> The captured video is aligned with the reference video to ensure frame-accurate comparison.</li>
                     <li><b>VMAF Analysis:</b> The aligned videos are analyzed using FFmpeg's libvmaf to calculate VMAF, PSNR, and SSIM metrics.</li>
                 </ol>
-                
+
                 <h3>Progress Monitoring</h3>
                 <p>Both alignment and VMAF analysis progress are displayed with progress bars and status messages.</p>
                 <p>A detailed log shows each step of the process for troubleshooting.</p>
             </div>
-            
+
             <h2>5. Results Tab</h2>
-            
+
             <div class="section">
                 <h3>Quality Metrics</h3>
                 <p><b>VMAF Score:</b> The primary quality metric (0-100), where higher values indicate better quality.</p>
                 <p><b>PSNR:</b> Peak Signal-to-Noise Ratio in dB, a traditional quality metric.</p>
                 <p><b>SSIM:</b> Structural Similarity Index (0-1), measuring structural differences between images.</p>
-                
+
                 <h3>Visual Comparison</h3>
                 <p>The Results tab includes visual frame comparisons between reference and captured video to help identify visual differences.</p>
-                
+
                 <h3>Export Options</h3>
                 <p>Results can be exported in various formats:</p>
                 <ul>
@@ -264,25 +263,25 @@ class HelpTab(QWidget):
                     <li>Frame comparison screenshots</li>
                 </ul>
             </div>
-            
+
             <h2>6. Options Tab</h2>
-            
+
             <div class="section">
                 <h3>General Settings</h3>
                 <p>Configure directories, FFmpeg paths, and application appearance.</p>
-                
+
                 <h3>Capture Settings</h3>
                 <p>Configure capture device parameters and bookend detection settings.</p>
-                
+
                 <h3>Analysis Settings</h3>
                 <p>Adjust VMAF analysis parameters and alignment methods.</p>
-                
+
                 <h3>Customization & Branding</h3>
                 <p>Customize application appearance and branding for reports and the UI.</p>
             </div>
-            
+
             <h2>7. Understanding VMAF Scores</h2>
-            
+
             <div class="section">
                 <h3>VMAF Scale</h3>
                 <p>VMAF scores range from 0 to 100, with higher scores indicating better quality:</p>
@@ -294,10 +293,10 @@ class HelpTab(QWidget):
                     <tr><td>60-70</td><td>Fair</td><td>Low-bitrate streaming, mobile</td></tr>
                     <tr><td>Below 60</td><td>Poor</td><td>Significant visible degradation</td></tr>
                 </table>
-                
+
                 <p>Note that VMAF scores should be interpreted within the context of your specific use case and content type.</p>
             </div>
-            
+
             <div class="tip">
                 <h3>Best Practices</h3>
                 <ul>
@@ -307,7 +306,7 @@ class HelpTab(QWidget):
                     <li>Run multiple tests and average results for more reliable measurements</li>
                 </ul>
             </div>
-            
+
             <div class="warning">
                 <h3>Known Limitations</h3>
                 <ul>
@@ -319,7 +318,7 @@ class HelpTab(QWidget):
         </body>
         </html>
         """
-    
+
     def _get_installation_content(self):
         """Get the HTML content for the Installation & Setup tab"""
         return """
@@ -338,48 +337,42 @@ class HelpTab(QWidget):
         </head>
         <body>
             <h1>Installation & Setup Guide</h1>
-            
+
             <p>This guide provides instructions for installing and configuring the VMAF Test App.</p>
-            
-            <h2>System Requirements</h2>
-            
-            <div class="section">
-                <h3>Hardware Requirements</h3>
-                <ul>
-                    <li><b>Processor:</b> Intel i5/i7 or AMD Ryzen 5/7 (or equivalent)</li>
-                    <li><b>RAM:</b> 8GB minimum, 16GB recommended</li>
-                    <li><b>Storage:</b> At least 1GB for the application, plus space for video files</li>
-                    <li><b>Video Capture:</b> BlackMagic Design capture device (e.g., Intensity, DeckLink, UltraStudio)</li>
-                    <li><b>Display:</b> 1920x1080 resolution minimum</li>
-                </ul>
-                
-                <h3>Software Requirements</h3>
-                <ul>
-                    <li><b>Operating System:</b> Windows 10/11</li>
-                    <li><b>BlackMagic Desktop Video:</b> Latest version compatible with your capture device</li>
-                </ul>
-            </div>
-            
-            <h2>Installation</h2>
-            
-            <div class="section">
-                <h3>1. Install the Application</h3>
-                <p>Run the installer package and follow the on-screen instructions to complete the installation.</p>
-                <p>The application is packaged as a single file installer that includes all necessary components, including FFmpeg.</p>
-                
-                <h3>2. Install BlackMagic Desktop Video</h3>
-                <p>Download the latest version of BlackMagic Desktop Video for Windows from <a href="https://www.blackmagicdesign.com/support">BlackMagic Design Support</a>.</p>
-                <p>Follow the installation instructions provided by BlackMagic Design.</p>
-            </div>
-            
-            <h2>Configuration</h2>
-            
-            <div class="section">
-                <h3>1. First-time Setup</h3>
-                <p>When you run the application for the first time, it will create a configuration folder and settings file automatically.</p>
-                <p>No additional setup is required as FFmpeg is included in the <code>/ffmpeg_bin/</code> folder of the application.</p>
-                
-                <h3>2. Configure Application Settings</h3>
+
+            <h2>1. Installation Setup</h2>
+            <p>The VMAF Test App is packaged as a standalone Windows application using PyInstaller.</p>
+
+            <h3>Windows</h3>
+            <ol>
+                <li>Run the installer provided to you</li>
+                <li>The application comes bundled with FFmpeg in the <code>/ffmpeg_bin/</code> folder</li>
+                <li>No additional software installation is required</li>
+            </ol>
+
+            <h2>2. System Requirements</h2>
+            <p>The VMAF Test App requires:</p>
+            <ul>
+                <li>Windows 10/11 64-bit operating system</li>
+                <li>Blackmagic Design capture device (supported models listed in section 5)</li>
+                <li>4GB RAM minimum (8GB or more recommended)</li>
+                <li>2GB available disk space</li>
+                <li>1920x1080 display resolution or higher</li>
+            </ul>
+
+            <h2>3. First-Time Setup</h2>
+            <p>After installation, you'll need to configure the app:</p>
+            <ol>
+                <li>Launch the application</li>
+                <li>Go to the Options tab</li>
+                <li>The FFmpeg path should be automatically set to the bundled version</li>
+                <li>Configure capture device settings for your Blackmagic device</li>
+                <li>Set your preferred reference video directory</li>
+                <li>Configure your branding settings if desired</li>
+                <li>Apply settings</li>
+            </ol>
+
+            <h2>4. Configure Application Settings</h2>
                 <p>In the application, navigate to the <b>Options</b> tab to configure:</p>
                 <ul>
                     <li>Reference video directory</li>
@@ -387,7 +380,7 @@ class HelpTab(QWidget):
                     <li>Capture device settings</li>
                     <li>Branding and UI preferences</li>
                 </ul>
-                
+
                 <h3>3. Test Your Setup</h3>
                 <p>Verify your installation by:</p>
                 <ol>
@@ -395,7 +388,7 @@ class HelpTab(QWidget):
                     <li>Testing your capture device in the Capture tab</li>
                     <li>Running a short VMAF analysis test</li>
                 </ol>
-                
+
                 <div class="note">
                     <h3>Note on BlackMagic Device Detection</h3>
                     <p>If your BlackMagic device is not detected:</p>
@@ -407,7 +400,7 @@ class HelpTab(QWidget):
                     </ul>
                 </div>
             </div>
-            
+
             <div class="warning">
                 <h3>Important Note on Dependencies</h3>
                 <p>This application is specifically designed to work with BlackMagic capture devices. Other capture hardware is not officially supported and may not work correctly.</p>
@@ -416,7 +409,7 @@ class HelpTab(QWidget):
         </body>
         </html>
         """
-    
+
     def _get_standards_content(self):
         """Get the HTML content for the VMAF Standards tab"""
         return """
@@ -436,16 +429,16 @@ class HelpTab(QWidget):
         </head>
         <body>
             <h1>VMAF Standards & Industry Practices</h1>
-            
+
             <p>This section provides information about VMAF, industry standards for video quality testing, and best practices.</p>
-            
+
             <h2>About VMAF</h2>
-            
+
             <div class="section">
                 <p>Video Multi-Method Assessment Fusion (VMAF) is a perceptual video quality assessment algorithm developed by Netflix in collaboration with the University of Southern California and the Laboratory for Image and Video Engineering at The University of Texas at Austin.</p>
-                
+
                 <p>VMAF combines multiple quality metrics and video features using machine learning to predict subjective quality scores that correlate with human perception.</p>
-                
+
                 <h3>Key Characteristics</h3>
                 <ul>
                     <li>Designed to capture perceptual quality as experienced by viewers</li>
@@ -455,12 +448,12 @@ class HelpTab(QWidget):
                     <li>Updated through multiple versions with various optimization targets (standard, 4K, phone, etc.)</li>
                 </ul>
             </div>
-            
+
             <h2>VMAF Models</h2>
-            
+
             <div class="section">
                 <p>Different VMAF models exist for specific use cases:</p>
-                
+
                 <table>
                     <tr>
                         <th>Model</th>
@@ -488,10 +481,10 @@ class HelpTab(QWidget):
                         <td>Better at handling severe compression artifacts</td>
                     </tr>
                 </table>
-                
+
                 <h3>Interpreting VMAF Scores</h3>
                 <p>Industry standard interpretations of VMAF scores:</p>
-                
+
                 <table>
                     <tr>
                         <th>Score Range</th>
@@ -530,19 +523,19 @@ class HelpTab(QWidget):
                     </tr>
                 </table>
             </div>
-            
+
             <h2>Industry Standards & Testing Protocols</h2>
-            
+
             <div class="section">
                 <h3>Recommended Testing Practices</h3>
-                
+
                 <h4>1. Test Selection</h4>
                 <ul>
                     <li>Use diverse content types (sports, drama, animation, etc.)</li>
                     <li>Include challenging scenes (fast motion, dark scenes, detailed textures)</li>
                     <li>Test with varying resolutions and frame rates</li>
                 </ul>
-                
+
                 <h4>2. Test Methodology</h4>
                 <ul>
                     <li>Use consistent test conditions across comparisons</li>
@@ -550,7 +543,7 @@ class HelpTab(QWidget):
                     <li>Use appropriate VMAF model for content type and viewing conditions</li>
                     <li>Run multiple tests and average results</li>
                 </ul>
-                
+
                 <h4>3. Reporting</h4>
                 <ul>
                     <li>Document test conditions (hardware, software, settings)</li>
@@ -558,7 +551,7 @@ class HelpTab(QWidget):
                     <li>Report confidence intervals or variance in measurements</li>
                     <li>Provide visual examples for context</li>
                 </ul>
-                
+
                 <h3>Related Industry Standards</h3>
                 <ul>
                     <li><b>ITU-T P.910:</b> Subjective video quality assessment methods for multimedia applications</li>
@@ -567,26 +560,26 @@ class HelpTab(QWidget):
                     <li><b>VQEG (Video Quality Experts Group):</b> Testing methodologies and validation procedures</li>
                 </ul>
             </div>
-            
+
             <h2>Best Practices for VMAF Testing</h2>
-            
+
             <div class="section">
                 <h3>1. Accurate Alignment</h3>
                 <p>Proper temporal alignment between reference and test videos is critical for accurate VMAF measurements. The bookend approach (white flashes at start/end) provides the most precise alignment.</p>
-                
+
                 <h3>2. Representative Sampling</h3>
                 <p>For long content, select representative segments that include various visual characteristics (motion, detail, color variance).</p>
-                
+
                 <h3>3. Multiple Metrics</h3>
                 <p>While VMAF is a powerful metric, also consider PSNR and SSIM for a more complete understanding of video quality differences.</p>
-                
+
                 <h3>4. Context-Specific Evaluation</h3>
                 <p>Interpret results in the context of your specific use case - acceptable quality thresholds may differ between broadcast, streaming, and archival applications.</p>
-                
+
                 <h3>5. Hardware Considerations</h3>
                 <p>Ensure that capture hardware does not introduce artifacts that could affect measurements. Use high-quality BlackMagic capture devices with appropriate settings.</p>
             </div>
-            
+
             <div class="reference">
                 <h3>Further Reading</h3>
                 <ul>
@@ -600,7 +593,7 @@ class HelpTab(QWidget):
         </body>
         </html>
         """
-    
+
     def _get_troubleshooting_content(self):
         """Get the HTML content for the Troubleshooting tab"""
         return """
@@ -618,15 +611,15 @@ class HelpTab(QWidget):
         </head>
         <body>
             <h1>Troubleshooting Guide</h1>
-            
+
             <p>This guide helps resolve common issues with the VMAF Test App.</p>
-            
+
             <h2>Capture Device Issues</h2>
-            
+
             <div class="issue">
                 <h3>BlackMagic device not detected</h3>
                 <p>The application cannot find or initialize your BlackMagic capture device.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -639,11 +632,11 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <div class="issue">
                 <h3>Capture fails to start</h3>
                 <p>The application cannot start the capture process.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -654,11 +647,11 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <div class="issue">
                 <h3>Poor quality or distorted capture</h3>
                 <p>The captured video has artifacts, distortion, or incorrect colors.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -669,13 +662,13 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <h2>Analysis Issues</h2>
-            
+
             <div class="issue">
                 <h3>Alignment fails</h3>
                 <p>The application cannot properly align the reference and captured videos.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -686,11 +679,11 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <div class="issue">
                 <h3>VMAF analysis fails</h3>
                 <p>The VMAF analysis process fails to complete or returns errors.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -700,17 +693,17 @@ class HelpTab(QWidget):
                         <li>Analyze a shorter segment of video</li>
                         <li>Check the application logs for specific FFmpeg errors</li>
                     </ol>
-                    
+
                     <p>To verify FFmpeg has libvmaf support, run:</p>
                     <div class="code">ffmpeg -filters | grep vmaf</div>
                     <p>This should show the libvmaf filter in the output.</p>
                 </div>
             </div>
-            
+
             <div class="issue">
                 <h3>Missing PSNR or SSIM results</h3>
                 <p>VMAF results appear but PSNR and/or SSIM metrics are missing.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -720,11 +713,11 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <div class="issue">
                 <h3>Duplicate analysis results</h3>
                 <p>The analysis runs twice or produces duplicate results.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -734,13 +727,13 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <h2>Application Issues</h2>
-            
+
             <div class="issue">
                 <h3>Application crashes or freezes</h3>
                 <p>The application becomes unresponsive or closes unexpectedly.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -752,11 +745,11 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <div class="issue">
                 <h3>UI elements missing or misaligned</h3>
                 <p>Application interface appears broken or incomplete.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -767,11 +760,11 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <div class="issue">
                 <h3>Settings not saving</h3>
                 <p>Configuration changes in the Options tab don't persist after restart.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -781,13 +774,13 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <h2>FFmpeg Issues</h2>
-            
+
             <div class="issue">
                 <h3>FFmpeg not found</h3>
                 <p>The application cannot locate the FFmpeg executables.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -797,11 +790,11 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <div class="issue">
                 <h3>Missing libvmaf support</h3>
                 <p>FFmpeg is found but doesn't have libvmaf support.</p>
-                
+
                 <div class="solution">
                     <h4>Solutions:</h4>
                     <ol>
@@ -812,18 +805,18 @@ class HelpTab(QWidget):
                     </ol>
                 </div>
             </div>
-            
+
             <h2>Getting Help</h2>
-            
+
             <p>If you're still experiencing issues after trying the solutions above:</p>
-            
+
             <ol>
                 <li>Check the application logs (in the 'logs' directory)</li>
                 <li>Take screenshots of any error messages</li>
                 <li>Note your system configuration, including OS, Python version, and FFmpeg version</li>
                 <li>Contact technical support with this information</li>
             </ol>
-            
+
             <p>For reporting bugs or requesting features, please visit our project repository.</p>
         </body>
         </html>
