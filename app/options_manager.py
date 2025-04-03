@@ -157,7 +157,11 @@ class OptionsManager(QObject):
         if key is None:
             return self.settings[category]
 
-        return self.settings[category].get(key, self.default_settings.get(category, {}).get(key))
+        default_value = None
+        if category in self.default_settings and key in self.default_settings[category]:
+            default_value = self.default_settings[category][key]
+            
+        return self.settings[category].get(key, default_value)
 
     def update_setting(self, category, key, value):
         """Update a specific setting"""
