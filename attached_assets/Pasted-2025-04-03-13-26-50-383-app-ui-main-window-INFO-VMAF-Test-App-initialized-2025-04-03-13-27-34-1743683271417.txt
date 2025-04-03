@@ -1,0 +1,35 @@
+2025-04-03 13:26:50,383 - app.ui.main_window - INFO - VMAF Test App initialized
+2025-04-03 13:27:34,564 - app.ui.tabs.results_tab - ERROR - Error loading results history: 'SetupTab' object has no attribute 'lbl_output_dir'
+2025-04-03 13:27:34,577 - app.ui.tabs.results_tab - ERROR - Traceback (most recent call last):
+  File "C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\ui\tabs\results_tab.py", line 262, in load_results_history
+    output_dir = self.parent.setup_tab.lbl_output_dir.text()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SetupTab' object has no attribute 'lbl_output_dir'. Did you mean: 'txt_output_dir'?
+
+2025-04-03 13:27:39,701 - app.ui.tabs.results_tab - ERROR - Error loading results history: 'SetupTab' object has no attribute 'lbl_output_dir'
+2025-04-03 13:27:39,714 - app.ui.tabs.results_tab - ERROR - Traceback (most recent call last):
+  File "C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\ui\tabs\results_tab.py", line 262, in load_results_history
+    output_dir = self.parent.setup_tab.lbl_output_dir.text()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SetupTab' object has no attribute 'lbl_output_dir'. Did you mean: 'txt_output_dir'?
+
+2025-04-03 13:27:40,860 - app.ui.tabs.results_tab - ERROR - Error loading results history: 'SetupTab' object has no attribute 'lbl_output_dir'
+2025-04-03 13:27:40,871 - app.ui.tabs.results_tab - ERROR - Traceback (most recent call last):
+  File "C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\ui\tabs\results_tab.py", line 262, in load_results_history
+    output_dir = self.parent.setup_tab.lbl_output_dir.text()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SetupTab' object has no attribute 'lbl_output_dir'. Did you mean: 'txt_output_dir'?
+
+2025-04-03 13:27:42,341 - app.ui.tabs.results_tab - ERROR - Error loading results history: 'SetupTab' object has no attribute 'lbl_output_dir'
+2025-04-03 13:27:42,350 - app.ui.tabs.results_tab - ERROR - Traceback (most recent call last):
+  File "C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\ui\tabs\results_tab.py", line 262, in load_results_history
+    output_dir = self.parent.setup_tab.lbl_output_dir.text()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SetupTab' object has no attribute 'lbl_output_dir'. Did you mean: 'txt_output_dir'?
+
+2025-04-03 13:27:45,596 - app.ui.tabs.results_tab - ERROR - Error loading results history: 'SetupTab' object has no attribute 'lbl_output_dir'
+2025-04-03 13:27:45,607 - app.ui.tabs.results_tab - ERROR - Traceback (most recent call last):
+  File "C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\ui\tabs\results_tab.py", line 262, in load_results_history
+    output_dir = self.parent.setup_tab.lbl_output_dir.text()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SetupTab' object has no attribute 'lbl_output_dir'. Did you mean: 'txt_output_dir'?
