@@ -156,7 +156,7 @@ class VMAFAnalyzer(QObject):
                     # Execute the command with window suppression
                     logger.info(f"Running simplified VMAF command: {' '.join(simplified_cmd)}")
 
-                    # Create startupinfo to suppress Windows error dialogs
+                    # Always create startupinfo to suppress all dialog windows
                     startupinfo = None
                     creationflags = 0
                     env = os.environ.copy()
@@ -164,15 +164,16 @@ class VMAFAnalyzer(QObject):
                     # Add environment variables to suppress FFmpeg dialogs
                     env.update({
                         "FFMPEG_HIDE_BANNER": "1",
-                        "AV_LOG_FORCE_NOCOLOR": "1"
+                        "AV_LOG_FORCE_NOCOLOR": "1",
+                        "SDL_VIDEODRIVER": "dummy",  # Prevent SDL from showing windows
+                        "SDL_AUDIODRIVER": "dummy"   # Prevent SDL from opening audio devices
                     })
 
                     if platform.system() == 'Windows':
                         startupinfo = subprocess.STARTUPINFO()
                         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                         startupinfo.wShowWindow = 0  # SW_HIDE
-                        if hasattr(subprocess, 'CREATE_NO_WINDOW'):
-                            creationflags = subprocess.CREATE_NO_WINDOW
+                        creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0x08000000  # Use the constant value if attribute not available
 
                     process = subprocess.Popen(
                         simplified_cmd,
@@ -419,6 +420,25 @@ class VMAFAnalyzer(QObject):
     def _run_psnr_ssim_analysis(self, ffmpeg_exe, distorted_path, reference_path, psnr_filename, ssim_filename):
         """Run PSNR and SSIM analysis separately using relative paths"""
         try:
+            # Set up startupinfo to suppress dialog windows
+            startupinfo = None
+            creationflags = 0
+            env = os.environ.copy()
+
+            # Add environment variables to suppress FFmpeg dialogs
+            env.update({
+                "FFMPEG_HIDE_BANNER": "1",
+                "AV_LOG_FORCE_NOCOLOR": "1",
+                "SDL_VIDEODRIVER": "dummy",
+                "SDL_AUDIODRIVER": "dummy"
+            })
+
+            if platform.system() == 'Windows':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0  # SW_HIDE
+                creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0x08000000
+            
             # Run PSNR analysis with relative paths
             logger.info("Running PSNR analysis...")
             psnr_cmd = [
@@ -431,7 +451,14 @@ class VMAFAnalyzer(QObject):
             ]
 
             logger.info(f"PSNR command: {' '.join(psnr_cmd)}")
-            subprocess.run(psnr_cmd, check=False, capture_output=True)
+            subprocess.run(
+                psnr_cmd,
+                check=False, 
+                capture_output=True, 
+                startupinfo=startupinfo,
+                creationflags=creationflags,
+                env=env
+            )
 
             # Run SSIM analysis with relative paths
             logger.info("Running SSIM analysis...")
@@ -445,7 +472,14 @@ class VMAFAnalyzer(QObject):
             ]
 
             logger.info(f"SSIM command: {' '.join(ssim_cmd)}")
-            subprocess.run(ssim_cmd, check=False, capture_output=True)
+            subprocess.run(
+                ssim_cmd,
+                check=False, 
+                capture_output=True,
+                startupinfo=startupinfo,
+                creationflags=creationflags,
+                env=env
+            )
 
             return True
         except Exception as e:

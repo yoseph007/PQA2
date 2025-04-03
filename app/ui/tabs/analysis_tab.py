@@ -1,4 +1,3 @@
-
 import logging
 import json
 from datetime import datetime
@@ -114,13 +113,13 @@ class AnalysisTab(QWidget):
         # Logs section with two columns
         logs_group = QGroupBox("Analysis Logs")
         logs_layout = QHBoxLayout()
-        
+
         # Left column - Analysis log
         left_log_layout = QVBoxLayout()
         left_log_label = QLabel("Analysis Log:")
         left_log_label.setStyleSheet("font-weight: bold;")
         left_log_layout.addWidget(left_log_label)
-        
+
         self.txt_analysis_log = QTextEdit()
         self.txt_analysis_log.setReadOnly(True)
         self.txt_analysis_log.setLineWrapMode(QTextEdit.WidgetWidth)
@@ -128,13 +127,13 @@ class AnalysisTab(QWidget):
         self.txt_analysis_log.setMaximumHeight(200)
         left_log_layout.addWidget(self.txt_analysis_log)
         logs_layout.addLayout(left_log_layout)
-        
+
         # Right column - Alignment and VMAF results
         right_log_layout = QVBoxLayout()
         right_log_label = QLabel("Alignment & Results:")
         right_log_label.setStyleSheet("font-weight: bold;")
         right_log_layout.addWidget(right_log_label)
-        
+
         self.txt_alignment_log = QTextEdit()
         self.txt_alignment_log.setReadOnly(True)
         self.txt_alignment_log.setLineWrapMode(QTextEdit.WidgetWidth)
@@ -142,7 +141,7 @@ class AnalysisTab(QWidget):
         self.txt_alignment_log.setMaximumHeight(200)
         right_log_layout.addWidget(self.txt_alignment_log)
         logs_layout.addLayout(right_log_layout)
-        
+
         logs_group.setLayout(logs_layout)
         layout.addWidget(logs_group)
 
@@ -273,11 +272,11 @@ class AnalysisTab(QWidget):
             test_name = self.parent.setup_tab.txt_test_name.currentText()
         else:
             test_name = self.parent.setup_tab.txt_test_name.text()
-            
+
         # Get tester name and location
         tester_name = self.parent.setup_tab.txt_tester_name.text()
         test_location = self.parent.setup_tab.txt_test_location.text()
-        
+
         # Save test metadata to file after VMAF analysis
         self.test_metadata = {
             "test_name": test_name,
@@ -340,13 +339,13 @@ class AnalysisTab(QWidget):
         vmaf_score = results.get('vmaf_score')
         psnr = results.get('psnr')
         ssim = results.get('ssim')
-        
+
         # Save test metadata to JSON file in the test directory
         try:
             if hasattr(self, 'test_metadata') and results.get('json_path'):
                 # Get the test directory from the VMAF results
                 test_dir = os.path.dirname(results.get('json_path'))
-                
+
                 # Add results to metadata
                 metadata = self.test_metadata.copy()
                 metadata.update({
@@ -356,12 +355,12 @@ class AnalysisTab(QWidget):
                     "reference_path": results.get('reference_path'),
                     "distorted_path": results.get('distorted_path')
                 })
-                
+
                 # Save metadata to JSON file
                 metadata_path = os.path.join(test_dir, f"{self.test_metadata['test_name']}_{self.test_metadata['timestamp']}_metadata.json")
                 with open(metadata_path, 'w') as f:
                     json.dump(metadata, f, indent=4)
-                
+
                 logger.info(f"Test metadata saved to: {metadata_path}")
                 self.log_to_analysis(f"Test metadata saved to test directory")
         except Exception as e:
@@ -435,15 +434,15 @@ class AnalysisTab(QWidget):
         """Log alignment updates to both columns"""
         # Log to general analysis log
         self.log_to_analysis(message)
-        
+
         # Add to alignment log with highlighted formatting
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] {message}"
-        
+
         # Add special formatting for important messages
         if "complete" in message.lower() or "finished" in message.lower() or "success" in message.lower():
             formatted_message = f'<span style="color: #388E3C; font-weight: bold;">{formatted_message}</span>'
-        
+
         # Ensure it also appears in alignment log
         self.txt_alignment_log.append(formatted_message)
         self.txt_alignment_log.verticalScrollBar().setValue(
@@ -454,10 +453,10 @@ class AnalysisTab(QWidget):
         """Update VMAF progress bar with better feedback"""
         # Ensure progress is between 0-100
         progress = max(0, min(100, progress))
-        
+
         # Update the progress bar
         self.pb_vmaf_progress.setValue(progress)
-        
+
         # Also update status text with percentage
         if progress < 100:
             self.lbl_vmaf_status.setText(f"VMAF Analysis: {progress}% complete")
@@ -492,53 +491,51 @@ class AnalysisTab(QWidget):
 
             logger.info(f"Scanning for VMAF models in: {models_dir}")
 
-            # Get default model from settings if available
-            default_model = "vmaf_v0.6.1"
-            if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-                try:
-                    vmaf_settings = self.parent.options_manager.get_setting("vmaf")
-                    if vmaf_settings and isinstance(vmaf_settings, dict) and 'default_model' in vmaf_settings:
-                        default_model = vmaf_settings['default_model']
-                except Exception as e:
-                    logger.warning(f"Error getting default VMAF model from settings: {e}")
-
-            # Scan directory for .json model files
-            model_files = []
+            # Scan for .json VMAF model files
             if os.path.exists(models_dir):
+                model_files = []
                 for file in os.listdir(models_dir):
                     if file.endswith('.json'):
-                        # Remove .json extension for display
-                        model_name = os.path.splitext(file)[0]
+                        model_name = os.path.splitext(file)[0]  # Remove .json extension
                         model_files.append(model_name)
 
-            # Sort models alphabetically
-            model_files.sort()
+                # Sort models alphabetically for better UX
+                model_files.sort()
 
-            # If no models found, add defaults
-            if not model_files:
-                model_files = ["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"]
-                logger.warning(f"No VMAF models found in {models_dir}, using defaults")
+                # Add each model to the dropdown
+                for model in model_files:
+                    self.combo_vmaf_model.addItem(model)
 
-            # Add models to dropdown
-            for model in model_files:
-                self.combo_vmaf_model.addItem(model, model)
+                logger.info(f"Populated VMAF model dropdown with {len(model_files)} models")
 
-            # Set default model if found
-            default_index = self.combo_vmaf_model.findData(default_model)
-            if default_index >= 0:
-                self.combo_vmaf_model.setCurrentIndex(default_index)
+                # Select default model from settings if available
+                if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                    try:
+                        vmaf_settings = self.parent.options_manager.get_setting("vmaf")
+                        default_model = vmaf_settings.get("default_model", "vmaf_v0.6.1")
 
-            logger.info(f"Populated VMAF model dropdown with {len(model_files)} models")
-
+                        # Find and select the default model
+                        index = self.combo_vmaf_model.findText(default_model)
+                        if index >= 0:
+                            self.combo_vmaf_model.setCurrentIndex(index)
+                    except Exception as e:
+                        logger.warning(f"Error selecting default VMAF model: {e}")
+            else:
+                logger.warning(f"Models directory not found: {models_dir}")
+                # Add fallback default models
+                default_models = ["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"]
+                for model in default_models:
+                    self.combo_vmaf_model.addItem(model)
+                logger.info("Using fallback default model list")
         except Exception as e:
             logger.error(f"Error populating VMAF models: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            # Add defaults as fallback
-            self.combo_vmaf_model.clear()
-            self.combo_vmaf_model.addItem("vmaf_v0.6.1", "vmaf_v0.6.1")
-            self.combo_vmaf_model.addItem("vmaf_4k_v0.6.1", "vmaf_4k_v0.6.1")
-            self.combo_vmaf_model.addItem("vmaf_b_v0.6.3", "vmaf_b_v0.6.3")
+
+            # Add fallback default models
+            default_models = ["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"]
+            for model in default_models:
+                self.combo_vmaf_model.addItem(model)
 
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated"""

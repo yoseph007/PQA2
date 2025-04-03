@@ -45,17 +45,18 @@ class SetupTab(QWidget):
         ref_file_layout = QHBoxLayout()
         self.txt_reference_path = QLineEdit()
         self.txt_reference_path.setReadOnly(True)
-        self.txt_reference_path.setPlaceholderText("Select reference video file...")
+        self.txt_reference_path.setPlaceholderText("Select a reference video...")
         self.btn_browse_reference = QPushButton("Browse...")
         self.btn_browse_reference.clicked.connect(self.browse_reference_video)
         ref_file_layout.addWidget(self.txt_reference_path)
         ref_file_layout.addWidget(self.btn_browse_reference)
         reference_layout.addLayout(ref_file_layout)
 
-        # Reference directory info
-        self.lbl_ref_dir_path = QLabel("Directory: Not set")
-        self.lbl_ref_dir_path.setStyleSheet("font-style: italic; color: #666; font-size: 9pt;")
-        reference_layout.addWidget(self.lbl_ref_dir_path)
+        # Information about using default output directory
+        note_label = QLabel("Output files will be saved to the location specified in Options.")
+        note_label.setStyleSheet("color: gray; font-style: italic;")
+        reference_layout.addWidget(note_label)
+
 
         # Reference details
         self.lbl_reference_details = QLabel("Reference details: None")
@@ -65,20 +66,6 @@ class SetupTab(QWidget):
         reference_group.setLayout(reference_layout)
         left_column.addWidget(reference_group)
 
-        # Output settings group
-        output_group = QGroupBox("Output Settings")
-        output_layout = QVBoxLayout()
-
-        # Output directory
-        output_dir_layout = QHBoxLayout()
-        self.txt_output_dir = QLineEdit()
-        self.txt_output_dir.setReadOnly(True)
-        self.txt_output_dir.setPlaceholderText("Select output directory...")
-        self.btn_browse_output = QPushButton("Browse...")
-        self.btn_browse_output.clicked.connect(self.browse_output_dir)
-        output_dir_layout.addWidget(self.txt_output_dir)
-        output_dir_layout.addWidget(self.btn_browse_output)
-        output_layout.addLayout(output_dir_layout)
 
         # Test name with improved placeholder and validation
         test_name_layout = QHBoxLayout()
@@ -92,26 +79,23 @@ class SetupTab(QWidget):
         validator = QRegExpValidator(QRegExp(r'[A-Za-z0-9_\-]+'))
         self.txt_test_name.setValidator(validator)
         test_name_layout.addWidget(self.txt_test_name)
-        output_layout.addLayout(test_name_layout)
-        
+        left_column.addLayout(test_name_layout)
+
         # Tester name field
         tester_name_layout = QHBoxLayout()
         tester_name_layout.addWidget(QLabel("Tester Name:"))
         self.txt_tester_name = QLineEdit()
         self.txt_tester_name.setPlaceholderText("Enter tester's name")
         tester_name_layout.addWidget(self.txt_tester_name)
-        output_layout.addLayout(tester_name_layout)
-        
+        left_column.addLayout(tester_name_layout)
+
         # Test location field
         test_location_layout = QHBoxLayout()
         test_location_layout.addWidget(QLabel("Test Location:"))
         self.txt_test_location = QLineEdit()
         self.txt_test_location.setPlaceholderText("Enter test location")
         test_location_layout.addWidget(self.txt_test_location)
-        output_layout.addLayout(test_location_layout)
-
-        output_group.setLayout(output_layout)
-        left_column.addWidget(output_group)
+        left_column.addLayout(test_location_layout)
 
         # Instructions group
         instructions_group = QGroupBox("Setup Instructions")
@@ -119,9 +103,8 @@ class SetupTab(QWidget):
 
         instructions_text = QLabel(
             "1. Select a reference video file\n"
-            "2. Set an output directory for test results\n"
-            "3. Provide a descriptive test name\n"
-            "4. Once reference video is loaded, proceed to Capture tab"
+            "2. Provide a descriptive test name\n"
+            "3. Once reference video is loaded, proceed to Capture tab"
         )
         instructions_text.setWordWrap(True)
         instructions_layout.addWidget(instructions_text)
@@ -338,49 +321,6 @@ class SetupTab(QWidget):
         """Handle error in reference video analysis"""
         self.log_to_setup(f"Error: {error_msg}")
         QMessageBox.critical(self, "Reference Analysis Error", error_msg)
-
-    def browse_output_dir(self):
-        """Browse for output directory using settings-defined path"""
-        try:
-            # First check if we have a path from options_manager
-            default_dir = None
-            if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-                try:
-                    paths = self.parent.options_manager.get_setting('paths')
-                    if isinstance(paths, dict) and 'output_dir' in paths:
-                        default_dir = paths['output_dir']
-                        logger.info(f"Using output directory from options: {default_dir}")
-                except Exception as e:
-                    logger.error(f"Error getting output directory from settings: {e}")
-
-            # Fallback to file manager or home directory
-            if not default_dir or not os.path.exists(default_dir):
-                default_dir = self.parent.file_mgr.get_default_output_dir() if hasattr(self.parent, 'file_mgr') else None
-                if not default_dir:
-                    default_dir = os.path.expanduser("~")
-
-            # Show directory dialog
-            directory = QFileDialog.getExistingDirectory(
-                self, "Select Output Directory", default_dir
-            )
-
-            if directory:
-                # Set output directory in UI and managers
-                self.txt_output_dir.setText(directory)
-                self.txt_output_dir.setToolTip(directory)
-
-                if hasattr(self.parent, 'file_mgr'):
-                    self.parent.file_mgr.base_dir = directory
-
-                if hasattr(self.parent, 'capture_mgr'):
-                    self.parent.capture_mgr.set_output_directory(directory)
-
-                self.log_to_setup(f"Output directory set to: {directory}")
-        except Exception as e:
-            logger.error(f"Error selecting output directory: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            self.log_to_setup(f"Error selecting output directory: {str(e)}")
 
     def log_to_setup(self, message):
         """Add message to setup log with formatting for different message types"""

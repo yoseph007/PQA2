@@ -822,3 +822,80 @@ class BookendAlignmentThread(QThread):
         """Override quit to properly clean up resources"""
         self._running = False
         super().quit()
+
+class Aligner(QObject):
+    alignment_progress = pyqtSignal(int)
+    alignment_complete = pyqtSignal(str)
+    alignment_error = pyqtSignal(str)
+    alignment_state_changed = pyqtSignal(int)
+    options_manager = None
+    alignment_state = None
+
+    def __init__(self):
+        super().__init__()
+        self.alignment_state = AlignmentState.COMPLETE
+
+    def set_options_manager(self, options_manager):
+        self.options_manager = options_manager
+
+    def align_videos_with_bookends(self, reference_path, captured_path):
+        """Align videos based on bookend frames"""
+        logger.info(f"Starting bookend alignment process")
+        logger.info(f"Reference: {reference_path}")
+        logger.info(f"Captured: {captured_path}")
+
+        self.alignment_state = AlignmentState.RUNNING
+        self.alignment_state_changed.emit(self.alignment_state)
+
+        # Create bookend aligner
+        aligner = BookendAligner()
+
+        # Pass frame sampling rate from options if available
+        if hasattr(self, 'options_manager') and self.options_manager:
+            try:
+                bookend_settings = self.options_manager.get_setting('bookend')
+                if isinstance(bookend_settings, dict) and 'frame_sampling_rate' in bookend_settings:
+                    frame_sampling_rate = int(bookend_settings.get('frame_sampling_rate', 5))
+                    # Ensure value is in valid range
+                    frame_sampling_rate = min(30, max(1, frame_sampling_rate))
+                    logger.info(f"Using frame sampling rate from options: {frame_sampling_rate}")
+                    aligner.frame_sampling_rate = frame_sampling_rate
+                else:
+                    logger.warning("Frame sampling rate not found in bookend settings, using default (5)")
+            except Exception as e:
+                logger.error(f"Error getting frame sampling rate from options: {e}")
+
+        # Start alignment thread
+        thread = BookendAlignmentThread(reference_path, captured_path)
+        thread.alignment_progress.connect(self.alignment_progress)
+        thread.alignment_complete.connect(lambda result: self._on_alignment_complete(result))
+        thread.error_occurred.connect(self.alignment_error)
+        thread.delete_capture_file.connect(self._on_delete_capture_file) # Connect delete signal
+        thread.start()
+
+        self.alignment_state = AlignmentState.RUNNING
+        self.alignment_state_changed.emit(self.alignment_state)
+
+    def _on_alignment_complete(self, result):
+        """Handle alignment completion"""
+        self.alignment_state = AlignmentState.COMPLETE
+        self.alignment_state_changed.emit(self.alignment_state)
+        self.alignment_complete.emit(f"Alignment complete: {result}")
+
+    def _on_delete_capture_file(self, should_delete):
+        """Handle deletion of capture file"""
+        if should_delete:
+            try:
+                os.remove(self.captured_path)
+                logger.info(f"Successfully deleted capture file: {self.captured_path}")
+            except Exception as e:
+                logger.error(f"Error deleting capture file: {e}")
+
+
+# ... rest of the file remains unchanged ...
+
+from enum import Enum
+class AlignmentState(Enum):
+    COMPLETE = 0
+    RUNNING = 1
+    ERROR = 2
