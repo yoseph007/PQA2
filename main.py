@@ -108,14 +108,22 @@ def main():
         logger.warning("QDarkStyle not installed, using default theme")
 
     # Create and show main window
-    window = MainWindow(capture_manager, file_manager, options_manager)
-
-    # Set headless mode if requested or running in Replit
-    if args.headless or headless:
-        window.headless_mode = True
-        logger.info("Running in headless mode")
-    else:
-        window.show()
+    logger.info("Creating main window...")
+    try:
+        window = MainWindow(capture_manager, file_manager, options_manager)
+        
+        # Set headless mode if requested or running in Replit
+        if args.headless or headless:
+            window.headless_mode = True
+            logger.info("Running in headless mode")
+        else:
+            logger.info("Showing GUI window...")
+            window.show()
+            logger.info("Window show() called successfully")
+    except Exception as e:
+        logger.error(f"ERROR creating or showing window: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
 
     # Run application event loop
     return app.exec_()
