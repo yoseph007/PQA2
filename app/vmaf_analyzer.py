@@ -1,3 +1,4 @@
+
 import os
 import logging
 import json
@@ -89,10 +90,14 @@ class VMAFAnalyzer(QObject):
             # Create consistent filenames with test name and timestamp
             vmaf_filename = f"{test_name}_{timestamp}_vmaf.json"
             csv_filename = f"{test_name}_{timestamp}_vmaf.csv"
+            psnr_filename = f"{test_name}_{timestamp}_psnr.txt"
+            ssim_filename = f"{test_name}_{timestamp}_ssim.txt"
 
             # Create full paths with forward slashes for FFmpeg
             json_path = os.path.join(test_dir, vmaf_filename).replace("\\", "/")
             csv_path = os.path.join(test_dir, csv_filename).replace("\\", "/")
+            psnr_path = os.path.join(test_dir, psnr_filename).replace("\\", "/")
+            ssim_path = os.path.join(test_dir, ssim_filename).replace("\\", "/")
 
             # For command line logging, save a copy
             vmaf_cmd_log = os.path.join(test_dir, f"{test_name}_{timestamp}_vmaf_command.txt").replace("\\", "/")
@@ -111,25 +116,25 @@ class VMAFAnalyzer(QObject):
             model_name = model
             if not model.endswith('.json'):
                 model_name = f"{model}.json"
-
+            
             # Find paths to FFmpeg executables using the utility function
             from .utils import get_ffmpeg_path
             ffmpeg_exe, ffprobe_exe, ffplay_exe = get_ffmpeg_path()
-
+            
             # Find the model path in models directory
             current_dir = os.path.dirname(os.path.abspath(__file__))
-
+            
             # Check if we're in the app directory or at the root
             if os.path.basename(current_dir) == "app":
                 root_dir = os.path.dirname(current_dir)  # Go up one level if in app directory
             else:
                 root_dir = current_dir  # We're already at root
-
+                
             models_dir = os.path.join(root_dir, "models")
             model_path = os.path.join(models_dir, model_name)
-
+            
             logger.info(f"Looking for VMAF model at: {model_path}")
-
+            
             # Check if model file exists in models directory
             if not os.path.exists(model_path):
                 logger.warning(f"VMAF model file not found at {model_path}, using default path")
@@ -142,29 +147,30 @@ class VMAFAnalyzer(QObject):
 
             # Change directory to the test directory for relative paths
             os.chdir(test_dir)
-
+            
             # Use just filenames after changing directory (this avoids Windows path character issues)
             # These are relative to the test_dir we just changed to
             rel_vmaf_json = vmaf_filename
-            rel_vmaf_csv = csv_filename
-
+            rel_vmaf_csv = csv_filename 
+            rel_psnr_txt = psnr_filename
+            rel_ssim_txt = ssim_filename
+            
             logger.info("Working directory changed to test directory for relative paths")
-            logger.info(f"Using relative paths: {rel_vmaf_json}, {rel_vmaf_csv}")
+            logger.info(f"Using relative paths: {rel_vmaf_json}, {rel_vmaf_csv}, {rel_psnr_txt}, {rel_ssim_txt}")
 
             # Try the simplest format possible first - just use basic libvmaf with relative paths
             try:
                 logger.info("Trying basic VMAF command with relative paths...")
                 # Use -lavfi instead of -filter_complex for simpler syntax
-                # Add PSNR and SSIM metrics to the libvmaf parameters
                 basic_cmd = [
                     ffmpeg_exe,
                     "-hide_banner",
                     "-i", distorted_path_ffmpeg,
                     "-i", reference_path_ffmpeg,
-                    "-lavfi", f"libvmaf=log_path={rel_vmaf_json}:log_fmt=json:psnr=1:ssim=1",
+                    "-lavfi", f"libvmaf=log_path={rel_vmaf_json}:log_fmt=json",
                     "-f", "null", "-"
                 ]
-
+                
                 logger.info(f"Command: {' '.join(basic_cmd)}")
                 process = subprocess.Popen(
                     basic_cmd,
@@ -173,36 +179,42 @@ class VMAFAnalyzer(QObject):
                     text=True,
                     bufsize=1
                 )
-
+                
                 # Monitor progress
                 output, error = process.communicate()
                 returncode = process.returncode
-
+                
                 if returncode == 0:
                     logger.info("Basic VMAF command succeeded!")
-                    # No need to run PSNR and SSIM separately - values are in VMAF output
-
-                    # Build full path for the results
+                    # Now try to run PSNR and SSIM separately with relative paths
+                    self._run_psnr_ssim_analysis(ffmpeg_exe, distorted_path_ffmpeg, reference_path_ffmpeg, rel_psnr_txt, rel_ssim_txt)
+                    
+                    # Build full paths for the results
                     json_path_full = os.path.join(test_dir, rel_vmaf_json).replace("\\", "/")
-
-                    return self._parse_vmaf_results(json_path_full, None, None, distorted_path, reference_path, current_dir)
+                    psnr_path_full = os.path.join(test_dir, rel_psnr_txt).replace("\\", "/")
+                    ssim_path_full = os.path.join(test_dir, rel_ssim_txt).replace("\\", "/")
+                    
+                    return self._parse_vmaf_results(json_path_full, psnr_path_full, ssim_path_full, distorted_path, reference_path, current_dir)
                 else:
                     logger.error(f"Basic VMAF command failed: {error}")
-
+                    
                     # Try with full filter complex, but using relative paths
                     logger.info("Trying with complete filter complex but using relative paths...")
                     filter_str = (
-                        "[0:v]setpts=PTS-STARTPTS,split=1[ref1];"
-                        "[1:v]setpts=PTS-STARTPTS,split=1[dist1];"
-                        f"[ref1][dist1]libvmaf=log_path={rel_vmaf_json}:log_fmt=json:psnr=1:ssim=1"
+                        "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
+                        "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
+                        f"[ref1][dist1]libvmaf=log_path={rel_vmaf_json}:log_fmt=json;"
+                        f"[ref2][dist2]libvmaf=log_path={rel_vmaf_csv}:log_fmt=csv;"
+                        f"[0:v][1:v]psnr=stats_file={rel_psnr_txt};"
+                        f"[0:v][1:v]ssim=stats_file={rel_ssim_txt}"
                     )
-
+                    
                     # Use shell=True on Windows for proper handling of complex filter
                     # Carefully format the command as a single string with escaped quotes 
                     if os.name == 'nt':  # Windows
                         cmd_str = f'"{ffmpeg_exe}" -hide_banner -i "{distorted_path_ffmpeg}" -i "{reference_path_ffmpeg}" -filter_complex "{filter_str}" -f null -'
                         logger.info(f"Shell command: {cmd_str}")
-
+                        
                         process = subprocess.Popen(
                             cmd_str,
                             stdout=subprocess.PIPE,
@@ -220,26 +232,28 @@ class VMAFAnalyzer(QObject):
                             "-f", "null", "-"
                         ]
                         logger.info(f"Command: {' '.join(complex_cmd)}")
-
+                        
                         process = subprocess.Popen(
                             complex_cmd,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,
                             text=True
                         )
-
+                    
                     output, error = process.communicate()
                     returncode = process.returncode
-
+                    
                     if returncode == 0:
                         logger.info("Complex filter command succeeded!")
-                        # Build full path for the result
+                        # Build full paths for the results
                         json_path_full = os.path.join(test_dir, rel_vmaf_json).replace("\\", "/")
-
-                        return self._parse_vmaf_results(json_path_full, None, None, distorted_path, reference_path, current_dir)
+                        psnr_path_full = os.path.join(test_dir, rel_psnr_txt).replace("\\", "/")
+                        ssim_path_full = os.path.join(test_dir, rel_ssim_txt).replace("\\", "/")
+                        
+                        return self._parse_vmaf_results(json_path_full, psnr_path_full, ssim_path_full, distorted_path, reference_path, current_dir)
                     else:
                         logger.error(f"Complex filter command failed: {error}")
-
+                        
                         # Last resort: use system FFmpeg with basic command
                         logger.info("Trying with system FFmpeg as last resort...")
                         basic_sys_cmd = [
@@ -250,7 +264,7 @@ class VMAFAnalyzer(QObject):
                             "-lavfi", f"libvmaf=log_path={rel_vmaf_json}:log_fmt=json",
                             "-f", "null", "-"
                         ]
-
+                        
                         logger.info(f"Command: {' '.join(basic_sys_cmd)}")
                         process = subprocess.Popen(
                             basic_sys_cmd,
@@ -258,17 +272,21 @@ class VMAFAnalyzer(QObject):
                             stderr=subprocess.PIPE,
                             text=True
                         )
-
+                        
                         output, error = process.communicate()
                         returncode = process.returncode
-
+                        
                         if returncode == 0:
                             logger.info("System FFmpeg VMAF command succeeded!")
-
-                            # Build full path for the result
+                            # Now try to run PSNR and SSIM separately
+                            self._run_psnr_ssim_analysis("ffmpeg", distorted_path_ffmpeg, reference_path_ffmpeg, rel_psnr_txt, rel_ssim_txt)
+                            
+                            # Build full paths for the results
                             json_path_full = os.path.join(test_dir, rel_vmaf_json).replace("\\", "/")
-
-                            return self._parse_vmaf_results(json_path_full, None, None, distorted_path, reference_path, current_dir)
+                            psnr_path_full = os.path.join(test_dir, rel_psnr_txt).replace("\\", "/")
+                            ssim_path_full = os.path.join(test_dir, rel_ssim_txt).replace("\\", "/")
+                            
+                            return self._parse_vmaf_results(json_path_full, psnr_path_full, ssim_path_full, distorted_path, reference_path, current_dir)
                         else:
                             logger.error(f"System FFmpeg VMAF command failed: {error}")
                             self.error_occurred.emit("VMAF analysis failed with all methods")
@@ -296,17 +314,43 @@ class VMAFAnalyzer(QObject):
             return None
 
     def _run_psnr_ssim_analysis(self, ffmpeg_exe, distorted_path, reference_path, psnr_filename, ssim_filename):
-        """
-        Previously ran PSNR and SSIM analysis separately.
-        This function is maintained for API compatibility but no longer writes separate files.
-        PSNR and SSIM values are now extracted from the main VMAF analysis.
-        """
-        # Log that we're skipping separate PSNR/SSIM analysis
-        logger.info("Skipping separate PSNR/SSIM analysis - using values from VMAF output")
-        return True
-
+        """Run PSNR and SSIM analysis separately using relative paths"""
+        try:
+            # Run PSNR analysis with relative paths
+            logger.info("Running PSNR analysis...")
+            psnr_cmd = [
+                ffmpeg_exe,
+                "-hide_banner",
+                "-i", distorted_path,
+                "-i", reference_path,
+                "-lavfi", f"psnr=stats_file={psnr_filename}",
+                "-f", "null", "-"
+            ]
+            
+            logger.info(f"PSNR command: {' '.join(psnr_cmd)}")
+            subprocess.run(psnr_cmd, check=False, capture_output=True)
+            
+            # Run SSIM analysis with relative paths
+            logger.info("Running SSIM analysis...")
+            ssim_cmd = [
+                ffmpeg_exe,
+                "-hide_banner",
+                "-i", distorted_path,
+                "-i", reference_path,
+                "-lavfi", f"ssim=stats_file={ssim_filename}",
+                "-f", "null", "-"
+            ]
+            
+            logger.info(f"SSIM command: {' '.join(ssim_cmd)}")
+            subprocess.run(ssim_cmd, check=False, capture_output=True)
+            
+            return True
+        except Exception as e:
+            logger.warning(f"Error running PSNR/SSIM analysis: {str(e)}")
+            return False
+    
     def _parse_vmaf_results(self, json_path, psnr_path, ssim_path, distorted_path, reference_path, current_dir):
-        """Parse VMAF results from the JSON output file"""
+        """Parse VMAF results from the output files"""
         try:
             # Check if output files exist
             if not os.path.exists(json_path.replace("/", "\\")):
@@ -386,6 +430,8 @@ class VMAFAnalyzer(QObject):
                     'ssim': ssim_score,
                     'json_path': json_path.replace("/", "\\"),
                     'csv_path': json_path.replace("vmaf.json", "vmaf.csv").replace("/", "\\"),
+                    'psnr_log': psnr_path.replace("/", "\\"),
+                    'ssim_log': ssim_path.replace("/", "\\"),
                     'reference_path': reference_path,
                     'distorted_path': distorted_path,
                     'raw_results': raw_results
@@ -399,20 +445,12 @@ class VMAFAnalyzer(QObject):
                 os.chdir(current_dir)
 
                 # Delete the primary capture file if it exists (and if explicitly labeled as a capture)
-                # But only after we've finished using it and only if configured to do so
                 if 'distorted_path' in results:
                     primary_capture = results['distorted_path']
                     try:
-                        # Check if we should delete the capture file - don't delete by default
-                        delete_capture = False
-                        if hasattr(self, 'options_manager') and self.options_manager:
-                            delete_capture = self.options_manager.get_setting("vmaf", "delete_capture_after_analysis", False)
-
-                        if delete_capture and os.path.exists(primary_capture) and "capture" in primary_capture.lower():
+                        if os.path.exists(primary_capture) and "capture" in primary_capture.lower():
                             logger.info(f"Deleting primary capture file: {primary_capture}")
                             os.remove(primary_capture)
-                        else:
-                            logger.info(f"Keeping primary capture file: {primary_capture}")
                     except Exception as cleanup_error:
                         logger.warning(f"Could not delete primary capture file: {cleanup_error}")
 
@@ -444,10 +482,10 @@ class VMAFAnalyzer(QObject):
             # Find path to FFprobe executable
             from .utils import get_ffmpeg_path
             ffmpeg_exe, ffprobe_exe, ffplay_exe = get_ffmpeg_path()
-
+            
             # Normalize path for FFprobe
             video_path_ffmpeg = video_path.replace("\\", "/")
-
+            
             # Use a simpler command that's more likely to work across FFmpeg versions
             cmd = [
                 ffprobe_exe,  # Use full path to ffprobe.exe
@@ -457,7 +495,7 @@ class VMAFAnalyzer(QObject):
                 "-show_streams",
                 video_path_ffmpeg
             ]
-
+            
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 logger.error(f"FFprobe failed: {result.stderr}")
@@ -523,7 +561,7 @@ class VMAFAnalysisThread(QThread):
         try:
             # Wait for thread to finish before disconnecting signals
             self.wait()
-
+            
             # Disconnect all signals to prevent issues during thread destruction
             try:
                 self.disconnect()
