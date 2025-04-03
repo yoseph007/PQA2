@@ -1,8 +1,10 @@
+
 import logging
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                            QLabel, QComboBox, QProgressBar, QGroupBox, QMessageBox,
                            QTextEdit, QStyle)
 from PyQt5.QtCore import Qt
+from datetime import datetime
 import os  # Required for file path operations
 
 logger = logging.getLogger(__name__)
@@ -407,7 +409,6 @@ class AnalysisTab(QWidget):
         self.txt_alignment_log.verticalScrollBar().setValue(
             self.txt_alignment_log.verticalScrollBar().maximum()
         )
-
         
         # Also log alignment-related and result messages to the right column
         if any(keyword in message.lower() for keyword in 
@@ -421,21 +422,6 @@ class AnalysisTab(QWidget):
         """Scan models directory and populate the VMAF model dropdown"""
         try:
             # Clear current items
-
-    def _update_vmaf_progress(self, progress):
-        """Update VMAF progress bar with better feedback"""
-        # Ensure progress is between 0-100
-        progress = max(0, min(100, progress))
-        
-        # Update the progress bar
-        self.pb_vmaf_progress.setValue(progress)
-        
-        # Also update status text with percentage
-        if progress < 100:
-            self.lbl_vmaf_status.setText(f"VMAF Analysis: {progress}% complete")
-        else:
-            self.lbl_vmaf_status.setText("VMAF Analysis: Complete!")
-
             self.combo_vmaf_model.clear()
 
             # Find models directory
@@ -507,6 +493,20 @@ class AnalysisTab(QWidget):
             self.combo_vmaf_model.addItem("vmaf_v0.6.1", "vmaf_v0.6.1")
             self.combo_vmaf_model.addItem("vmaf_4k_v0.6.1", "vmaf_4k_v0.6.1")
             self.combo_vmaf_model.addItem("vmaf_b_v0.6.3", "vmaf_b_v0.6.3")
+
+    def _update_vmaf_progress(self, progress):
+        """Update VMAF progress bar with better feedback"""
+        # Ensure progress is between 0-100
+        progress = max(0, min(100, progress))
+        
+        # Update the progress bar
+        self.pb_vmaf_progress.setValue(progress)
+        
+        # Also update status text with percentage
+        if progress < 100:
+            self.lbl_vmaf_status.setText(f"VMAF Analysis: {progress}% complete")
+        else:
+            self.lbl_vmaf_status.setText("VMAF Analysis: Complete!")
 
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated"""
