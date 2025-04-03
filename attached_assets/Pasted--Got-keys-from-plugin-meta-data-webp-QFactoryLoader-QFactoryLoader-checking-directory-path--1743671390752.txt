@@ -1,0 +1,69 @@
+
+Got keys from plugin meta data ("webp")
+QFactoryLoader::QFactoryLoader() checking directory path "C:/Users/yos/AppData/Local/Programs/Python/Python312/imageformats" ...
+loaded library "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/imageformats/qgif.dll"
+loaded library "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/imageformats/qicns.dll"
+loaded library "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/imageformats/qico.dll"
+loaded library "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/imageformats/qjpeg.dll"
+loaded library "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/imageformats/qsvg.dll"
+loaded library "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/imageformats/qtga.dll"
+loaded library "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/imageformats/qtiff.dll"
+loaded library "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/imageformats/qwbmp.dll"
+loaded library "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/imageformats/qwebp.dll"
+2025-04-03 10:09:29,300 - app.ui.main_window - INFO - Set application logo: C:/Users/yos/OneDrive/Chroma Networks Ltd/Artwork/SA_FF.png
+QFactoryLoader::QFactoryLoader() checking directory path "C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/plugins/accessiblebridge" ...
+QFactoryLoader::QFactoryLoader() checking directory path "C:/Users/yos/AppData/Local/Programs/Python/Python312/accessiblebridge" ...
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/.venv/Lib/site-packages/PyQt5/Qt5/lib/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+2025-04-03 10:09:29,432 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-03 10:09:29,433 - app.ui.tabs.capture_tab - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-03 10:09:29,433 - app.ui.tabs.capture_tab - INFO - Set current device to: Intensity Shuttle
+2025-04-03 10:09:29,434 - app.ui.tabs.capture_tab - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-03 10:09:29,435 - app.ui.tabs.analysis_tab - INFO - Scanning for VMAF models in: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/models
+2025-04-03 10:09:29,437 - app.ui.tabs.analysis_tab - INFO - Populated VMAF model dropdown with 9 models
+2025-04-03 10:09:29,454 - app.ui.tabs.results_tab - WARNING - Output directory does not exist: Default output directory
+2025-04-03 10:09:29,551 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-03 10:09:29,552 - app.ui.tabs.options_tab - INFO - Populated device dropdown with 1 devices
+2025-04-03 10:09:29,566 - app.ui.tabs.options_tab - INFO - Looking for VMAF models in: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\models
+2025-04-03 10:09:29,567 - app.ui.tabs.options_tab - WARNING - Models directory doesn't exist: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\models, using defaults
+2025-04-03 10:09:29,568 - app.ui.tabs.options_tab - INFO - Populated VMAF model dropdown with 3 models
+2025-04-03 10:09:29,588 - app.ui.tabs.options_tab - INFO - Looking for VMAF models in: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/models
+2025-04-03 10:09:29,589 - app.ui.tabs.options_tab - INFO - Populated VMAF model dropdown with 9 models
+2025-04-03 10:09:29,590 - app.options_manager - INFO - Settings saved to C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-03 10:09:29,599 - app.ui.theme_manager - INFO - Applied theme: Light
+2025-04-03 10:09:29,700 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-03 10:09:29,701 - app.ui.tabs.options_tab - INFO - Settings loaded successfully
+2025-04-03 10:09:29,702 - app.ui.theme_manager - INFO - Applied theme: Light
+2025-04-03 10:09:29,706 - app.ui.tabs.setup_tab - INFO - Found 2 reference videos
+2025-04-03 10:09:29,707 - app.ui.main_window - INFO - VMAF Test App initialized
+2025-04-03 10:09:29,707 - __main__ - INFO - Running in headless mode
+2025-04-03 10:09:29,877 - app.reference_analyzer - INFO - White bookend frame detected at frame 0
+2025-04-03 10:09:29,887 - app.capture - INFO - Reference video set: Dance01.mp4, duration: 7.29s, resolution: 1920x1080
