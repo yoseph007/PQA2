@@ -248,7 +248,7 @@ class AnalysisTab(QWidget):
             test_name = self.parent.setup_tab.txt_test_name.currentText()
         else:
             test_name = self.parent.setup_tab.txt_test_name.text()
-            
+
         output_dir = self.parent.setup_tab.txt_output_dir.text()
         if not output_dir or output_dir == "Default output directory" and hasattr(self.parent, 'file_mgr'):
             output_dir = self.parent.file_mgr.get_default_output_dir()
