@@ -1012,7 +1012,7 @@ class BookendCaptureManager(QObject):
                 # Output format settings
                 "-c:v", "libx264",
                 "-preset", "fast",
-                "-crf", "18",  # Good quality
+                "-crf", "0",  # Good quality
                 "-pix_fmt", "yuv420p",
                 "-r", str(frame_rate),
                 "-t", str(max_capture_time),  # Maximum capture duration
