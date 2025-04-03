@@ -89,14 +89,10 @@ class VMAFAnalyzer(QObject):
             # Create consistent filenames with test name and timestamp
             vmaf_filename = f"{test_name}_{timestamp}_vmaf.json"
             csv_filename = f"{test_name}_{timestamp}_vmaf.csv"
-            psnr_filename = f"{test_name}_{timestamp}_psnr.txt"
-            ssim_filename = f"{test_name}_{timestamp}_ssim.txt"
 
             # Create full paths with forward slashes for FFmpeg
             json_path = os.path.join(test_dir, vmaf_filename).replace("\\", "/")
             csv_path = os.path.join(test_dir, csv_filename).replace("\\", "/")
-            psnr_path = os.path.join(test_dir, psnr_filename).replace("\\", "/")
-            ssim_path = os.path.join(test_dir, ssim_filename).replace("\\", "/")
 
             # For command line logging, save a copy
             vmaf_cmd_log = os.path.join(test_dir, f"{test_name}_{timestamp}_vmaf_command.txt").replace("\\", "/")
@@ -150,12 +146,10 @@ class VMAFAnalyzer(QObject):
             # Use just filenames after changing directory (this avoids Windows path character issues)
             # These are relative to the test_dir we just changed to
             rel_vmaf_json = vmaf_filename
-            rel_vmaf_csv = csv_filename 
-            rel_psnr_txt = psnr_filename
-            rel_ssim_txt = ssim_filename
+            rel_vmaf_csv = csv_filename
             
             logger.info("Working directory changed to test directory for relative paths")
-            logger.info(f"Using relative paths: {rel_vmaf_json}, {rel_vmaf_csv}, {rel_psnr_txt}, {rel_ssim_txt}")
+            logger.info(f"Using relative paths: {rel_vmaf_json}, {rel_vmaf_csv}")
 
             # Try the simplest format possible first - just use basic libvmaf with relative paths
             try:
@@ -185,27 +179,21 @@ class VMAFAnalyzer(QObject):
                 
                 if returncode == 0:
                     logger.info("Basic VMAF command succeeded!")
-                    # Now try to run PSNR and SSIM separately with relative paths
-                    self._run_psnr_ssim_analysis(ffmpeg_exe, distorted_path_ffmpeg, reference_path_ffmpeg, rel_psnr_txt, rel_ssim_txt)
+                    # No need to run PSNR and SSIM separately - values are in VMAF output
                     
-                    # Build full paths for the results
+                    # Build full path for the results
                     json_path_full = os.path.join(test_dir, rel_vmaf_json).replace("\\", "/")
-                    psnr_path_full = os.path.join(test_dir, rel_psnr_txt).replace("\\", "/")
-                    ssim_path_full = os.path.join(test_dir, rel_ssim_txt).replace("\\", "/")
                     
-                    return self._parse_vmaf_results(json_path_full, psnr_path_full, ssim_path_full, distorted_path, reference_path, current_dir)
+                    return self._parse_vmaf_results(json_path_full, None, None, distorted_path, reference_path, current_dir)
                 else:
                     logger.error(f"Basic VMAF command failed: {error}")
                     
                     # Try with full filter complex, but using relative paths
                     logger.info("Trying with complete filter complex but using relative paths...")
                     filter_str = (
-                        "[0:v]setpts=PTS-STARTPTS,split=2[ref1][ref2];"
-                        "[1:v]setpts=PTS-STARTPTS,split=2[dist1][dist2];"
-                        f"[ref1][dist1]libvmaf=log_path={rel_vmaf_json}:log_fmt=json;"
-                        f"[ref2][dist2]libvmaf=log_path={rel_vmaf_csv}:log_fmt=csv;"
-                        f"[0:v][1:v]psnr=stats_file={rel_psnr_txt};"
-                        f"[0:v][1:v]ssim=stats_file={rel_ssim_txt}"
+                        "[0:v]setpts=PTS-STARTPTS,split=1[ref1];"
+                        "[1:v]setpts=PTS-STARTPTS,split=1[dist1];"
+                        f"[ref1][dist1]libvmaf=log_path={rel_vmaf_json}:log_fmt=json:psnr=1:ssim=1"
                     )
                     
                     # Use shell=True on Windows for proper handling of complex filter
@@ -244,12 +232,10 @@ class VMAFAnalyzer(QObject):
                     
                     if returncode == 0:
                         logger.info("Complex filter command succeeded!")
-                        # Build full paths for the results
+                        # Build full path for the result
                         json_path_full = os.path.join(test_dir, rel_vmaf_json).replace("\\", "/")
-                        psnr_path_full = os.path.join(test_dir, rel_psnr_txt).replace("\\", "/")
-                        ssim_path_full = os.path.join(test_dir, rel_ssim_txt).replace("\\", "/")
                         
-                        return self._parse_vmaf_results(json_path_full, psnr_path_full, ssim_path_full, distorted_path, reference_path, current_dir)
+                        return self._parse_vmaf_results(json_path_full, None, None, distorted_path, reference_path, current_dir)
                     else:
                         logger.error(f"Complex filter command failed: {error}")
                         
@@ -277,15 +263,11 @@ class VMAFAnalyzer(QObject):
                         
                         if returncode == 0:
                             logger.info("System FFmpeg VMAF command succeeded!")
-                            # Now try to run PSNR and SSIM separately
-                            self._run_psnr_ssim_analysis("ffmpeg", distorted_path_ffmpeg, reference_path_ffmpeg, rel_psnr_txt, rel_ssim_txt)
                             
-                            # Build full paths for the results
+                            # Build full path for the result
                             json_path_full = os.path.join(test_dir, rel_vmaf_json).replace("\\", "/")
-                            psnr_path_full = os.path.join(test_dir, rel_psnr_txt).replace("\\", "/")
-                            ssim_path_full = os.path.join(test_dir, rel_ssim_txt).replace("\\", "/")
                             
-                            return self._parse_vmaf_results(json_path_full, psnr_path_full, ssim_path_full, distorted_path, reference_path, current_dir)
+                            return self._parse_vmaf_results(json_path_full, None, None, distorted_path, reference_path, current_dir)
                         else:
                             logger.error(f"System FFmpeg VMAF command failed: {error}")
                             self.error_occurred.emit("VMAF analysis failed with all methods")
@@ -313,43 +295,17 @@ class VMAFAnalyzer(QObject):
             return None
 
     def _run_psnr_ssim_analysis(self, ffmpeg_exe, distorted_path, reference_path, psnr_filename, ssim_filename):
-        """Run PSNR and SSIM analysis separately using relative paths"""
-        try:
-            # Run PSNR analysis with relative paths
-            logger.info("Running PSNR analysis...")
-            psnr_cmd = [
-                ffmpeg_exe,
-                "-hide_banner",
-                "-i", distorted_path,
-                "-i", reference_path,
-                "-lavfi", f"psnr=stats_file={psnr_filename}",
-                "-f", "null", "-"
-            ]
-            
-            logger.info(f"PSNR command: {' '.join(psnr_cmd)}")
-            subprocess.run(psnr_cmd, check=False, capture_output=True)
-            
-            # Run SSIM analysis with relative paths
-            logger.info("Running SSIM analysis...")
-            ssim_cmd = [
-                ffmpeg_exe,
-                "-hide_banner",
-                "-i", distorted_path,
-                "-i", reference_path,
-                "-lavfi", f"ssim=stats_file={ssim_filename}",
-                "-f", "null", "-"
-            ]
-            
-            logger.info(f"SSIM command: {' '.join(ssim_cmd)}")
-            subprocess.run(ssim_cmd, check=False, capture_output=True)
-            
-            return True
-        except Exception as e:
-            logger.warning(f"Error running PSNR/SSIM analysis: {str(e)}")
-            return False
+        """
+        Previously ran PSNR and SSIM analysis separately.
+        This function is maintained for API compatibility but no longer writes separate files.
+        PSNR and SSIM values are now extracted from the main VMAF analysis.
+        """
+        # Log that we're skipping separate PSNR/SSIM analysis
+        logger.info("Skipping separate PSNR/SSIM analysis - using values from VMAF output")
+        return True
     
     def _parse_vmaf_results(self, json_path, psnr_path, ssim_path, distorted_path, reference_path, current_dir):
-        """Parse VMAF results from the output files, with additional parsing for PSNR and SSIM from separate files"""
+        """Parse VMAF results from the JSON output file"""
         try:
             # Check if output files exist
             if not os.path.exists(json_path.replace("/", "\\")):
@@ -413,48 +369,6 @@ class VMAFAnalyzer(QObject):
                         if ssim_values:
                             ssim_score = sum(ssim_values) / len(ssim_values)
 
-                # Try to parse PSNR from separate file if not found in VMAF data
-                if psnr_score is None and os.path.exists(psnr_path.replace("/", "\\")):
-                    try:
-                        with open(psnr_path.replace("/", "\\"), 'r') as f:
-                            psnr_data = f.read()
-                        
-                        # Extract average PSNR value
-                        psnr_match = re.search(r'average:(\d+\.\d+)', psnr_data)
-                        if psnr_match:
-                            psnr_score = float(psnr_match.group(1))
-                            logger.info(f"Parsed PSNR from separate file: {psnr_score}")
-                        
-                        # Alternative format parsing
-                        if not psnr_match:
-                            psnr_match = re.search(r'PSNR\s+average:\s+(\d+\.\d+)', psnr_data)
-                            if psnr_match:
-                                psnr_score = float(psnr_match.group(1))
-                                logger.info(f"Parsed PSNR from separate file (alt format): {psnr_score}")
-                    except Exception as e:
-                        logger.warning(f"Error parsing PSNR file: {str(e)}")
-                
-                # Try to parse SSIM from separate file if not found in VMAF data
-                if ssim_score is None and os.path.exists(ssim_path.replace("/", "\\")):
-                    try:
-                        with open(ssim_path.replace("/", "\\"), 'r') as f:
-                            ssim_data = f.read()
-                        
-                        # Extract average SSIM value - common patterns
-                        ssim_match = re.search(r'All:(\d+\.\d+)', ssim_data)
-                        if ssim_match:
-                            ssim_score = float(ssim_match.group(1))
-                            logger.info(f"Parsed SSIM from separate file: {ssim_score}")
-                        
-                        # Alternative format parsing
-                        if not ssim_match:
-                            ssim_match = re.search(r'SSIM\s+average:\s+(\d+\.\d+)', ssim_data)
-                            if ssim_match:
-                                ssim_score = float(ssim_match.group(1))
-                                logger.info(f"Parsed SSIM from separate file (alt format): {ssim_score}")
-                    except Exception as e:
-                        logger.warning(f"Error parsing SSIM file: {str(e)}")
-
                 # Log results
                 logger.info(f"VMAF Score: {vmaf_score}")
                 logger.info(f"PSNR Score: {psnr_score}")
@@ -471,8 +385,6 @@ class VMAFAnalyzer(QObject):
                     'ssim': ssim_score,
                     'json_path': json_path.replace("/", "\\"),
                     'csv_path': json_path.replace("vmaf.json", "vmaf.csv").replace("/", "\\"),
-                    'psnr_log': psnr_path.replace("/", "\\"),
-                    'ssim_log': ssim_path.replace("/", "\\"),
                     'reference_path': reference_path,
                     'distorted_path': distorted_path,
                     'raw_results': raw_results
