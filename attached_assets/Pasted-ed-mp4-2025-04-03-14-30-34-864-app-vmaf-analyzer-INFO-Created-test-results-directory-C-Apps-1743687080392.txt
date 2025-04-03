@@ -1,0 +1,23 @@
+ed.mp4
+2025-04-03 14:30:34,864 - app.vmaf_analyzer - INFO - Created test results directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250403_141201\Test_01_20250403_143034
+2025-04-03 14:30:34,865 - app.utils - INFO - Root directory determined to be: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app
+2025-04-03 14:30:34,866 - app.utils - INFO - Using FFmpeg bin directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin
+2025-04-03 14:30:34,867 - app.utils - INFO - FFmpeg path: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe
+2025-04-03 14:30:34,867 - app.utils - INFO - FFprobe path: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffprobe.exe
+2025-04-03 14:30:34,867 - app.vmaf_analyzer - INFO - Looking for VMAF model at: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\models\vmaf_v0.6.1.json
+2025-04-03 14:30:34,868 - app.vmaf_analyzer - INFO - Using VMAF model from: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\models\vmaf_v0.6.1.json
+2025-04-03 14:30:34,868 - app.vmaf_analyzer - INFO - Working directory changed to test directory for relative paths
+2025-04-03 14:30:34,868 - app.vmaf_analyzer - INFO - Using relative paths: Test_01_20250403_143034_vmaf.json, Test_01_20250403_143034_vmaf.csv, Test_01_20250403_143034_psnr.txt, Test_01_20250403_143034_ssim.txt
+2025-04-03 14:30:34,869 - app.vmaf_analyzer - INFO - Trying basic VMAF command with relative paths...
+2025-04-03 14:30:34,869 - app.vmaf_analyzer - INFO - Command: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_references/default_test_20250403_142932/REF02_wts_capture_142932_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_references/default_test_20250403_142932/REF02_wts_142932_aligned.mp4 -lavfi libvmaf=log_path=Test_01_20250403_143034_vmaf.json:log_fmt=json -f null -
+2025-04-03 14:30:53,071 - app.vmaf_analyzer - INFO - Basic VMAF command succeeded!
+2025-04-03 14:30:53,072 - app.vmaf_analyzer - INFO - Running PSNR analysis...
+2025-04-03 14:30:53,072 - app.vmaf_analyzer - INFO - PSNR command: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_references/default_test_20250403_142932/REF02_wts_capture_142932_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_references/default_test_20250403_142932/REF02_wts_142932_aligned.mp4 -lavfi psnr=stats_file=Test_01_20250403_143034_psnr.txt -f null -
+2025-04-03 14:30:53,963 - app.vmaf_analyzer - INFO - Running SSIM analysis...
+2025-04-03 14:30:53,964 - app.vmaf_analyzer - INFO - SSIM command: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe -hide_banner -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_references/default_test_20250403_142932/REF02_wts_capture_142932_aligned.mp4 -i C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/tests/test_references/default_test_20250403_142932/REF02_wts_142932_aligned.mp4 -lavfi ssim=stats_file=Test_01_20250403_143034_ssim.txt -f null -
+2025-04-03 14:30:54,940 - app.vmaf_analyzer - INFO - VMAF Score: 50.568174
+2025-04-03 14:30:54,941 - app.vmaf_analyzer - INFO - PSNR Score: None
+2025-04-03 14:30:54,942 - app.vmaf_analyzer - INFO - SSIM Score: None
+2025-04-03 14:30:54,943 - app.vmaf_analyzer - INFO - Deleting primary capture file: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_references\default_test_20250403_142932\REF02_wts_capture_142932_aligned.mp4
+2025-04-03 14:30:54,947 - app.vmaf_analyzer - INFO - Set output directory to: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\tests\test_results\Test_01_20250403_141201
+2025-04-03 14:30:54,948 - app.vmaf_analyzer - INFO - Set test name to: Test_01
