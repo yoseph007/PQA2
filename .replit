@@ -109,16 +109,3 @@ args = "pip install PyQt5 opencv-python numpy psutil pytesseract Pillow qdarksty
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py --headless"
-
-[[workflows.workflow]]
-name = "Run VMAF App with VNC"
-author = 40724597
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pip install PyQt5 opencv-python numpy psutil pytesseract Pillow qdarkstyle"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python main.py"
