@@ -262,7 +262,7 @@ class VMAFEnhancer:
                 timestamp = Path(distorted_path).stem
                 output_path = os.path.join(output_dir, f"{timestamp}_vmaf.json")
             
-            output_path = output_path.replace("\\", "/")
+            output_path_ffmpeg = output_path.replace("\\", "/")
             
             # Build a simple, reliable command - avoid complex parameters
             # Just use model name instead of model_path which causes issues
@@ -271,7 +271,7 @@ class VMAFEnhancer:
                 "-hide_banner",
                 "-i", distorted_path_ffmpeg,
                 "-i", reference_path_ffmpeg,
-                "-lavfi", f"libvmaf=log_path={output_path}:log_fmt=json",
+                "-lavfi", f"libvmaf=log_path={output_path_ffmpeg}:log_fmt=json",
                 "-f", "null", "-"
             ]
             
@@ -322,12 +322,16 @@ class VMAFEnhancer:
             
             # Use the simplified command format directly
             # This is the command that has been working most consistently
+            output_path_ffmpeg = output_path.replace("\\", "/")
+            distorted_path_ffmpeg = distorted_path.replace("\\", "/")
+            reference_path_ffmpeg = reference_path.replace("\\", "/")
+            
             cmd = [
                 ffmpeg,
                 "-hide_banner",
-                "-i", distorted_path.replace("\\", "/"),
-                "-i", reference_path.replace("\\", "/"),
-                "-lavfi", f"libvmaf=log_path={output_path.replace('\\', '/')}:log_fmt=json",
+                "-i", distorted_path_ffmpeg,
+                "-i", reference_path_ffmpeg,
+                "-lavfi", f"libvmaf=log_path={output_path_ffmpeg}:log_fmt=json",
                 "-f", "null", "-"
             ]
             

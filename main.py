@@ -73,6 +73,12 @@ if __name__ == "__main__":
         capture_manager.path_manager = file_manager
         capture_manager.options_manager = options_manager
 
+        # Configure for headless environments like Replit
+        if 'REPLIT_ENVIRONMENT' in os.environ or 'REPL_ID' in os.environ:
+            logger.info("Running in Replit environment, setting QT_QPA_PLATFORM")
+            os.environ["QT_QPA_PLATFORM"] = "vnc"  # Use VNC for Replit
+            os.environ["QT_DEBUG_PLUGINS"] = "1"   # Enable debug for platform plugins
+
         # Create and show the main window
         window = MainWindow(capture_manager, file_manager, options_manager)
         window.show()
