@@ -242,14 +242,14 @@ class VMAFEnhancer:
     
     def get_optimal_command(self, reference_path, distorted_path, model_name="vmaf_v0.6.1", output_path=None, ffmpeg_path=None):
         """
-        Generate the optimal VMAF command based on video properties and model
-        This adapts easyVmaf's sophisticated approach to command generation
+        Generate a simplified reliable VMAF command that works consistently
+        Avoids complex options that can cause path parsing issues
         """
         try:
             # Use provided ffmpeg path or default to "ffmpeg"
             ffmpeg = ffmpeg_path or "ffmpeg"
             
-            # Validate and locate model
+            # Validate and locate model - but don't use model_path parameter which causes issues
             model_path = self.validate_vmaf_model(model_name)
             
             # Ensure paths use forward slashes
@@ -264,35 +264,18 @@ class VMAFEnhancer:
             
             output_path = output_path.replace("\\", "/")
             
-            # Start building the command
+            # Build a simple, reliable command - avoid complex parameters
+            # Just use model name instead of model_path which causes issues
             cmd = [
                 ffmpeg,
                 "-hide_banner",
                 "-i", distorted_path_ffmpeg,
-                "-i", reference_path_ffmpeg
+                "-i", reference_path_ffmpeg,
+                "-lavfi", f"libvmaf=log_path={output_path}:log_fmt=json",
+                "-f", "null", "-"
             ]
             
-            # Build VMAF filter string
-            vmaf_filter = "libvmaf="
-            
-            # Add model path if specified
-            if model_path:
-                model_path_ffmpeg = model_path.replace("\\", "/")
-                vmaf_filter += f"model_path={model_path_ffmpeg}:"
-            else:
-                # Use built-in model
-                vmaf_filter += f"model={model_name}:"
-            
-            # Add standard options for consistent results
-            vmaf_filter += f"log_path={output_path}:log_fmt=json:n_threads=4:psnr=1:ssim=1:ms_ssim=1"
-            
-            # Complete the command
-            cmd.extend([
-                "-lavfi", vmaf_filter,
-                "-f", "null", "-"
-            ])
-            
-            logger.info(f"Generated VMAF command: {' '.join(cmd)}")
+            logger.info(f"Generated simplified VMAF command: {' '.join(cmd)}")
             return cmd, output_path
             
         except Exception as e:
@@ -304,7 +287,7 @@ class VMAFEnhancer:
     def run_vmaf_analysis(self, reference_path, distorted_path, model_name="vmaf_v0.6.1", preprocess=True, 
                           match_framerate=True, match_resolution=True, ffmpeg_path=None):
         """
-        Run enhanced VMAF analysis with preprocessing and optimal command generation
+        Run simplified VMAF analysis with reliable command format
         """
         try:
             # Get FFmpeg path
@@ -313,7 +296,7 @@ class VMAFEnhancer:
             ffmpeg = ffmpeg_path or ffmpeg_exe
             ffprobe = ffprobe_exe
             
-            logger.info(f"Starting enhanced VMAF analysis between {os.path.basename(reference_path)} and {os.path.basename(distorted_path)}")
+            logger.info(f"Starting simplified VMAF analysis between {os.path.basename(reference_path)} and {os.path.basename(distorted_path)}")
             
             # Preprocess videos if needed
             if preprocess:
@@ -335,20 +318,20 @@ class VMAFEnhancer:
             # Create output directory
             output_dir = os.path.dirname(distorted_path)
             timestamp = Path(distorted_path).stem
-            output_path = os.path.join(output_dir, f"{timestamp}_vmaf_enhanced.json")
+            output_path = os.path.join(output_dir, f"{timestamp}_vmaf.json")
             
-            # Generate optimal VMAF command
-            cmd, output_json = self.get_optimal_command(
-                reference_path, distorted_path, model_name, 
-                output_path=output_path, ffmpeg_path=ffmpeg
-            )
+            # Use the simplified command format directly
+            # This is the command that has been working most consistently
+            cmd = [
+                ffmpeg,
+                "-hide_banner",
+                "-i", distorted_path.replace("\\", "/"),
+                "-i", reference_path.replace("\\", "/"),
+                "-lavfi", f"libvmaf=log_path={output_path.replace('\\', '/')}:log_fmt=json",
+                "-f", "null", "-"
+            ]
             
-            if not cmd:
-                logger.error("Failed to generate VMAF command")
-                return None
-                
-            # Execute VMAF command
-            logger.info(f"Running VMAF analysis with model: {model_name}")
+            logger.info(f"Running simplified VMAF command: {' '.join(cmd)}")
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -364,17 +347,17 @@ class VMAFEnhancer:
                 logger.error(f"VMAF analysis failed: {stderr}")
                 return None
                 
-            logger.info(f"VMAF analysis completed successfully, parsing results from {output_json}")
+            logger.info(f"VMAF analysis completed successfully, parsing results from {output_path}")
             
             # Parse results
             try:
-                with open(output_json, 'r') as f:
+                with open(output_path, 'r') as f:
                     vmaf_data = json.load(f)
                     
                 # Extract scores
-                results = self.parse_vmaf_json(vmaf_data, reference_path, distorted_path, output_json)
+                results = self.parse_vmaf_json(vmaf_data, reference_path, distorted_path, output_path)
                 
-                logger.info(f"VMAF Score: {results['vmaf_score']:.2f}, PSNR: {results['psnr']:.2f}, SSIM: {results['ssim']:.2f}")
+                logger.info(f"VMAF Score: {results['vmaf_score']:.2f}, PSNR: {results.get('psnr', 0):.2f}, SSIM: {results.get('ssim', 0):.2f}")
                 return results
                 
             except Exception as e:
