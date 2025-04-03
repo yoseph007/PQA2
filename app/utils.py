@@ -305,10 +305,11 @@ def get_subprocess_startupinfo():
     Get a STARTUPINFO object configured to suppress Windows console windows and error dialogs
     
     Returns:
-        Tuple containing (startupinfo, creationflags) for subprocess calls
+        Tuple containing (startupinfo, creationflags, env) for subprocess calls
     """
     startupinfo = None
     creationflags = 0
+    env = os.environ.copy()
     
     if platform.system() == 'Windows':
         startupinfo = subprocess.STARTUPINFO()
@@ -318,8 +319,59 @@ def get_subprocess_startupinfo():
         # Use CREATE_NO_WINDOW flag if available
         if hasattr(subprocess, 'CREATE_NO_WINDOW'):
             creationflags = subprocess.CREATE_NO_WINDOW
+            
+        # Add environment variables to suppress FFmpeg dialogs
+        env.update({
+            "FFMPEG_HIDE_BANNER": "1",
+            "AV_LOG_FORCE_NOCOLOR": "1"
+        })
     
-    return startupinfo, creationflags
+    return startupinfo, creationflags, env
+
+def run_ffmpeg_without_dialogs(cmd, timeout=None, input_data=None, universal_newlines=True):
+    """
+    Run FFmpeg command with comprehensive error dialog suppression
+    
+    Args:
+        cmd: Command list to execute
+        timeout: Optional timeout in seconds
+        input_data: Optional input data for stdin
+        universal_newlines: Whether to use text mode (default: True)
+        
+    Returns:
+        CompletedProcess object or subprocess.Popen object if input_data is provided
+    """
+    startupinfo, creationflags, env = get_subprocess_startupinfo()
+    
+    # Log the command being executed
+    logging.getLogger(__name__).debug(f"Running FFmpeg command: {' '.join(cmd)}")
+    
+    if input_data is not None:
+        # When stdin input is needed, use Popen
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=universal_newlines,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+            env=env
+        )
+        stdout, stderr = process.communicate(input=input_data, timeout=timeout)
+        return process
+    else:
+        # For simple commands, use run
+        return subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            text=universal_newlines,
+            timeout=timeout,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+            env=env
+        )
 
 
 def get_video_info(video_path):

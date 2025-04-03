@@ -546,12 +546,19 @@ class BookendCaptureManager(QObject):
                 # Create startupinfo to suppress Windows error dialogs
                 startupinfo = None
                 creationflags = 0
+                env = os.environ.copy()
                 
                 if platform.system() == 'Windows':
                     startupinfo = subprocess.STARTUPINFO()
                     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                     startupinfo.wShowWindow = 0  # SW_HIDE
-                    creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                    if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+                        creationflags = subprocess.CREATE_NO_WINDOW
+                    # Add environment variables to suppress FFmpeg dialogs
+                    env.update({
+                        "FFMPEG_HIDE_BANNER": "1",
+                        "AV_LOG_FORCE_NOCOLOR": "1"
+                    })
                 
                 devices_result = subprocess.run(
                     devices_cmd,
@@ -560,7 +567,8 @@ class BookendCaptureManager(QObject):
                     text=True,
                     timeout=3,
                     startupinfo=startupinfo,
-                    creationflags=creationflags
+                    creationflags=creationflags,
+                    env=env
                 )
 
                 # If device name appears in the output, it's likely available
@@ -579,15 +587,22 @@ class BookendCaptureManager(QObject):
             ]
 
             try:
-                # Create startupinfo to suppress Windows error dialogs
+                # Create enhanced startupinfo to suppress Windows error dialogs
                 startupinfo = None
                 creationflags = 0
+                env = os.environ.copy()
                 
                 if platform.system() == 'Windows':
                     startupinfo = subprocess.STARTUPINFO()
                     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                     startupinfo.wShowWindow = 0  # SW_HIDE
-                    creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                    if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+                        creationflags = subprocess.CREATE_NO_WINDOW
+                    # Add environment variables to suppress FFmpeg dialogs
+                    env.update({
+                        "FFMPEG_HIDE_BANNER": "1",
+                        "AV_LOG_FORCE_NOCOLOR": "1"
+                    })
                 
                 format_result = subprocess.run(
                     format_cmd,
@@ -596,7 +611,8 @@ class BookendCaptureManager(QObject):
                     text=True,
                     timeout=3,
                     startupinfo=startupinfo,
-                    creationflags=creationflags
+                    creationflags=creationflags,
+                    env=env
                 )
 
                 if "Supported formats" in format_result.stderr:
@@ -1766,21 +1782,28 @@ class CaptureManager(QObject):
             # Log command
             logger.info(f"FFmpeg bookend capture command: {' '.join(cmd)}")
 
-            # Start FFmpeg process with proper error suppression
+            # Start FFmpeg process with enhanced error suppression for Windows
             if platform.system() == 'Windows':
-                # Windows-specific settings to suppress error dialogs
+                # Windows-specific settings to completely suppress error dialogs
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 startupinfo.wShowWindow = 0  # SW_HIDE
                 
+                # Use all available methods to suppress dialog boxes
+                creationflags = 0
+                if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+                    creationflags |= subprocess.CREATE_NO_WINDOW
+                
+                # Also redirect stderr to a pipe to intercept error messages
                 self.ffmpeg_process = subprocess.Popen(
                     cmd,
                     stderr=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stdin=subprocess.PIPE,
                     universal_newlines=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
-                    startupinfo=startupinfo
+                    creationflags=creationflags,
+                    startupinfo=startupinfo,
+                    env=dict(os.environ, **{"FFMPEG_HIDE_BANNER": "1", "AV_LOG_FORCE_NOCOLOR": "1"})
                 )
             else:
                 # Regular process creation for non-Windows platforms
