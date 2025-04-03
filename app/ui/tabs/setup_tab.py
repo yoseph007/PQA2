@@ -1,21 +1,21 @@
-
 import os
 import logging
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                             QLabel, QComboBox, QGroupBox, QFileDialog, QMessageBox)
 from PyQt5.QtCore import Qt
+import threading
 
 logger = logging.getLogger(__name__)
 
 class SetupTab(QWidget):
     """Setup tab for selecting reference videos and output settings"""
-    
+
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
         self.reference_thread = None
         self._setup_ui()
-        
+
     def _setup_ui(self):
         """Set up the Setup tab UI"""
         layout = QVBoxLayout(self)
@@ -87,35 +87,65 @@ class SetupTab(QWidget):
 
         # Add stretch to push everything up
         layout.addStretch()
-        
+
     def refresh_reference_videos(self):
-        """Populate dropdown with available reference videos from configured directory"""
-        self.combo_reference_videos.clear()
+        """Refresh the reference video dropdown list"""
+        try:
+            self.combo_reference_videos.clear()
+            self.lbl_reference_details.setText("Reference details: None")
 
-        # Get reference directory from settings
-        reference_folder = None
-        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-            reference_folder = self.parent.options_manager.get_setting("paths", "reference_video_dir")
+            # Get reference directory from options
+            ref_dir = ""
+            if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                paths = self.parent.options_manager.get_setting('paths', {})
+                ref_dir = paths.get('reference_video_dir', '')
 
-        # If not configured, use default location
-        if not reference_folder or not os.path.exists(reference_folder):
-            script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            reference_folder = os.path.join(script_dir, "tests", "test_data")
+            if not ref_dir or not os.path.exists(ref_dir):
+                self.combo_reference_videos.addItem("No reference directory set")
+                return
 
-            # If still doesn't exist, create it
-            if not os.path.exists(reference_folder):
-                os.makedirs(reference_folder, exist_ok=True)
+            # Add a loading indicator
+            self.combo_reference_videos.addItem("Loading...")
+            self.combo_reference_videos.setEnabled(False)
 
-        # Find all video files
+            # Process events to update UI
+            from PyQt5.QtCore import QCoreApplication
+            QCoreApplication.processEvents()
+
+            # Start a thread to scan for video files
+            self.reference_thread = threading.Thread(
+                target=self._scan_references,
+                args=(ref_dir,)
+            )
+            self.reference_thread.daemon = True
+
+            try:
+                self.reference_thread.start()
+            except KeyboardInterrupt:
+                logging.warning("Reference scanning was interrupted by user")
+                self.combo_reference_videos.clear()
+                self.combo_reference_videos.addItem("Scanning interrupted")
+                self.combo_reference_videos.setEnabled(True)
+                return
+
+        except Exception as e:
+            logger.error(f"Error refreshing reference videos: {str(e)}")
+            self.combo_reference_videos.addItem("Error loading videos", "")
+            self.combo_reference_videos.setEnabled(True)
+
+
+    def _scan_references(self, ref_dir):
         video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
         video_files = []
-
         try:
-            for file in os.listdir(reference_folder):
+            for file in os.listdir(ref_dir):
                 if any(file.lower().endswith(ext) for ext in video_extensions):
-                    video_files.append(os.path.join(reference_folder, file))
+                    video_files.append(os.path.join(ref_dir, file))
 
-            # Add to dropdown
+            # Update UI on the main thread
+            from PyQt5.QtCore import QCoreApplication
+            QCoreApplication.processEvents()
+            self.combo_reference_videos.clear()
             if video_files:
                 for video_path in sorted(video_files):
                     self.combo_reference_videos.addItem(os.path.basename(video_path), video_path)
@@ -123,10 +153,13 @@ class SetupTab(QWidget):
             else:
                 self.combo_reference_videos.addItem("No reference videos found", "")
                 logger.info("No reference videos found in the configured directory")
+            self.combo_reference_videos.setEnabled(True)
         except Exception as e:
             logger.error(f"Error loading reference videos: {str(e)}")
             self.combo_reference_videos.addItem("Error loading videos", "")
-            
+            self.combo_reference_videos.setEnabled(True)
+
+
     def reference_selected(self, index):
         """Handle reference video selection from dropdown"""
         if index < 0:
@@ -143,7 +176,7 @@ class SetupTab(QWidget):
         else:
             self.lbl_reference_path.setText("Invalid reference path")
             self.lbl_setup_status.setText("Please select a valid reference video")
-            
+
     def analyze_reference(self, file_path):
         """Analyze reference video to extract metadata"""
         self.log_to_setup(f"Analyzing reference video: {os.path.basename(file_path)}")
@@ -157,7 +190,7 @@ class SetupTab(QWidget):
 
         # Start analysis
         self.reference_thread.start()
-        
+
     def handle_reference_analyzed(self, info):
         """Handle completion of reference video analysis"""
         self.parent.reference_info = info
@@ -210,12 +243,12 @@ class SetupTab(QWidget):
                 self.parent.analysis_tab.combo_duration.addItem(f"{d} seconds", d)
 
         self.log_to_setup("Reference video analysis complete")
-        
+
     def handle_reference_error(self, error_msg):
         """Handle error in reference video analysis"""
         self.log_to_setup(f"Error: {error_msg}")
         QMessageBox.critical(self, "Reference Analysis Error", error_msg)
-        
+
     def browse_output_dir(self):
         """Browse for output directory"""
         # Use standard test_results directory as base
@@ -243,12 +276,12 @@ class SetupTab(QWidget):
                 self.parent.capture_mgr.set_output_directory(directory)
 
             self.log_to_setup(f"Output directory set to: {directory}")
-            
+
     def log_to_setup(self, message):
         """Add message to setup status"""
         self.lbl_setup_status.setText(message)
         self.parent.statusBar().showMessage(message)
-        
+
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated"""
         if hasattr(self, 'reference_thread') and self.reference_thread and self.reference_thread.isRunning():
