@@ -21,202 +21,175 @@ class SetupTab(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Set up the Setup tab UI"""
-        layout = QVBoxLayout(self)
-
+        """Set up the Setup tab UI with improved two-column layout"""
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        
         # Summary header with improved styling
         self.lbl_setup_summary = QLabel("Select a reference video to begin")
         self.lbl_setup_summary.setStyleSheet("font-weight: bold; color: #444; background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
         self.lbl_setup_summary.setWordWrap(True)
-        layout.addWidget(self.lbl_setup_summary)
-
-        # Main content splitter
-        splitter = QSplitter(Qt.Horizontal)
-
-        # Left side - reference and output settings
-        left_widget = QWidget()
-        left_layout = QVBoxLayout(left_widget)
-
+        main_layout.addWidget(self.lbl_setup_summary)
+        
+        # Create horizontal layout for main content
+        content_layout = QHBoxLayout()
+        
+        # Left column - Settings
+        left_column = QVBoxLayout()
+        
         # Reference video group
         reference_group = QGroupBox("Reference Video")
         reference_layout = QVBoxLayout()
-
-        # Reference file selection - direct file selector
+        
+        # Reference file selection
         ref_file_layout = QHBoxLayout()
-        self.lbl_reference_path = QLabel("Reference video:")
         self.txt_reference_path = QLineEdit()
-        self.txt_reference_path.setMinimumWidth(300)
         self.txt_reference_path.setReadOnly(True)
+        self.txt_reference_path.setPlaceholderText("Select reference video file...")
         self.btn_browse_reference = QPushButton("Browse...")
         self.btn_browse_reference.clicked.connect(self.browse_reference_video)
-
-        ref_file_layout.addWidget(self.lbl_reference_path)
         ref_file_layout.addWidget(self.txt_reference_path)
         ref_file_layout.addWidget(self.btn_browse_reference)
         reference_layout.addLayout(ref_file_layout)
-
-        # Reference directory path display
-        dir_layout = QHBoxLayout()
-        self.lbl_ref_dir_title = QLabel("Reference videos directory:")
-        self.lbl_ref_dir_path = QLabel("Not set")
-        self.lbl_ref_dir_path.setStyleSheet("font-style: italic;")
-        dir_layout.addWidget(self.lbl_ref_dir_title)
-        dir_layout.addWidget(self.lbl_ref_dir_path)
-        dir_layout.addStretch()
-        reference_layout.addLayout(dir_layout)
-
+        
+        # Reference directory info
+        self.lbl_ref_dir_path = QLabel("Directory: Not set")
+        self.lbl_ref_dir_path.setStyleSheet("font-style: italic; color: #666; font-size: 9pt;")
+        reference_layout.addWidget(self.lbl_ref_dir_path)
+        
         # Reference details
         self.lbl_reference_details = QLabel("Reference details: None")
+        self.lbl_reference_details.setWordWrap(True)
         reference_layout.addWidget(self.lbl_reference_details)
-
-        # Add to group
+        
         reference_group.setLayout(reference_layout)
-        left_layout.addWidget(reference_group)
-
-        # Output settings with improved layout
+        left_column.addWidget(reference_group)
+        
+        # Output settings group
         output_group = QGroupBox("Output Settings")
         output_layout = QVBoxLayout()
-
-        # Output directory with better layout
+        
+        # Output directory
         output_dir_layout = QHBoxLayout()
-        self.lbl_output_dir_title = QLabel("Output directory:")
         self.txt_output_dir = QLineEdit()
         self.txt_output_dir.setReadOnly(True)
+        self.txt_output_dir.setPlaceholderText("Select output directory...")
         self.btn_browse_output = QPushButton("Browse...")
         self.btn_browse_output.clicked.connect(self.browse_output_dir)
-        output_dir_layout.addWidget(self.lbl_output_dir_title)
-        output_dir_layout.addWidget(self.txt_output_dir, 1)  # Give the text field more space
+        output_dir_layout.addWidget(self.txt_output_dir)
         output_dir_layout.addWidget(self.btn_browse_output)
         output_layout.addLayout(output_dir_layout)
-
-        # Test name with better layout
+        
+        # Test name
         test_name_layout = QHBoxLayout()
         test_name_layout.addWidget(QLabel("Test Name:"))
         self.txt_test_name = QLineEdit("Test_01")
         self.txt_test_name.setPlaceholderText("Enter test name...")
         test_name_layout.addWidget(self.txt_test_name)
         output_layout.addLayout(test_name_layout)
-
-        # Add to group
+        
         output_group.setLayout(output_layout)
-        left_layout.addWidget(output_group)
-
-        # Add instructions group
-        instructions_group = QGroupBox("Instructions")
+        left_column.addWidget(output_group)
+        
+        # Instructions group
+        instructions_group = QGroupBox("Setup Instructions")
         instructions_layout = QVBoxLayout()
         
         instructions_text = QLabel(
-            "1. Select a reference video file using the Browse button above.\n"
-            "2. The application will analyze the video and extract metadata.\n"
-            "3. Set an output directory for test results (optional).\n"
-            "4. Provide a descriptive test name.\n"
-            "5. Once reference video is loaded, click 'Next: Capture' to continue."
+            "1. Select a reference video file\n"
+            "2. Set an output directory for test results\n"
+            "3. Provide a descriptive test name\n"
+            "4. Once reference video is loaded, proceed to Capture tab"
         )
         instructions_text.setWordWrap(True)
         instructions_layout.addWidget(instructions_text)
         
         instructions_group.setLayout(instructions_layout)
-        left_layout.addWidget(instructions_group)
-
-        # Add stretch to push everything up
-        left_layout.addStretch()
-
-        # Right side - video preview and status log
-        right_widget = QWidget()
-        right_layout = QVBoxLayout(right_widget)
-
+        left_column.addWidget(instructions_group)
+        
+        # Add spacer to push everything to the top
+        left_column.addStretch()
+        
+        # Right column - Preview and Log
+        right_column = QVBoxLayout()
+        
         # Video preview group
         preview_group = QGroupBox("Reference Video Preview")
         preview_layout = QVBoxLayout()
-
-        # Preview frame with improved styling
+        
+        # Preview frame
         preview_frame = QFrame()
         preview_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
-        preview_frame.setLineWidth(1)
+        preview_frame.setMinimumHeight(240)
         preview_inner_layout = QVBoxLayout(preview_frame)
-
-        # Preview label with enhanced styling and initial placeholder
+        preview_inner_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Video preview label
         self.video_preview = QLabel("No video selected")
         self.video_preview.setAlignment(Qt.AlignCenter)
-        self.video_preview.setMinimumSize(480, 270)
-        self.video_preview.setMaximumSize(800, 450)
-        self.video_preview.setStyleSheet("background-color: #e0e0e0; color: black; border-radius: 4px;")
+        self.video_preview.setMinimumSize(400, 225)  # 16:9 aspect ratio
+        self.video_preview.setStyleSheet("background-color: #e0e0e0; border-radius: 4px;")
         preview_inner_layout.addWidget(self.video_preview)
-        preview_inner_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Add status indicator for preview
-        preview_status_layout = QHBoxLayout()
+        
+        preview_layout.addWidget(preview_frame)
+        
+        # Preview status
         self.lbl_preview_status = QLabel("Status: No video selected")
         self.lbl_preview_status.setStyleSheet("color: #666; font-size: 9pt;")
-        preview_status_layout.addWidget(self.lbl_preview_status)
-        preview_status_layout.addStretch()
-
-        # Add components to layouts
-        preview_layout.addWidget(preview_frame)
-        preview_layout.addLayout(preview_status_layout)
+        preview_layout.addWidget(self.lbl_preview_status)
+        
         preview_group.setLayout(preview_layout)
-        right_layout.addWidget(preview_group)
-
-        # Setup log with enhanced styling
+        right_column.addWidget(preview_group)
+        
+        # Setup log group
         log_group = QGroupBox("Setup Log")
         log_layout = QVBoxLayout()
-
-        # Create log text area with enhanced styling
+        
+        # Log text area
         self.txt_setup_log = QTextEdit()
         self.txt_setup_log.setReadOnly(True)
         self.txt_setup_log.setLineWrapMode(QTextEdit.WidgetWidth)
         self.txt_setup_log.setMinimumHeight(150)
-        self.txt_setup_log.setMaximumHeight(200)
-        self.txt_setup_log.setFixedWidth(550)
-
-        # Set custom stylesheet for better readability
         self.txt_setup_log.setStyleSheet("""
             QTextEdit {
                 background-color: #f8f8f8;
                 font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 10pt;
+                font-size: 9pt;
                 padding: 4px;
                 border: 1px solid #ddd;
             }
         """)
-
-        # Add clear log button
+        log_layout.addWidget(self.txt_setup_log)
+        
+        # Log controls
         log_controls = QHBoxLayout()
         self.btn_clear_setup_log = QPushButton("Clear Log")
-        self.btn_clear_setup_log.setMaximumWidth(100)
         self.btn_clear_setup_log.clicked.connect(self.txt_setup_log.clear)
         log_controls.addStretch()
         log_controls.addWidget(self.btn_clear_setup_log)
-
-        # Add components to layouts
-        log_layout.addWidget(self.txt_setup_log)
         log_layout.addLayout(log_controls)
-        log_group.setLayout(log_layout)
-        right_layout.addWidget(log_group)
-
-        # Add widgets to splitter with 50/50 split
-        splitter.addWidget(left_widget)
-        splitter.addWidget(right_widget)
-        splitter.setSizes([500, 500])  # 50/50 split
         
-        # Set a minimum width for both panes to prevent unwanted resizing
-        left_widget.setMinimumWidth(400)
-        right_widget.setMinimumWidth(400)
-
-        # Add splitter to layout
-        layout.addWidget(splitter)
-
-        # Setup status and navigation buttons
+        log_group.setLayout(log_layout)
+        right_column.addWidget(log_group)
+        
+        # Add both columns to content layout
+        content_layout.addLayout(left_column, 1)
+        content_layout.addLayout(right_column, 1)
+        
+        # Add content layout to main layout
+        main_layout.addLayout(content_layout)
+        
+        # Navigation buttons
         nav_layout = QHBoxLayout()
-
         nav_layout.addStretch()
         
         self.btn_next_to_capture = QPushButton("Next: Capture")
         self.btn_next_to_capture.setEnabled(False)
+        self.btn_next_to_capture.setStyleSheet("font-weight: bold;")
         nav_layout.addWidget(self.btn_next_to_capture)
         
-        layout.addLayout(nav_layout)
-
+        main_layout.addLayout(nav_layout)
+        
         # Initialize with welcome message
         self.log_to_setup("Welcome to VMAF Test App. Please select a reference video to continue.")
 
@@ -233,7 +206,7 @@ class SetupTab(QWidget):
             start_dir = os.path.expanduser("~")
 
         # Store reference directory for display
-        self.lbl_ref_dir_path.setText(start_dir)
+        self.lbl_ref_dir_path.setText(f"Directory: {start_dir}")
         self.lbl_ref_dir_path.setToolTip(start_dir)
 
         # Show file dialog
@@ -251,7 +224,7 @@ class SetupTab(QWidget):
 
             # Update directory display
             ref_dir = os.path.dirname(file_path)
-            self.lbl_ref_dir_path.setText(ref_dir)
+            self.lbl_ref_dir_path.setText(f"Directory: {ref_dir}")
             self.lbl_ref_dir_path.setToolTip(ref_dir)
 
             # Save the directory to options
@@ -343,31 +316,39 @@ class SetupTab(QWidget):
 
     def browse_output_dir(self):
         """Browse for output directory"""
-        # Use standard test_results directory as base
-        default_dir = self.parent.file_mgr.get_default_base_dir() if hasattr(self.parent, 'file_mgr') else None
-
-        if not default_dir:
-            script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            default_dir = os.path.join(script_dir, "tests", "test_results")
-            os.makedirs(default_dir, exist_ok=True)
-
-        # Show the browser but only for visual confirmation
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Output Directory", default_dir
-        )
-
-        if directory:
-            # Set output directory in UI and managers
-            self.txt_output_dir.setText(directory)
-            self.txt_output_dir.setToolTip(directory)
-
+        try:
+            # Get default directory
+            default_dir = None
             if hasattr(self.parent, 'file_mgr'):
-                self.parent.file_mgr.base_dir = directory
+                default_dir = self.parent.file_mgr.get_default_base_dir()
+            
+            if not default_dir:
+                script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+                default_dir = os.path.join(script_dir, "tests", "test_results")
+                os.makedirs(default_dir, exist_ok=True)
 
-            if hasattr(self.parent, 'capture_mgr'):
-                self.parent.capture_mgr.set_output_directory(directory)
+            # Show directory dialog
+            directory = QFileDialog.getExistingDirectory(
+                self, "Select Output Directory", default_dir
+            )
 
-            self.log_to_setup(f"Output directory set to: {directory}")
+            if directory:
+                # Set output directory in UI and managers
+                self.txt_output_dir.setText(directory)
+                self.txt_output_dir.setToolTip(directory)
+
+                if hasattr(self.parent, 'file_mgr'):
+                    self.parent.file_mgr.base_dir = directory
+
+                if hasattr(self.parent, 'capture_mgr'):
+                    self.parent.capture_mgr.set_output_directory(directory)
+
+                self.log_to_setup(f"Output directory set to: {directory}")
+        except Exception as e:
+            logger.error(f"Error selecting output directory: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            self.log_to_setup(f"Error selecting output directory: {str(e)}")
 
     def log_to_setup(self, message):
         """Add message to setup log with formatting for different message types"""
@@ -424,7 +405,6 @@ class SetupTab(QWidget):
         """Load and display a preview frame from the video"""
         try:
             import cv2
-            from PyQt5.QtGui import QImage, QPixmap
 
             # Open the video file
             cap = cv2.VideoCapture(video_path)

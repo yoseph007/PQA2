@@ -111,6 +111,15 @@ class FileManager:
         # Track all files
         self.temp_files = []
         self.final_files = []
+        
+    def get_default_base_dir(self):
+        """
+        Get the default base directory for test results
+        
+        Returns:
+            The base directory path
+        """
+        return self.base_dir
 
     def get_test_path(self, test_name, filename=None):
         """
