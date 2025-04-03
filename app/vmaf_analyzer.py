@@ -161,17 +161,18 @@ class VMAFAnalyzer(QObject):
                     creationflags = 0
                     env = os.environ.copy()
 
+                    # Add environment variables to suppress FFmpeg dialogs
+                    env.update({
+                        "FFMPEG_HIDE_BANNER": "1",
+                        "AV_LOG_FORCE_NOCOLOR": "1"
+                    })
+
                     if platform.system() == 'Windows':
                         startupinfo = subprocess.STARTUPINFO()
                         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                         startupinfo.wShowWindow = 0  # SW_HIDE
                         if hasattr(subprocess, 'CREATE_NO_WINDOW'):
                             creationflags = subprocess.CREATE_NO_WINDOW
-                        # Add environment variables to suppress FFmpeg dialogs
-                        env.update({
-                            "FFMPEG_HIDE_BANNER": "1",
-                            "AV_LOG_FORCE_NOCOLOR": "1"
-                        })
 
                     process = subprocess.Popen(
                         simplified_cmd,

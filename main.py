@@ -30,6 +30,8 @@ def initialize_vmaf_enhancer():
         return enhancer
     except Exception as e:
         logger.warning(f"Could not initialize VMAF enhancer: {str(e)}")
+        import traceback
+        logger.warning(traceback.format_exc())
         return None
 
 if __name__ == "__main__":
