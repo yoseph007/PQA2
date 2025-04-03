@@ -396,8 +396,26 @@ class BookendAligner(QObject):
     def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration):
         """Create aligned videos based on bookend content timing with improved naming"""
         try:
-            # Get the test directory from captured_path
-            output_dir = os.path.dirname(captured_path)
+            # First try to get output directory from parent of reference path
+            # This ensures results go in test_results, not test_references
+            ref_parent_dir = os.path.dirname(os.path.dirname(reference_path))
+            if os.path.basename(ref_parent_dir) == "test_references":
+                # If reference is in test_references, use test_results instead
+                test_results_dir = os.path.join(os.path.dirname(ref_parent_dir), "test_results")
+                if os.path.exists(test_results_dir):
+                    # Get test name from captured_path directory
+                    capture_dir_name = os.path.basename(os.path.dirname(captured_path))
+                    # Create matching directory in test_results
+                    output_dir = os.path.join(test_results_dir, capture_dir_name)
+                    os.makedirs(output_dir, exist_ok=True)
+                    logger.info(f"Using test_results directory for aligned output: {output_dir}")
+                else:
+                    # Fallback to captured path directory
+                    output_dir = os.path.dirname(captured_path)
+                    logger.warning(f"test_results directory not found, using: {output_dir}")
+            else:
+                # If not in test_references, use the captured path directory
+                output_dir = os.path.dirname(captured_path)
 
             # Get the timestamp from the directory name if possible
             dir_name = os.path.basename(output_dir)

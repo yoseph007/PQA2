@@ -148,8 +148,8 @@ class CaptureTab(QWidget):
         preview_status_layout.addStretch()
         preview_status_layout.addWidget(self.lbl_frame_counter)
 
-        # Show a placeholder image initially
-        self._show_placeholder_image("Waiting for video capture to start...")
+        # Show the reference video preview initially
+        self._show_reference_preview()
 
         # Add components to layouts
         preview_layout.addWidget(preview_frame)
@@ -581,3 +581,80 @@ class CaptureTab(QWidget):
             self.parent.statusBar().setStyleSheet("background-color: #FFCDD2;")  # Light red
             # Reset style after 2 seconds
             QTimer.singleShot(2000, lambda: self.parent.statusBar().setStyleSheet(current_style))
+
+
+    def _show_reference_preview(self):
+        """Show the reference video preview in the capture tab"""
+        try:
+            # Check if we have a reference video
+            if hasattr(self.parent, 'reference_info') and self.parent.reference_info:
+                reference_path = self.parent.reference_info.get('path')
+                if reference_path and os.path.exists(reference_path):
+                    # Use the same preview loading code from SetupTab
+                    import cv2
+                    
+                    # Open the video file
+                    cap = cv2.VideoCapture(reference_path)
+                    if not cap.isOpened():
+                        logger.error(f"Could not open reference video: {reference_path}")
+                        return
+                    
+                    # Get the middle frame for preview
+                    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    if total_frames > 10:
+                        # Seek to middle frame
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
+                    
+                    # Read the frame
+                    ret, frame = cap.read()
+                    if not ret:
+                        logger.error("Could not read reference video frame")
+                        cap.release()
+                        return
+                    
+                    # Convert frame to RGB format (OpenCV uses BGR)
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    
+                    # Calculate scaled dimensions to fit the preview area
+                    h, w, ch = frame_rgb.shape
+                    preview_w = self.lbl_preview.width()
+                    preview_h = self.lbl_preview.height()
+                    
+                    # Calculate aspect ratio-preserving dimensions
+                    if w/h > preview_w/preview_h:  # Width-limited
+                        new_w = preview_w
+                        new_h = int(h * (preview_w / w))
+                    else:  # Height-limited
+                        new_h = preview_h
+                        new_w = int(w * (preview_h / h))
+                    
+                    # Resize the frame
+                    resized = cv2.resize(frame_rgb, (new_w, new_h))
+                    
+                    # Convert to QImage and QPixmap
+                    from PyQt5.QtGui import QImage, QPixmap
+                    bytes_per_line = ch * new_w
+                    q_img = QImage(resized.data, new_w, new_h, bytes_per_line, QImage.Format_RGB888)
+                    pixmap = QPixmap.fromImage(q_img)
+                    
+                    # Set the pixmap to the QLabel
+                    self.lbl_preview.setPixmap(pixmap)
+                    self.lbl_preview.setAlignment(Qt.AlignCenter)
+                    
+                    # Update status text
+                    ref_name = os.path.basename(reference_path)
+                    self.lbl_preview_status.setText(f"Reference preview: {ref_name}")
+                    
+                    # Release the video capture
+                    cap.release()
+                    return
+            
+            # Fall back to text message if couldn't load reference
+            self.lbl_preview.setText("Reference video preview not available")
+            self.lbl_preview.setStyleSheet("background-color: #f0f0f0; color: #666; padding: 10px;")
+            self.lbl_preview_status.setText("Status: No reference video loaded")
+            
+        except Exception as e:
+            logger.error(f"Error showing reference preview: {e}")
+            self.lbl_preview.setText("Error loading reference preview")
+            self.lbl_preview_status.setText(f"Error: {str(e)}")

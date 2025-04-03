@@ -79,11 +79,17 @@ class SetupTab(QWidget):
         output_dir_layout.addWidget(self.btn_browse_output)
         output_layout.addLayout(output_dir_layout)
 
-        # Test name
+        # Test name with improved placeholder and validation
         test_name_layout = QHBoxLayout()
         test_name_layout.addWidget(QLabel("Test Name:"))
-        self.txt_test_name = QLineEdit("Test_01")
-        self.txt_test_name.setPlaceholderText("Enter test name...")
+        self.txt_test_name = QLineEdit()
+        self.txt_test_name.setPlaceholderText("Enter a test name (alpha-numeric, _ or - only)")
+        self.txt_test_name.setToolTip("Use a descriptive name with letters, numbers, underscores, or hyphens")
+        # Add validator to enforce proper naming
+        from PyQt5.QtGui import QRegExpValidator
+        from PyQt5.QtCore import QRegExp
+        validator = QRegExpValidator(QRegExp(r'[A-Za-z0-9_\-]+'))
+        self.txt_test_name.setValidator(validator)
         test_name_layout.addWidget(self.txt_test_name)
         output_layout.addLayout(test_name_layout)
 
@@ -314,12 +320,24 @@ class SetupTab(QWidget):
         QMessageBox.critical(self, "Reference Analysis Error", error_msg)
 
     def browse_output_dir(self):
-        """Browse for output directory"""
+        """Browse for output directory using settings-defined path"""
         try:
-            # Get default directory
-            default_dir = self.parent.file_mgr.get_default_output_dir() if hasattr(self.parent, 'file_mgr') else None
-            if not default_dir:
-                default_dir = os.path.expanduser("~")
+            # First check if we have a path from options_manager
+            default_dir = None
+            if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                try:
+                    paths = self.parent.options_manager.get_setting('paths')
+                    if isinstance(paths, dict) and 'output_dir' in paths:
+                        default_dir = paths['output_dir']
+                        logger.info(f"Using output directory from options: {default_dir}")
+                except Exception as e:
+                    logger.error(f"Error getting output directory from settings: {e}")
+            
+            # Fallback to file manager or home directory
+            if not default_dir or not os.path.exists(default_dir):
+                default_dir = self.parent.file_mgr.get_default_output_dir() if hasattr(self.parent, 'file_mgr') else None
+                if not default_dir:
+                    default_dir = os.path.expanduser("~")
 
             # Show directory dialog
             directory = QFileDialog.getExistingDirectory(

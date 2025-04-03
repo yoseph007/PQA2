@@ -108,18 +108,40 @@ class AnalysisTab(QWidget):
         progress_group.setLayout(progress_layout)
         layout.addWidget(progress_group)
 
-        # Log section with fixed height
-        log_group = QGroupBox("Analysis Log")
-        log_layout = QVBoxLayout()
+        # Logs section with two columns
+        logs_group = QGroupBox("Analysis Logs")
+        logs_layout = QHBoxLayout()
+        
+        # Left column - Analysis log
+        left_log_layout = QVBoxLayout()
+        left_log_label = QLabel("Analysis Log:")
+        left_log_label.setStyleSheet("font-weight: bold;")
+        left_log_layout.addWidget(left_log_label)
+        
         self.txt_analysis_log = QTextEdit()
         self.txt_analysis_log.setReadOnly(True)
         self.txt_analysis_log.setLineWrapMode(QTextEdit.WidgetWidth)
         self.txt_analysis_log.setMinimumHeight(150)
-        self.txt_analysis_log.setMaximumHeight(200)  # Fix height to prevent stretching
-        self.txt_analysis_log.setFixedWidth(800)  # Fixed width to avoid UI stretching with long messages
-        log_layout.addWidget(self.txt_analysis_log)
-        log_group.setLayout(log_layout)
-        layout.addWidget(log_group)
+        self.txt_analysis_log.setMaximumHeight(200)
+        left_log_layout.addWidget(self.txt_analysis_log)
+        logs_layout.addLayout(left_log_layout)
+        
+        # Right column - Alignment and VMAF results
+        right_log_layout = QVBoxLayout()
+        right_log_label = QLabel("Alignment & Results:")
+        right_log_label.setStyleSheet("font-weight: bold;")
+        right_log_layout.addWidget(right_log_label)
+        
+        self.txt_alignment_log = QTextEdit()
+        self.txt_alignment_log.setReadOnly(True)
+        self.txt_alignment_log.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.txt_alignment_log.setMinimumHeight(150)
+        self.txt_alignment_log.setMaximumHeight(200)
+        right_log_layout.addWidget(self.txt_alignment_log)
+        logs_layout.addLayout(right_log_layout)
+        
+        logs_group.setLayout(logs_layout)
+        layout.addWidget(logs_group)
 
         # Navigation buttons
         nav_layout = QHBoxLayout()
@@ -183,9 +205,9 @@ class AnalysisTab(QWidget):
             self.parent.capture_path
         )
 
-        # Connect signals
+        # Connect signals with dual logging
         self.alignment_thread.alignment_progress.connect(self.pb_alignment_progress.setValue)
-        self.alignment_thread.status_update.connect(self.log_to_analysis)
+        self.alignment_thread.status_update.connect(self._log_alignment_update)
         self.alignment_thread.error_occurred.connect(self.handle_alignment_error)
 
         # Connect to special handler for combined workflow
@@ -270,8 +292,8 @@ class AnalysisTab(QWidget):
         if test_name:
             self.vmaf_thread.set_test_name(test_name)
 
-        # Connect signals
-        self.vmaf_thread.analysis_progress.connect(self.pb_vmaf_progress.setValue)
+        # Connect signals with improved progress handling
+        self.vmaf_thread.analysis_progress.connect(self._update_vmaf_progress)
         self.vmaf_thread.status_update.connect(self.log_to_analysis)
         self.vmaf_thread.error_occurred.connect(self.handle_vmaf_error)
         self.vmaf_thread.analysis_complete.connect(self.handle_vmaf_complete)
@@ -360,17 +382,60 @@ class AnalysisTab(QWidget):
         self.btn_run_combined_analysis.setEnabled(True)
 
     def log_to_analysis(self, message):
-        """Add message to analysis log"""
+        """Add message to analysis log column"""
         self.txt_analysis_log.append(message)
         self.txt_analysis_log.verticalScrollBar().setValue(
             self.txt_analysis_log.verticalScrollBar().maximum()
         )
         self.parent.statusBar().showMessage(message)
 
+    def _log_alignment_update(self, message):
+        """Log alignment updates to both columns"""
+        # Log to general analysis log
+        self.log_to_analysis(message)
+        
+        # Add to alignment log with highlighted formatting
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        formatted_message = f"[{timestamp}] {message}"
+        
+        # Add special formatting for important messages
+        if "complete" in message.lower() or "finished" in message.lower() or "success" in message.lower():
+            formatted_message = f'<span style="color: #388E3C; font-weight: bold;">{formatted_message}</span>'
+        
+        # Ensure it also appears in alignment log
+        self.txt_alignment_log.append(formatted_message)
+        self.txt_alignment_log.verticalScrollBar().setValue(
+            self.txt_alignment_log.verticalScrollBar().maximum()
+        )
+
+        
+        # Also log alignment-related and result messages to the right column
+        if any(keyword in message.lower() for keyword in 
+               ["align", "bookend", "vmaf score", "psnr", "ssim", "complete", "error"]):
+            self.txt_alignment_log.append(message)
+            self.txt_alignment_log.verticalScrollBar().setValue(
+                self.txt_alignment_log.verticalScrollBar().maximum()
+            )
+
     def _populate_vmaf_models(self):
         """Scan models directory and populate the VMAF model dropdown"""
         try:
             # Clear current items
+
+    def _update_vmaf_progress(self, progress):
+        """Update VMAF progress bar with better feedback"""
+        # Ensure progress is between 0-100
+        progress = max(0, min(100, progress))
+        
+        # Update the progress bar
+        self.pb_vmaf_progress.setValue(progress)
+        
+        # Also update status text with percentage
+        if progress < 100:
+            self.lbl_vmaf_status.setText(f"VMAF Analysis: {progress}% complete")
+        else:
+            self.lbl_vmaf_status.setText("VMAF Analysis: Complete!")
+
             self.combo_vmaf_model.clear()
 
             # Find models directory

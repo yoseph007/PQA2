@@ -444,18 +444,29 @@ class VMAFAnalyzer(QObject):
                 # Restore original directory
                 os.chdir(current_dir)
 
-                # Only delete the primary capture file if it's not an aligned file
-                # (aligned files are needed for further processing)
+                # Handle file cleanup properly
                 if 'distorted_path' in results:
-                    primary_capture = results['distorted_path']
-                    try:
-                        if os.path.exists(primary_capture) and "capture" in primary_capture.lower() and "aligned" not in primary_capture.lower():
-                            logger.info(f"Keeping primary capture file: {primary_capture}")
-                            # os.remove(primary_capture) - don't delete aligned files
-                        elif "aligned" in primary_capture.lower():
-                            logger.info(f"Keeping aligned capture file for analysis: {primary_capture}")
-                    except Exception as cleanup_error:
-                        logger.warning(f"Error processing primary capture file: {cleanup_error}")
+                    # Get the aligned capture file path
+                    aligned_capture = results['distorted_path']
+                    
+                    # Get the original capture file if it exists (before alignment)
+                    original_capture = None
+                    if "aligned" in aligned_capture.lower():
+                        # Try to find the original unaligned file
+                        original_path = aligned_capture.replace("_aligned", "")
+                        if os.path.exists(original_path):
+                            original_capture = original_path
+                    
+                    # Log the file status
+                    logger.info(f"Keeping aligned capture file for results: {aligned_capture}")
+                    
+                    # Delete the original unaligned file if it exists
+                    if original_capture and os.path.exists(original_capture):
+                        try:
+                            logger.info(f"Deleting original unaligned capture file: {original_capture}")
+                            os.remove(original_capture)
+                        except Exception as cleanup_error:
+                            logger.warning(f"Could not delete original capture file: {cleanup_error}")
 
                 # Return results
                 self.analysis_complete.emit(results)
