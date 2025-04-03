@@ -215,6 +215,14 @@ class OptionsTab(QWidget):
         vmaf_group = QGroupBox("VMAF Analysis Settings")
         vmaf_layout = QFormLayout()
 
+        # Tester information
+        self.txt_tester_name = QLineEdit()
+        vmaf_layout.addRow("Tester Name:", self.txt_tester_name)
+        
+        self.txt_test_location = QLineEdit()
+        vmaf_layout.addRow("Test Location:", self.txt_test_location)
+
+        # VMAF options
         self.check_use_temp_files = QCheckBox()
         self.check_use_temp_files.setChecked(True)
         vmaf_layout.addRow("Use Temporary Files:", self.check_use_temp_files)
@@ -235,6 +243,13 @@ class OptionsTab(QWidget):
         self.combo_alignment_method.addItems(["SSIM", "Bookend Detection", "Combined"])
         vmaf_layout.addRow("Alignment Method:", self.combo_alignment_method)
 
+        # Number of threads for VMAF
+        self.spin_vmaf_threads = QSpinBox()
+        self.spin_vmaf_threads.setRange(0, 32)
+        self.spin_vmaf_threads.setValue(4)
+        self.spin_vmaf_threads.setToolTip("0 = Auto (use all available cores)")
+        vmaf_layout.addRow("VMAF Threads:", self.spin_vmaf_threads)
+        
         # Add default VMAF model selection
         self.combo_default_vmaf_model = QComboBox()
         self._populate_vmaf_models()
@@ -449,6 +464,15 @@ class OptionsTab(QWidget):
                 self.check_save_plots.setChecked(vmaf.get('save_plots', True))
                 self.check_auto_alignment.setChecked(settings.get('auto_alignment', True))
                 self.combo_alignment_method.setCurrentText(settings.get('alignment_method', 'Bookend Detection'))
+                
+                # Load tester information
+                if hasattr(self, 'txt_tester_name'):
+                    self.txt_tester_name.setText(vmaf.get('tester_name', ''))
+                    self.txt_test_location.setText(vmaf.get('test_location', ''))
+                
+                # Load thread count
+                if hasattr(self, 'spin_vmaf_threads'):
+                    self.spin_vmaf_threads.setValue(vmaf.get('threads', 4))
 
                 # Populate VMAF models and set default
                 self._populate_vmaf_models()
@@ -571,6 +595,9 @@ class OptionsTab(QWidget):
                         'default_model': self.combo_default_vmaf_model.currentText(),
                         'save_json': self.check_save_json.isChecked(),
                         'save_plots': self.check_save_plots.isChecked(),
+                        'threads': self.spin_vmaf_threads.value(),
+                        'tester_name': self.txt_tester_name.text(),
+                        'test_location': self.txt_test_location.text(),
                     },
 
                     # Analysis general settings

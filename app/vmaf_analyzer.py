@@ -1,10 +1,10 @@
-
 import os
 import logging
 import json
 import subprocess
 import re
 import time
+import platform # Added for platform detection
 from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
 from .utils import normalize_path
@@ -90,25 +90,25 @@ class VMAFAnalyzer(QObject):
             # Find paths to FFmpeg executables using the utility function
             from .utils import get_ffmpeg_path
             ffmpeg_exe, ffprobe_exe, ffplay_exe = get_ffmpeg_path()
-            
+
             # Try using the enhanced VMAF analyzer first (for more consistent results)
             try:
                 # Import the VMAF Enhancer
                 from .vmaf_enhancer import VMAFEnhancer
                 enhancer = VMAFEnhancer()
-                
+
                 # Create consistent filenames with test name and timestamp
                 vmaf_filename = f"{test_name}_{timestamp}_vmaf_enhanced.json"
                 psnr_filename = f"{test_name}_{timestamp}_psnr.txt"
                 ssim_filename = f"{test_name}_{timestamp}_ssim.txt"
-                
+
                 # Create full paths
                 json_path = os.path.join(test_dir, vmaf_filename).replace("\\", "/")
-                
+
                 # Set status updates
                 self.status_update.emit("Preprocessing videos for consistent comparison...")
                 self.analysis_progress.emit(10)
-                
+
                 # First try with the enhanced method that handles preprocessing
                 # Preprocess videos to ensure consistent frame rates and resolutions
                 self.status_update.emit("Preprocessing videos to ensure consistent comparison...")
@@ -119,84 +119,115 @@ class VMAFAnalyzer(QObject):
                     match_framerate=True,
                     match_resolution=True
                 )
-                
+
                 if ref_processed and dist_processed:
                     reference_path_ffmpeg = ref_processed.replace("\\", "/")
                     distorted_path_ffmpeg = dist_processed.replace("\\", "/")
-                    
+
                     # Use simplified reliable VMAF command
                     self.status_update.emit("Generating simplified VMAF command...")
                     self.analysis_progress.emit(20)
-                    
+
+                    # Get thread count from options if available
+                    thread_count = 4  # Default
+                    try:
+                        from app.options_manager import OptionsManager
+                        options_manager = OptionsManager()
+                        vmaf_settings = options_manager.get_setting("vmaf")
+                        thread_count = vmaf_settings.get("threads", 4)
+                    except Exception as e:
+                        logger.warning(f"Could not get thread count from options: {e}")
+
                     # Create direct simplified command that has been working reliably
                     simplified_cmd = [
                         ffmpeg_exe,
                         "-hide_banner",
                         "-i", distorted_path_ffmpeg,
                         "-i", reference_path_ffmpeg,
-                        "-lavfi", f"libvmaf=log_path={json_path}:log_fmt=json",
+                        "-lavfi", f"libvmaf=log_path={json_path}:log_fmt=json:n_threads={thread_count}",
                         "-f", "null", "-"
                     ]
-                    
+
                     output_json = json_path
-                    
+
                     self.status_update.emit("Running VMAF analysis...")
                     self.analysis_progress.emit(30)
-                    
-                    # Execute the command
+
+                    # Execute the command with window suppression
                     logger.info(f"Running simplified VMAF command: {' '.join(simplified_cmd)}")
+
+                    # Create startupinfo to suppress Windows error dialogs
+                    startupinfo = None
+                    creationflags = 0
+                    env = os.environ.copy()
+
+                    if platform.system() == 'Windows':
+                        startupinfo = subprocess.STARTUPINFO()
+                        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                        startupinfo.wShowWindow = 0  # SW_HIDE
+                        if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+                            creationflags = subprocess.CREATE_NO_WINDOW
+                        # Add environment variables to suppress FFmpeg dialogs
+                        env.update({
+                            "FFMPEG_HIDE_BANNER": "1",
+                            "AV_LOG_FORCE_NOCOLOR": "1"
+                        })
+
                     process = subprocess.Popen(
                         simplified_cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        text=True
+                        text=True,
+                        startupinfo=startupinfo,
+                        creationflags=creationflags,
+                        env=env
                     )
-                    
+
                     # Monitor progress
                     output, error = process.communicate()
                     returncode = process.returncode
-                        
-                        if returncode == 0:
-                            logger.info("Enhanced VMAF command succeeded!")
-                            self.status_update.emit("Parsing VMAF results...")
-                            self.analysis_progress.emit(90)
-                            
-                            # Parse the results
-                            results = enhancer.parse_vmaf_json(
-                                json.load(open(output_json, 'r')),
-                                reference_path,
-                                distorted_path,
-                                output_json
-                            )
-                            
-                            # Add file paths to results
-                            results['json_path'] = output_json
-                            results['reference_path'] = reference_path
-                            results['distorted_path'] = distorted_path
-                            
-                            # Set progress to 100%
-                            self.analysis_progress.emit(100)
-                            self.status_update.emit(f"VMAF analysis complete! Score: {results['vmaf_score']:.2f}")
-                            
-                            # Return the results
-                            return results
-                        else:
-                            logger.warning(f"Enhanced VMAF command failed: {error}, falling back to original method")
-                            # Continue with original method
+
+                    if returncode == 0:
+                        logger.info("Enhanced VMAF command succeeded!")
+                        self.status_update.emit("Parsing VMAF results...")
+                        self.analysis_progress.emit(90)
+
+                        # Parse the results
+                        results = enhancer.parse_vmaf_json(
+                            json.load(open(output_json, 'r')),
+                            reference_path,
+                            distorted_path,
+                            output_json
+                        )
+
+                        # Add file paths to results
+                        results['json_path'] = output_json
+                        results['reference_path'] = reference_path
+                        results['distorted_path'] = distorted_path
+
+                        # Set progress to 100%
+                        self.analysis_progress.emit(100)
+                        self.status_update.emit(f"VMAF analysis complete! Score: {results['vmaf_score']:.2f}")
+
+                        # Return the results
+                        return results
                     else:
-                        logger.warning("Could not generate enhanced VMAF command, falling back to original method")
+                        logger.warning(f"Enhanced VMAF command failed: {error}, falling back to original method")
                         # Continue with original method
                 else:
-                    logger.warning("Enhanced preprocessing failed, falling back to original method")
+                    logger.warning("Could not generate enhanced VMAF command, falling back to original method")
                     # Continue with original method
-            
+            else:
+                logger.warning("Enhanced preprocessing failed, falling back to original method")
+                # Continue with original method
+
             except Exception as e:
                 logger.warning(f"Enhanced VMAF analysis failed with error: {str(e)}, falling back to legacy method")
                 # Continue with original method as fallback
-            
+
             # If enhanced method failed or wasn't available, use the original method
             self.status_update.emit("Using original VMAF analysis method...")
-            
+
             # Create consistent filenames with test name and timestamp
             vmaf_filename = f"{test_name}_{timestamp}_vmaf.json"
             csv_filename = f"{test_name}_{timestamp}_vmaf.csv"
@@ -226,21 +257,21 @@ class VMAFAnalyzer(QObject):
             model_name = model
             if not model.endswith('.json'):
                 model_name = f"{model}.json"
-            
+
             # Find the model path in models directory
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            
+
             # Check if we're in the app directory or at the root
             if os.path.basename(current_dir) == "app":
                 root_dir = os.path.dirname(current_dir)  # Go up one level if in app directory
             else:
                 root_dir = current_dir  # We're already at root
-                
+
             models_dir = os.path.join(root_dir, "models")
             model_path = os.path.join(models_dir, model_name)
-            
+
             logger.info(f"Looking for VMAF model at: {model_path}")
-            
+
             # Check if model file exists in models directory
             if not os.path.exists(model_path):
                 logger.warning(f"VMAF model file not found at {model_path}, using default path")
@@ -253,21 +284,21 @@ class VMAFAnalyzer(QObject):
 
             # Change directory to the test directory for relative paths
             os.chdir(test_dir)
-            
+
             # Use just filenames after changing directory (this avoids Windows path character issues)
             # These are relative to the test_dir we just changed to
             rel_vmaf_json = vmaf_filename
             rel_vmaf_csv = csv_filename 
             rel_psnr_txt = psnr_filename
             rel_ssim_txt = ssim_filename
-            
+
             logger.info("Working directory changed to test directory for relative paths")
             logger.info(f"Using relative paths: {rel_vmaf_json}, {rel_vmaf_csv}, {rel_psnr_txt}, {rel_ssim_txt}")
 
             # Use the simplified, reliable command format that works consistently
             try:
                 logger.info("Running VMAF analysis with simple reliable command format...")
-                
+
                 # For Windows paths, use the most reliable method with simple command
                 # Avoid complex filters and focus on basic command that works consistently
                 reliable_cmd = [
@@ -278,34 +309,54 @@ class VMAFAnalyzer(QObject):
                     "-lavfi", f"libvmaf=log_path={rel_vmaf_json}:log_fmt=json",
                     "-f", "null", "-"
                 ]
-                
+
                 logger.info(f"Command: {' '.join(reliable_cmd)}")
+                # Create startupinfo to suppress Windows error dialogs
+                startupinfo = None
+                creationflags = 0
+                env = os.environ.copy()
+
+                if platform.system() == 'Windows':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = 0  # SW_HIDE
+                    if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+                        creationflags = subprocess.CREATE_NO_WINDOW
+                    # Add environment variables to suppress FFmpeg dialogs
+                    env.update({
+                        "FFMPEG_HIDE_BANNER": "1",
+                        "AV_LOG_FORCE_NOCOLOR": "1"
+                    })
+
                 process = subprocess.Popen(
                     reliable_cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    bufsize=1
+                    bufsize=1,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags,
+                    env=env
                 )
-                
+
                 # Monitor progress
                 output, error = process.communicate()
                 returncode = process.returncode
-                
+
                 if returncode == 0:
                     logger.info("VMAF command succeeded!")
                     # Now run PSNR and SSIM separately with relative paths
                     self._run_psnr_ssim_analysis(ffmpeg_exe, distorted_path_ffmpeg, reference_path_ffmpeg, rel_psnr_txt, rel_ssim_txt)
-                    
+
                     # Build full paths for the results
                     json_path_full = os.path.join(test_dir, rel_vmaf_json).replace("\\", "/")
                     psnr_path_full = os.path.join(test_dir, rel_psnr_txt).replace("\\", "/")
                     ssim_path_full = os.path.join(test_dir, rel_ssim_txt).replace("\\", "/")
-                    
+
                     return self._parse_vmaf_results(json_path_full, psnr_path_full, ssim_path_full, distorted_path, reference_path, current_dir)
                 else:
                     logger.error(f"Primary VMAF command failed: {error}")
-                    
+
                     # Try system FFmpeg as fallback
                     logger.info("Trying with system FFmpeg as fallback...")
                     fallback_cmd = [
@@ -316,7 +367,7 @@ class VMAFAnalyzer(QObject):
                         "-lavfi", f"libvmaf=log_path={rel_vmaf_json}:log_fmt=json",
                         "-f", "null", "-"
                     ]
-                    
+
                     logger.info(f"Fallback command: {' '.join(fallback_cmd)}")
                     process = subprocess.Popen(
                         fallback_cmd,
@@ -324,20 +375,20 @@ class VMAFAnalyzer(QObject):
                         stderr=subprocess.PIPE,
                         text=True
                     )
-                    
+
                     output, error = process.communicate()
                     returncode = process.returncode
-                    
+
                     if returncode == 0:
                         logger.info("System FFmpeg VMAF command succeeded!")
                         # Run PSNR and SSIM separately
                         self._run_psnr_ssim_analysis("ffmpeg", distorted_path_ffmpeg, reference_path_ffmpeg, rel_psnr_txt, rel_ssim_txt)
-                        
+
                         # Build full paths for the results
                         json_path_full = os.path.join(test_dir, rel_vmaf_json).replace("\\", "/")
                         psnr_path_full = os.path.join(test_dir, rel_psnr_txt).replace("\\", "/")
                         ssim_path_full = os.path.join(test_dir, rel_ssim_txt).replace("\\", "/")
-                        
+
                         return self._parse_vmaf_results(json_path_full, psnr_path_full, ssim_path_full, distorted_path, reference_path, current_dir)
                     else:
                         logger.error(f"Fallback VMAF command failed: {error}")
@@ -378,10 +429,10 @@ class VMAFAnalyzer(QObject):
                 "-lavfi", f"psnr=stats_file={psnr_filename}",
                 "-f", "null", "-"
             ]
-            
+
             logger.info(f"PSNR command: {' '.join(psnr_cmd)}")
             subprocess.run(psnr_cmd, check=False, capture_output=True)
-            
+
             # Run SSIM analysis with relative paths
             logger.info("Running SSIM analysis...")
             ssim_cmd = [
@@ -392,15 +443,15 @@ class VMAFAnalyzer(QObject):
                 "-lavfi", f"ssim=stats_file={ssim_filename}",
                 "-f", "null", "-"
             ]
-            
+
             logger.info(f"SSIM command: {' '.join(ssim_cmd)}")
             subprocess.run(ssim_cmd, check=False, capture_output=True)
-            
+
             return True
         except Exception as e:
             logger.warning(f"Error running PSNR/SSIM analysis: {str(e)}")
             return False
-    
+
     def _parse_vmaf_results(self, json_path, psnr_path, ssim_path, distorted_path, reference_path, current_dir):
         """Parse VMAF results from the output files"""
         try:
@@ -500,7 +551,7 @@ class VMAFAnalyzer(QObject):
                 if 'distorted_path' in results:
                     # Get the aligned capture file path
                     aligned_capture = results['distorted_path']
-                    
+
                     # Get the original capture file if it exists (before alignment)
                     original_capture = None
                     if "aligned" in aligned_capture.lower():
@@ -508,10 +559,10 @@ class VMAFAnalyzer(QObject):
                         original_path = aligned_capture.replace("_aligned", "")
                         if os.path.exists(original_path):
                             original_capture = original_path
-                    
+
                     # Log the file status
                     logger.info(f"Keeping aligned capture file for results: {aligned_capture}")
-                    
+
                     # Delete the original unaligned file if it exists
                     if original_capture and os.path.exists(original_capture):
                         try:
@@ -548,10 +599,10 @@ class VMAFAnalyzer(QObject):
             # Find path to FFprobe executable
             from .utils import get_ffmpeg_path
             ffmpeg_exe, ffprobe_exe, ffplay_exe = get_ffmpeg_path()
-            
+
             # Normalize path for FFprobe
             video_path_ffmpeg = video_path.replace("\\", "/")
-            
+
             # Use a simpler command that's more likely to work across FFmpeg versions
             cmd = [
                 ffprobe_exe,  # Use full path to ffprobe.exe
@@ -561,7 +612,7 @@ class VMAFAnalyzer(QObject):
                 "-show_streams",
                 video_path_ffmpeg
             ]
-            
+
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 logger.error(f"FFprobe failed: {result.stderr}")
@@ -627,7 +678,7 @@ class VMAFAnalysisThread(QThread):
         try:
             # Wait for thread to finish before disconnecting signals
             self.wait()
-            
+
             # Disconnect all signals to prevent issues during thread destruction
             try:
                 self.disconnect()

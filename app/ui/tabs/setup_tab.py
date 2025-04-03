@@ -17,6 +17,7 @@ class SetupTab(QWidget):
         super().__init__()
         self.parent = parent
         self.reference_thread = None
+        self.reference_video_path = None #Added to store full path
         self._setup_ui()
 
     def _setup_ui(self):
@@ -223,9 +224,10 @@ class SetupTab(QWidget):
         )
 
         if file_path and os.path.exists(file_path):
-            # Update UI
-            self.txt_reference_path.setText(file_path)
-            self.txt_reference_path.setToolTip(file_path)
+            # Update UI - display only filename
+            filename = os.path.basename(file_path)
+            self.txt_reference_path.setText(filename)
+            self.txt_reference_path.setToolTip(file_path) #Store full path in tooltip
 
             # Update directory display
             ref_dir = os.path.dirname(file_path)
@@ -242,6 +244,8 @@ class SetupTab(QWidget):
 
             # Analyze the selected video
             self.analyze_reference(file_path)
+            self.reference_video_path = file_path #Store full path
+
 
     def analyze_reference(self, file_path):
         """Analyze reference video to extract metadata"""
@@ -332,7 +336,7 @@ class SetupTab(QWidget):
                         logger.info(f"Using output directory from options: {default_dir}")
                 except Exception as e:
                     logger.error(f"Error getting output directory from settings: {e}")
-            
+
             # Fallback to file manager or home directory
             if not default_dir or not os.path.exists(default_dir):
                 default_dir = self.parent.file_mgr.get_default_output_dir() if hasattr(self.parent, 'file_mgr') else None
