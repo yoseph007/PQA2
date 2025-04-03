@@ -297,6 +297,141 @@ class FileManager:
         # Return path with filename
         return os.path.join(test_dir, filename)
 
+
+def run_unit_tests(test_module=None):
+    """
+    Run unit tests for the application
+    
+    Args:
+        test_module: Optional module name to test (e.g., 'app.tests.test_utils')
+                    If None, runs all tests
+    
+    Returns:
+        Success status (True if all tests passed)
+    """
+    try:
+        import pytest
+        args = []
+        
+        if test_module:
+            args.append(test_module)
+        else:
+            args.append('tests/')
+            
+        # Add common pytest args
+        args.extend(['-v'])
+        
+        # Run tests
+        result = pytest.main(args)
+        
+        return result == 0
+    except Exception as e:
+        logger.error(f"Error running unit tests: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
+def validate_application_state(app_instance):
+    """
+    Validate that the application is in a consistent state
+    
+    Args:
+        app_instance: Reference to the main application window
+        
+    Returns:
+        Dictionary with validation results
+    """
+    results = {
+        'status': 'PASS',
+        'issues': [],
+        'components_checked': 0,
+        'components_passed': 0
+    }
+    
+    try:
+        # Check that essential managers exist
+        components = [
+            ('file_mgr', 'File Manager'),
+            ('capture_mgr', 'Capture Manager'),
+            ('options_manager', 'Options Manager')
+        ]
+        
+        for attr, name in components:
+            results['components_checked'] += 1
+            if not hasattr(app_instance, attr) or getattr(app_instance, attr) is None:
+                results['issues'].append(f"Missing {name}")
+                results['status'] = 'FAIL'
+            else:
+                results['components_passed'] += 1
+                
+        # Check that essential UI components exist
+        ui_components = [
+            ('setup_tab', 'Setup Tab'),
+            ('capture_tab', 'Capture Tab'),
+            ('analysis_tab', 'Analysis Tab'),
+            ('results_tab', 'Results Tab'),
+            ('options_tab', 'Options Tab'),
+            ('help_tab', 'Help Tab')
+        ]
+        
+        for attr, name in ui_components:
+            results['components_checked'] += 1
+            if not hasattr(app_instance, attr) or getattr(app_instance, attr) is None:
+                results['issues'].append(f"Missing {name}")
+                results['status'] = 'FAIL'
+            else:
+                results['components_passed'] += 1
+                
+        # Validate file manager operations
+        if hasattr(app_instance, 'file_mgr') and app_instance.file_mgr:
+            results['components_checked'] += 1
+            try:
+                # Test creating a temporary file
+                temp_file = app_instance.file_mgr.get_temp_file()
+                if not temp_file or not os.path.exists(os.path.dirname(temp_file)):
+                    results['issues'].append("File Manager failed to create temporary file")
+                    results['status'] = 'FAIL'
+                else:
+                    results['components_passed'] += 1
+            except Exception as e:
+                results['issues'].append(f"File Manager error: {str(e)}")
+                results['status'] = 'FAIL'
+                
+        # Validate options manager
+        if hasattr(app_instance, 'options_manager') and app_instance.options_manager:
+            results['components_checked'] += 1
+            try:
+                # Test loading settings
+                settings = app_instance.options_manager.get_all_settings()
+                if settings is None:
+                    results['issues'].append("Options Manager failed to load settings")
+                    results['status'] = 'FAIL'
+                else:
+                    results['components_passed'] += 1
+            except Exception as e:
+                results['issues'].append(f"Options Manager error: {str(e)}")
+                results['status'] = 'FAIL'
+                
+        # Check VMAF models
+        results['components_checked'] += 1
+        models_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
+        if not os.path.exists(models_dir) or len(os.listdir(models_dir)) == 0:
+            results['issues'].append("VMAF models directory is missing or empty")
+            results['status'] = 'FAIL'
+        else:
+            results['components_passed'] += 1
+            
+        # Add overall summary
+        results['pass_rate'] = f"{results['components_passed']}/{results['components_checked']}"
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error validating application state: {str(e)}")
+        results['status'] = 'ERROR'
+        results['issues'].append(f"Validation error: {str(e)}")
+        return results
+
     def get_default_output_dir(self):
         """Get the default output directory for results"""
         script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
