@@ -1,11 +1,13 @@
+
 import os
 import logging
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                             QLabel, QComboBox, QGroupBox, QFileDialog, QMessageBox,
-                            QLineEdit)
-from PyQt5.QtCore import Qt
+                            QLineEdit, QSplitter, QFrame, QTextEdit)
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 import threading
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,19 @@ class SetupTab(QWidget):
     def _setup_ui(self):
         """Set up the Setup tab UI"""
         layout = QVBoxLayout(self)
+
+        # Summary header with improved styling
+        self.lbl_setup_summary = QLabel("Select a reference video to begin")
+        self.lbl_setup_summary.setStyleSheet("font-weight: bold; color: #444; background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
+        self.lbl_setup_summary.setWordWrap(True)
+        layout.addWidget(self.lbl_setup_summary)
+
+        # Main content splitter
+        splitter = QSplitter(Qt.Horizontal)
+
+        # Left side - reference and output settings
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
 
         # Reference video group
         reference_group = QGroupBox("Reference Video")
@@ -54,28 +69,9 @@ class SetupTab(QWidget):
         self.lbl_reference_details = QLabel("Reference details: None")
         reference_layout.addWidget(self.lbl_reference_details)
 
-        # Video preview - arrange side by side with details for larger screens
-        preview_area = QHBoxLayout()
-
-        # Left side - preview
-        preview_layout = QVBoxLayout()
-        preview_layout.addWidget(QLabel("Reference Video Preview:"))
-        self.video_preview = QLabel()
-        self.video_preview.setMinimumSize(480, 270)  # Increased size
-        self.video_preview.setMaximumSize(800, 450)  # Increased max size
-        self.video_preview.setAlignment(Qt.AlignCenter)
-        # Use theme-aware background that adapts to light/dark mode
-        self.video_preview.setStyleSheet("background-color: rgba(0, 0, 0, 0.8); color: white; border-radius: 4px;")
-        self.video_preview.setText("No video selected")
-        preview_layout.addWidget(self.video_preview)
-        preview_layout.addStretch()
-
-        preview_area.addLayout(preview_layout)
-        reference_layout.addLayout(preview_area)
-
         # Add to group
         reference_group.setLayout(reference_layout)
-        layout.addWidget(reference_group)
+        left_layout.addWidget(reference_group)
 
         # Output settings with improved layout
         output_group = QGroupBox("Output Settings")
@@ -103,22 +99,126 @@ class SetupTab(QWidget):
 
         # Add to group
         output_group.setLayout(output_layout)
-        layout.addWidget(output_group)
+        left_layout.addWidget(output_group)
 
-        # Setup status
-        self.lbl_setup_status = QLabel("Please select a reference video to continue")
-        layout.addWidget(self.lbl_setup_status)
+        # Add instructions group
+        instructions_group = QGroupBox("Instructions")
+        instructions_layout = QVBoxLayout()
+        
+        instructions_text = QLabel(
+            "1. Select a reference video file using the Browse button above.\n"
+            "2. The application will analyze the video and extract metadata.\n"
+            "3. Set an output directory for test results (optional).\n"
+            "4. Provide a descriptive test name.\n"
+            "5. Once reference video is loaded, click 'Next: Capture' to continue."
+        )
+        instructions_text.setWordWrap(True)
+        instructions_layout.addWidget(instructions_text)
+        
+        instructions_group.setLayout(instructions_layout)
+        left_layout.addWidget(instructions_group)
 
-        # Navigation buttons
+        # Add stretch to push everything up
+        left_layout.addStretch()
+
+        # Right side - video preview and status log
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+
+        # Video preview group
+        preview_group = QGroupBox("Reference Video Preview")
+        preview_layout = QVBoxLayout()
+
+        # Preview frame with improved styling
+        preview_frame = QFrame()
+        preview_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+        preview_frame.setLineWidth(1)
+        preview_inner_layout = QVBoxLayout(preview_frame)
+
+        # Preview label with enhanced styling and initial placeholder
+        self.video_preview = QLabel("No video selected")
+        self.video_preview.setAlignment(Qt.AlignCenter)
+        self.video_preview.setMinimumSize(480, 270)
+        self.video_preview.setMaximumSize(800, 450)
+        self.video_preview.setStyleSheet("background-color: #e0e0e0; color: black; border-radius: 4px;")
+        preview_inner_layout.addWidget(self.video_preview)
+        preview_inner_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Add status indicator for preview
+        preview_status_layout = QHBoxLayout()
+        self.lbl_preview_status = QLabel("Status: No video selected")
+        self.lbl_preview_status.setStyleSheet("color: #666; font-size: 9pt;")
+        preview_status_layout.addWidget(self.lbl_preview_status)
+        preview_status_layout.addStretch()
+
+        # Add components to layouts
+        preview_layout.addWidget(preview_frame)
+        preview_layout.addLayout(preview_status_layout)
+        preview_group.setLayout(preview_layout)
+        right_layout.addWidget(preview_group)
+
+        # Setup log with enhanced styling
+        log_group = QGroupBox("Setup Log")
+        log_layout = QVBoxLayout()
+
+        # Create log text area with enhanced styling
+        self.txt_setup_log = QTextEdit()
+        self.txt_setup_log.setReadOnly(True)
+        self.txt_setup_log.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.txt_setup_log.setMinimumHeight(150)
+        self.txt_setup_log.setMaximumHeight(200)
+        self.txt_setup_log.setFixedWidth(550)
+
+        # Set custom stylesheet for better readability
+        self.txt_setup_log.setStyleSheet("""
+            QTextEdit {
+                background-color: #f8f8f8;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 10pt;
+                padding: 4px;
+                border: 1px solid #ddd;
+            }
+        """)
+
+        # Add clear log button
+        log_controls = QHBoxLayout()
+        self.btn_clear_setup_log = QPushButton("Clear Log")
+        self.btn_clear_setup_log.setMaximumWidth(100)
+        self.btn_clear_setup_log.clicked.connect(self.txt_setup_log.clear)
+        log_controls.addStretch()
+        log_controls.addWidget(self.btn_clear_setup_log)
+
+        # Add components to layouts
+        log_layout.addWidget(self.txt_setup_log)
+        log_layout.addLayout(log_controls)
+        log_group.setLayout(log_layout)
+        right_layout.addWidget(log_group)
+
+        # Add widgets to splitter with 50/50 split
+        splitter.addWidget(left_widget)
+        splitter.addWidget(right_widget)
+        splitter.setSizes([500, 500])  # 50/50 split
+        
+        # Set a minimum width for both panes to prevent unwanted resizing
+        left_widget.setMinimumWidth(400)
+        right_widget.setMinimumWidth(400)
+
+        # Add splitter to layout
+        layout.addWidget(splitter)
+
+        # Setup status and navigation buttons
         nav_layout = QHBoxLayout()
+
         nav_layout.addStretch()
+        
         self.btn_next_to_capture = QPushButton("Next: Capture")
         self.btn_next_to_capture.setEnabled(False)
         nav_layout.addWidget(self.btn_next_to_capture)
+        
         layout.addLayout(nav_layout)
 
-        # Add stretch to push everything up
-        layout.addStretch()
+        # Initialize with welcome message
+        self.log_to_setup("Welcome to VMAF Test App. Please select a reference video to continue.")
 
     def browse_reference_video(self):
         """Browse for a reference video file"""
@@ -179,20 +279,6 @@ class SetupTab(QWidget):
         # Start analysis
         self.reference_thread.start()
 
-    def analyze_reference(self, file_path):
-        """Analyze reference video to extract metadata"""
-        self.log_to_setup(f"Analyzing reference video: {os.path.basename(file_path)}")
-
-        # Create analysis thread
-        from app.reference_analyzer import ReferenceAnalysisThread
-        self.reference_thread = ReferenceAnalysisThread(file_path)
-        self.reference_thread.progress_update.connect(self.log_to_setup)
-        self.reference_thread.error_occurred.connect(self.handle_reference_error)
-        self.reference_thread.analysis_complete.connect(self.handle_reference_analyzed)
-
-        # Start analysis
-        self.reference_thread.start()
-
     def handle_reference_analyzed(self, info):
         """Handle completion of reference video analysis"""
         self.parent.reference_info = info
@@ -217,7 +303,8 @@ class SetupTab(QWidget):
         self.load_video_preview(info['path'])
 
         # Update setup status
-        self.lbl_setup_status.setText("Reference video loaded successfully")
+        self.log_to_setup("Reference video loaded successfully")
+        self.lbl_setup_summary.setText(f"Reference: {os.path.basename(info['path'])} - {details}")
 
         # Enable next buttons
         self.btn_next_to_capture.setEnabled(True)
@@ -257,7 +344,7 @@ class SetupTab(QWidget):
     def browse_output_dir(self):
         """Browse for output directory"""
         # Use standard test_results directory as base
-        default_dir = self.parent.file_manager.get_default_base_dir() if hasattr(self.parent, 'file_manager') else None
+        default_dir = self.parent.file_mgr.get_default_base_dir() if hasattr(self.parent, 'file_mgr') else None
 
         if not default_dir:
             script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -274,8 +361,8 @@ class SetupTab(QWidget):
             self.txt_output_dir.setText(directory)
             self.txt_output_dir.setToolTip(directory)
 
-            if hasattr(self.parent, 'file_manager'):
-                self.parent.file_manager.base_dir = directory
+            if hasattr(self.parent, 'file_mgr'):
+                self.parent.file_mgr.base_dir = directory
 
             if hasattr(self.parent, 'capture_mgr'):
                 self.parent.capture_mgr.set_output_directory(directory)
@@ -283,9 +370,45 @@ class SetupTab(QWidget):
             self.log_to_setup(f"Output directory set to: {directory}")
 
     def log_to_setup(self, message):
-        """Add message to setup status"""
-        self.lbl_setup_status.setText(message)
+        """Add message to setup log with formatting for different message types"""
+        # Apply HTML formatting for different message types
+        formatted_message = message
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        # Format errors in red
+        if "error" in message.lower() or "failed" in message.lower() or "exception" in message.lower():
+            formatted_message = f'<span style="color: #D32F2F; font-weight: bold;">[{timestamp}] {message}</span>'
+        # Format warnings in orange
+        elif "warning" in message.lower() or "caution" in message.lower():
+            formatted_message = f'<span style="color: #FF9800;">[{timestamp}] {message}</span>'
+        # Format success messages in green
+        elif "success" in message.lower() or "complete" in message.lower() or "finished" in message.lower():
+            formatted_message = f'<span style="color: #388E3C; font-weight: bold;">[{timestamp}] {message}</span>'
+        # Regular messages with timestamp
+        else:
+            formatted_message = f'[{timestamp}] {message}'
+
+        # Append to log if the text edit exists
+        if hasattr(self, 'txt_setup_log') and self.txt_setup_log:
+            self.txt_setup_log.append(formatted_message)
+            
+            # Auto-scroll to bottom
+            self.txt_setup_log.verticalScrollBar().setValue(
+                self.txt_setup_log.verticalScrollBar().maximum()
+            )
+
+        # Also update status label
+        self.lbl_preview_status.setText(f"Status: {message.split('.')[0]}")
+        
+        # Update main window status bar
         self.parent.statusBar().showMessage(message)
+
+        # If error message, flash status bar to draw attention
+        if "error" in message.lower():
+            current_style = self.parent.statusBar().styleSheet()
+            self.parent.statusBar().setStyleSheet("background-color: #FFCDD2;")  # Light red
+            # Reset style after 2 seconds
+            QTimer.singleShot(2000, lambda: self.parent.statusBar().setStyleSheet(current_style))
 
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated"""
@@ -307,12 +430,14 @@ class SetupTab(QWidget):
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
                 self.video_preview.setText("Error: Could not open video")
+                self.log_to_setup("Error: Could not open video file")
                 return
 
             # Read the first frame
             ret, frame = cap.read()
             if not ret:
                 self.video_preview.setText("Error: Could not read video frame")
+                self.log_to_setup("Error: Could not read video frame")
                 cap.release()
                 return
 
@@ -354,12 +479,19 @@ class SetupTab(QWidget):
             # Set the pixmap to the QLabel
             self.video_preview.setPixmap(pixmap)
             self.video_preview.setAlignment(Qt.AlignCenter)
+            
+            # Update preview status
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            self.lbl_preview_status.setText(f"Status: Preview loaded ({w}x{h}, {fps:.2f}fps)")
 
             # Release the video capture
             cap.release()
+            
+            self.log_to_setup(f"Preview frame loaded from frame {total_frames//2} of {total_frames}")
 
         except Exception as e:
             logger.error(f"Error creating video preview: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             self.video_preview.setText(f"Error loading preview: {str(e)}")
+            self.log_to_setup(f"Error creating video preview: {str(e)}")
