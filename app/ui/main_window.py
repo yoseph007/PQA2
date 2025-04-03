@@ -171,44 +171,32 @@ class MainWindow(QMainWindow):
     def _set_application_logo(self):
         """Set the application logo/icon"""
         try:
-            # Check if logo path is set in options
-            logo_path = None
-            if hasattr(self, 'options_manager') and self.options_manager:
-                theme_settings = self.options_manager.get_setting("theme")
-
-                # Handle both dictionary and string theme settings
-                if isinstance(theme_settings, dict):
-                    logo_path = theme_settings.get("logo_path", "")
-                elif isinstance(theme_settings, str):
-                    # If theme_settings is a string, it's just the theme name
-                    logo_path = ""
-
-            # If not set or doesn't exist, use default
-            if not logo_path or not os.path.exists(logo_path):
-                # Try multiple potential logo locations
-                possible_paths = [
-                    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
-                               "attached_assets", "chroma-logo.png"),
-                    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
-                               "assets", "chroma-logo.png")
-                ]
-
-                for path in possible_paths:
-                    if os.path.exists(path):
-                        logo_path = path
-                        break
-
-            # Set the window icon if the logo exists
-            if logo_path and os.path.exists(logo_path):
-                from PyQt5.QtGui import QIcon
-                self.setWindowIcon(QIcon(logo_path))
-
+            # Hard-code to use the assets/chroma-logo.png file
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                                  "assets", "chroma-logo.png")
+            
+            if os.path.exists(logo_path):
+                from PyQt5.QtGui import QIcon, QPixmap
+                
+                # Load the image
+                pixmap = QPixmap(logo_path)
+                
+                # Resize to proper icon size (32x32 and 64x64 are common sizes)
+                icon = QIcon()
+                icon.addPixmap(pixmap.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                icon.addPixmap(pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                icon.addPixmap(pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                icon.addPixmap(pixmap.scaled(128, 128, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                
+                # Set the application icon
+                self.setWindowIcon(icon)
+                
                 # Store the logo path for future reference
                 self.logo_path = logo_path
                 logger.info(f"Set application logo: {logo_path}")
             else:
-                logger.warning("Could not find a valid logo file")
-
+                logger.warning(f"Logo file not found at {logo_path}")
+                
         except Exception as e:
             logger.error(f"Error setting application logo: {str(e)}")
             import traceback

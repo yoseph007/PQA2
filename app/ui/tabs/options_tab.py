@@ -290,48 +290,73 @@ class OptionsTab(QWidget):
 
         # Custom branding settings
         branding_group = QGroupBox("Company Branding")
-        branding_layout = QFormLayout()
-
+        branding_main_layout = QHBoxLayout()
+        
+        # Left column - Company details
+        company_details_layout = QVBoxLayout()
+        company_form_layout = QFormLayout()
+        
         self.txt_app_name = QLineEdit("VMAF Test App")
-        branding_layout.addRow("Application Title:", self.txt_app_name)
+        company_form_layout.addRow("Application Title:", self.txt_app_name)
 
         self.txt_company_name = QLineEdit("Chroma")
-        branding_layout.addRow("Organization Name:", self.txt_company_name)
+        company_form_layout.addRow("Organization Name:", self.txt_company_name)
 
         self.txt_footer_text = QLineEdit("© 2025 Chroma")
-        branding_layout.addRow("Report Footer Text:", self.txt_footer_text)
+        company_form_layout.addRow("Report Footer Text:", self.txt_footer_text)
+        
+        # Add new company contact details
+        self.txt_contact_phone = QLineEdit("+1 (555) 123-4567")
+        company_form_layout.addRow("Contact Phone:", self.txt_contact_phone)
+        
+        self.txt_contact_email = QLineEdit("info@chroma.com")
+        company_form_layout.addRow("Contact Email:", self.txt_contact_email)
+        
+        self.txt_contact_address = QLineEdit("123 Tech Plaza, Suite 400, San Francisco, CA 94105")
+        company_form_layout.addRow("Physical Address:", self.txt_contact_address)
 
         self.color_primary = QLineEdit("#4CAF50")
-        branding_layout.addRow("Brand Accent Color:", self.color_primary)
+        color_layout = QHBoxLayout()
+        color_layout.addWidget(self.color_primary)
         self.btn_pick_primary = QPushButton("...")
         self.btn_pick_primary.setMaximumWidth(30)
         self.btn_pick_primary.clicked.connect(lambda: self.pick_color(self.color_primary))
-        branding_layout.addWidget(self.btn_pick_primary)
-
-        # Logo selection - upload and save to assets folder
-        logo_layout = QHBoxLayout()
-        preview_layout = QHBoxLayout()
-
-        logo_layout.addWidget(QLabel("Company Logo:"))
+        color_layout.addWidget(self.btn_pick_primary)
+        company_form_layout.addRow("Brand Accent Color:", color_layout)
+        
+        company_details_layout.addLayout(company_form_layout)
+        
+        # Right column - Logo
+        logo_column_layout = QVBoxLayout()
+        logo_column_layout.setAlignment(Qt.AlignCenter)
+        
+        logo_header = QLabel("Company Logo")
+        logo_header.setAlignment(Qt.AlignCenter)
+        logo_column_layout.addWidget(logo_header)
+        
+        # Logo preview label
+        self.lbl_logo_preview = QLabel("No logo selected")
+        self.lbl_logo_preview.setMinimumHeight(150)
+        self.lbl_logo_preview.setMinimumWidth(200)
+        self.lbl_logo_preview.setAlignment(Qt.AlignCenter)
+        self.lbl_logo_preview.setStyleSheet("border: 1px solid #CCCCCC; background-color: #F9F9F9;")
+        logo_column_layout.addWidget(self.lbl_logo_preview)
+        
+        # Upload button
         self.btn_upload_logo = QPushButton("Upload Logo")
         self.btn_upload_logo.clicked.connect(self.upload_logo)
-        logo_layout.addWidget(self.btn_upload_logo)
-
+        logo_column_layout.addWidget(self.btn_upload_logo)
+        
         # Hidden field to store logo path
         self.txt_logo_path = QLineEdit()
         self.txt_logo_path.setVisible(False)
-
-        # Logo preview label
-        self.lbl_logo_preview = QLabel("No logo selected")
-        self.lbl_logo_preview.setMinimumHeight(50)
-        self.lbl_logo_preview.setAlignment(Qt.AlignCenter)
-        preview_layout.addWidget(self.lbl_logo_preview)
-
-        branding_layout.addRow(logo_layout)
-        branding_layout.addRow("Preview:", self.lbl_logo_preview)
-
-
-        branding_group.setLayout(branding_layout)
+        logo_column_layout.addWidget(self.txt_logo_path)
+        
+        # Add both columns to the main layout
+        branding_main_layout.addLayout(company_details_layout, 3)  # 3:1 ratio
+        branding_main_layout.addLayout(logo_column_layout, 1)
+        
+        branding_group.setLayout(branding_main_layout)
         theme_layout.addWidget(branding_group)
 
         # Add tabs to options tabwidget
@@ -451,12 +476,17 @@ class OptionsTab(QWidget):
 
                 # Populate branding settings
                 branding = settings.get('branding', {})
-                if hasattr(self, 'check_enable_white_label'):
-                    self.check_enable_white_label.setChecked(branding.get('enable_white_label', False))
+                if hasattr(self, 'txt_app_name'):
                     self.txt_app_name.setText(branding.get('app_name', 'VMAF Test App'))
                     self.txt_company_name.setText(branding.get('company_name', 'Chroma'))
                     self.txt_footer_text.setText(branding.get('footer_text', '© 2025 Chroma'))
                     self.color_primary.setText(branding.get('primary_color', '#4CAF50'))
+                    
+                    # Handle new contact fields
+                    if hasattr(self, 'txt_contact_phone'):
+                        self.txt_contact_phone.setText(branding.get('contact_phone', '+1 (555) 123-4567'))
+                        self.txt_contact_email.setText(branding.get('contact_email', 'info@chroma.com'))
+                        self.txt_contact_address.setText(branding.get('contact_address', '123 Tech Plaza, Suite 400, San Francisco, CA 94105'))
 
                 # Populate device dropdown
                 if hasattr(self, 'combo_device_for_formats'):
@@ -551,7 +581,10 @@ class OptionsTab(QWidget):
                     'company_name': self.txt_company_name.text(),
                     'footer_text': self.txt_footer_text.text(),
                     'primary_color': self.color_primary.text(),
-                    'logo_path': getattr(self, 'logo_path', '')
+                    'logo_path': getattr(self, 'logo_path', ''),
+                    'contact_phone': self.txt_contact_phone.text(),
+                    'contact_email': self.txt_contact_email.text(),
+                    'contact_address': self.txt_contact_address.text()
                 }
 
                 # Update settings
@@ -781,73 +814,93 @@ class OptionsTab(QWidget):
                                        "Detecting formats for the selected device.\nThis may take a few moments.")
 
                 try:
-                    # Get formats for the device with timeout protection
-                    formats = self.parent.options_manager.get_device_formats(device)
-                except KeyboardInterrupt:
-                    logger.warning("Auto-detect operation was interrupted by user")
-                    QMessageBox.warning(self, "Operation Cancelled", "Format detection was cancelled.")
-                    return
-
-                if formats:
-                    # Get combined format strings (resolution + fps) directly from the device output
-                    combined_formats = set()
+                    # Run FFmpeg command directly to get formats
+                    import subprocess
+                    cmd = ["ffmpeg", "-f", "dshow", "-hide_banner", "-list_options", "true", "-i", f"video=Decklink Video Capture"]
+                    logger.info(f"Getting device formats using command: {' '.join(cmd)}")
+                    
+                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    stdout, stderr = process.communicate(timeout=10)
+                    combined_output = stdout + stderr
+                    
+                    # Parse the output lines directly
+                    import re
+                    
+                    # Format patterns for pixel_format and vcodec lines
+                    pixel_format_pattern = r'pixel_format=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
+                    vcodec_pattern = r'vcodec=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
+                    
+                    format_list = []
                     pixel_formats = set()
-
-                    for fmt in formats:
-                        # Create a combined format string that includes both resolution and frame rate
-                        if 'resolution' in fmt and 'fps' in fmt:
-                            combined_format = f"{fmt['resolution']}@{fmt['fps']}fps"
-                            if 'format_name' in fmt:
-                                combined_format = f"{fmt['format_name']} ({combined_format})"
-                            combined_formats.add(combined_format)
-
-                        # Also track pixel formats
-                        if 'pixel_format' in fmt:
-                            pixel_formats.add(fmt['pixel_format'])
-
-                    # Update the resolution dropdown with exact formats from the device
+                    
+                    # Process all the lines in the output
+                    for line in combined_output.splitlines():
+                        # Try to match pixel_format pattern
+                        pixel_match = re.search(pixel_format_pattern, line)
+                        if pixel_match:
+                            pixel_format, resolution, fps = pixel_match.groups()
+                            format_list.append({
+                                'pixel_format': pixel_format,
+                                'resolution': resolution,
+                                'fps': fps,
+                                'display': f"{resolution} @ {fps} fps ({pixel_format})"
+                            })
+                            pixel_formats.add(pixel_format)
+                            continue
+                            
+                        # Try to match vcodec pattern
+                        vcodec_match = re.search(vcodec_pattern, line)
+                        if vcodec_match:
+                            vcodec, resolution, fps = vcodec_match.groups()
+                            format_list.append({
+                                'vcodec': vcodec,
+                                'resolution': resolution,
+                                'fps': fps,
+                                'display': f"{resolution} @ {fps} fps ({vcodec})"
+                            })
+                            continue
+                    
+                    # Update the resolution dropdown with the exact formats
                     self.combo_default_resolution.clear()
-                    for fmt in sorted(combined_formats):
-                        self.combo_default_resolution.addItem(fmt, fmt)
-
-                    # Remove the separate frame rate dropdown as it's now included in the resolution dropdown
-                    # Just hide it and its label instead of removing it completely
-                    if hasattr(self, 'combo_default_fps'):
-                        frame_rate_label = None
-                        # Find the label for the combo_default_fps
-                        for i in range(self.layout().count()):
-                            item = self.layout().itemAt(i)
-                            if item.widget() and isinstance(item.widget(), QFormLayout):
-                                for row in range(item.widget().rowCount()):
-                                    field = item.widget().itemAt(row, QFormLayout.FieldRole)
-                                    if field and field.widget() == self.combo_default_fps:
-                                        label = item.widget().itemAt(row, QFormLayout.LabelRole)
-                                        if label and label.widget():
-                                            frame_rate_label = label.widget()
-                                            break
-
-                        # Hide the combo box and its label
-                        if self.combo_default_fps:
-                            self.combo_default_fps.hide()
-                        if frame_rate_label:
-                            frame_rate_label.hide()
-
+                    if format_list:
+                        for fmt in format_list:
+                            display = fmt['display']
+                            self.combo_default_resolution.addItem(display, fmt)
+                        
+                        logger.info(f"Parsed {len(format_list)} formats from FFmpeg output")
+                    else:
+                        logger.warning("No formats found in FFmpeg output")
+                        
                     # Update the pixel format dropdown
                     self.combo_pixel_format.clear()
                     for pix_fmt in sorted(pixel_formats):
                         self.combo_pixel_format.addItem(pix_fmt)
-
+                    
                     QMessageBox.information(
                         self, 
                         "Auto-Detect Complete", 
-                        f"Found {len(combined_formats)} device formats with {len(pixel_formats)} pixel formats."
+                        f"Found {len(format_list)} device formats with {len(pixel_formats)} pixel formats."
                     )
-                else:
+                    
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    logger.warning("Timeout getting device formats")
+                    QMessageBox.warning(self, "Timeout", "The operation timed out while detecting formats.")
+                    return
+                except KeyboardInterrupt:
+                    logger.warning("Auto-detect operation was interrupted by user")
+                    QMessageBox.warning(self, "Operation Cancelled", "Format detection was cancelled.")
+                    return
+                except Exception as e:
+                    logger.error(f"Error detecting formats: {str(e)}", exc_info=True)
                     QMessageBox.warning(
                         self,
-                        "No Formats Found",
-                        "No formats were detected for the selected device. Make sure the BlackMagic device is connected properly."
+                        "Error Detecting Formats",
+                        f"An error occurred while detecting formats: {str(e)}"
                     )
+        except Exception as e:
+            logger.error(f"Auto-detect formats error: {str(e)}", exc_info=True)
+            QMessageBox.critical(self, "Error", f"Error during format detection: {str(e)}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error detecting formats: {e}")
             logger.error(f"Error auto-detecting formats: {e}")

@@ -148,7 +148,9 @@ class SetupTab(QWidget):
             self.combo_reference_videos.clear()
             if video_files:
                 for video_path in sorted(video_files):
-                    self.combo_reference_videos.addItem(os.path.basename(video_path), video_path)
+                    # Ensure the path is a string, not a dict or other unhashable type
+                    if isinstance(video_path, str) and os.path.exists(video_path):
+                        self.combo_reference_videos.addItem(os.path.basename(video_path), video_path)
                 logger.info(f"Found {len(video_files)} reference videos")
             else:
                 self.combo_reference_videos.addItem("No reference videos found", "")
@@ -156,6 +158,8 @@ class SetupTab(QWidget):
             self.combo_reference_videos.setEnabled(True)
         except Exception as e:
             logger.error(f"Error loading reference videos: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             self.combo_reference_videos.addItem("Error loading videos", "")
             self.combo_reference_videos.setEnabled(True)
 
