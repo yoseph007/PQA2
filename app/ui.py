@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QGroupBox, QMessageBox, QTabWidget, QSplitter, QTextEdit,
                            QListWidget, QListWidgetItem, QStyle, QFormLayout, QCheckBox,
                            QSizePolicy, QFrame, QScrollArea, QSpinBox, QDoubleSpinBox,
-                           QSlider, QLineEdit)
+                           QSlider, QLineEdit, QApplication)
 from PyQt5.QtCore import Qt, pyqtSlot, QTimer, QSize
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QFont, QPen
 import cv2
