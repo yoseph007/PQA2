@@ -1,0 +1,35 @@
+2025-04-03 13:42:27,941 - app.ui.tabs.results_tab - ERROR - Error loading results history: 'FileManager' object has no attribute 'get_default_base_dir'
+2025-04-03 13:42:27,942 - app.ui.tabs.results_tab - ERROR - Traceback (most recent call last):
+  File "C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\ui\tabs\results_tab.py", line 263, in load_results_history
+    output_dir = self.parent.file_mgr.get_default_base_dir()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FileManager' object has no attribute 'get_default_base_dir'
+
+2025-04-03 13:42:28,046 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-03 13:42:28,047 - app.ui.tabs.options_tab - INFO - Populated device dropdown with 1 devices
+2025-04-03 13:42:28,056 - app.ui.tabs.options_tab - INFO - Looking for VMAF models in: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\models
+2025-04-03 13:42:28,057 - app.ui.tabs.options_tab - WARNING - Models directory doesn't exist: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\models, using defaults
+2025-04-03 13:42:28,057 - app.ui.tabs.options_tab - INFO - Populated VMAF model dropdown with 3 models
+2025-04-03 13:42:28,084 - app.ui.tabs.options_tab - INFO - Looking for VMAF models in: C:/Apps/VMAF_2app_approach/VMAF/VB01-vmaf-app/models
+2025-04-03 13:42:28,084 - app.ui.tabs.options_tab - INFO - Populated VMAF model dropdown with 9 models
+2025-04-03 13:42:28,088 - app.options_manager - INFO - Settings saved to C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-03 13:42:28,096 - app.ui.theme_manager - INFO - Applied theme: Light
+2025-04-03 13:42:28,211 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-03 13:42:28,212 - app.ui.tabs.options_tab - INFO - Settings loaded successfully
+2025-04-03 13:42:28,227 - app.ui.theme_manager - INFO - Applied theme: Light
+2025-04-03 13:42:28,227 - app.ui.main_window - INFO - VMAF Test App initialized
+2025-04-03 13:42:33,359 - app.options_manager - INFO - Settings saved to C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\config\settings.json
+2025-04-03 13:42:33,359 - app.ui.main_window - INFO - Settings updated, applying changes to UI
+2025-04-03 13:42:33,460 - app.options_manager - INFO - Found DeckLink devices: ['Intensity Shuttle']
+2025-04-03 13:42:33,460 - app.ui.tabs.capture_tab - INFO - Found devices from options manager: ['Intensity Shuttle']
+2025-04-03 13:42:33,460 - app.ui.tabs.capture_tab - INFO - Set current device to: Intensity Shuttle
+2025-04-03 13:42:33,460 - app.ui.tabs.capture_tab - INFO - Device 'Intensity Shuttle' availability: True, message: Device check skipped
+2025-04-03 13:42:33,460 - app.ui.theme_manager - INFO - Applied theme: Light
+2025-04-03 13:42:33,639 - app.reference_analyzer - INFO - White bookend frame detected at frame 0
+2025-04-03 13:42:33,821 - app.capture - INFO - Reference video set: REF02_wts.mp4, duration: 7.24s, resolution: 1920x1080
+Traceback (most recent call last):
+  File "C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\app\ui\tabs\setup_tab.py", line 347, in browse_output_dir
+    default_dir = self.parent.file_mgr.get_default_base_dir() if hasattr(self.parent, 'file_mgr') else None
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FileManager' object has no attribute 'get_default_base_dir'
+(.venv) PS C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app> 
