@@ -65,7 +65,6 @@ def main():
 
     # Configure font paths to resolve Qt font loading issues
     logger.info("Configuring font paths")
-    import platform
     if platform.system() == 'Windows':
         # On Windows, use system fonts
         from PyQt5.QtGui import QFontDatabase
