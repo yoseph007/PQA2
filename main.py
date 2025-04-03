@@ -48,8 +48,8 @@ def main():
     # Check if running in headless environment (like Replit)
     headless = False
     if 'REPLIT_ENVIRONMENT' in os.environ or not os.environ.get('DISPLAY'):
-        logger.info("Running in Replit environment, set QT_QPA_PLATFORM to vnc")
-        os.environ["QT_QPA_PLATFORM"] = "vnc"  # Use VNC instead of offscreen for preview
+        logger.info("Running in headless environment, setting QT_QPA_PLATFORM to offscreen")
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"  # Use offscreen platform which is available
         os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
         headless = True
 
