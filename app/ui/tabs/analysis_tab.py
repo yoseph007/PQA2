@@ -249,9 +249,11 @@ class AnalysisTab(QWidget):
         else:
             test_name = self.parent.setup_tab.txt_test_name.text()
 
+        # Get output directory
         output_dir = self.parent.setup_tab.txt_output_dir.text()
-        if not output_dir or output_dir == "Default output directory" and hasattr(self.parent, 'file_mgr'):
+        if (not output_dir or output_dir == "Default output directory") and hasattr(self.parent, 'file_mgr'):
             output_dir = self.parent.file_mgr.get_default_output_dir()
+            logger.info(f"Using default output directory: {output_dir}")
 
         # Create analysis thread
         from app.vmaf_analyzer import VMAFAnalysisThread
