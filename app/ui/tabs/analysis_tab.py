@@ -243,10 +243,15 @@ class AnalysisTab(QWidget):
         self.pb_vmaf_progress.setValue(0)
 
         # Get test name and output directory
-        test_name = self.parent.setup_tab.txt_test_name.currentText()
+        # Check if txt_test_name is a QComboBox or QLineEdit
+        if hasattr(self.parent.setup_tab.txt_test_name, 'currentText'):
+            test_name = self.parent.setup_tab.txt_test_name.currentText()
+        else:
+            test_name = self.parent.setup_tab.txt_test_name.text()
+            
         output_dir = self.parent.setup_tab.lbl_output_dir.text()
-        if output_dir == "Default output directory" and hasattr(self.parent, 'file_manager'):
-            output_dir = self.parent.file_manager.get_default_base_dir()
+        if output_dir == "Default output directory" and hasattr(self.parent, 'file_mgr'):
+            output_dir = self.parent.file_mgr.get_default_output_dir()
 
         # Create analysis thread
         from app.vmaf_analyzer import VMAFAnalysisThread
