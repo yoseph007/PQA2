@@ -590,6 +590,9 @@ class OptionsTab(QWidget):
             if custom_dir and os.path.exists(custom_dir):
                 models_dir = custom_dir
             
+            # Log the models directory for debugging
+            logger.info(f"Looking for VMAF models in: {models_dir}")
+            
             # Scan for model files
             if os.path.exists(models_dir):
                 model_files = []
@@ -607,13 +610,19 @@ class OptionsTab(QWidget):
                 
                 if not model_files:
                     # Add defaults if no models found
+                    logger.warning(f"No VMAF model files found in {models_dir}, using defaults")
                     self.combo_default_vmaf_model.addItems(["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"])
             else:
                 # Add defaults if directory doesn't exist
+                logger.warning(f"Models directory doesn't exist: {models_dir}, using defaults")
                 self.combo_default_vmaf_model.addItems(["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"])
+                
+            logger.info(f"Populated VMAF model dropdown with {self.combo_default_vmaf_model.count()} models")
                 
         except Exception as e:
             logger.error(f"Error populating VMAF models in options: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             # Add defaults as fallback
             self.combo_default_vmaf_model.clear()
             self.combo_default_vmaf_model.addItems(["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"])

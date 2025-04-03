@@ -368,11 +368,12 @@ class AnalysisTab(QWidget):
             vmaf_models_dir = None
             if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
                 try:
-                    settings = self.parent.options_manager.get_settings()
-                    if 'vmaf_models_dir' in settings and settings['vmaf_models_dir']:
-                        vmaf_models_dir = settings['vmaf_models_dir']
-                except:
-                    pass
+                    # Try to get models_dir from paths
+                    paths_settings = self.parent.options_manager.get_setting("paths")
+                    if paths_settings and isinstance(paths_settings, dict) and 'models_dir' in paths_settings:
+                        vmaf_models_dir = paths_settings['models_dir']
+                except Exception as e:
+                    logger.warning(f"Error accessing models directory from settings: {e}")
             
             # Use custom directory if specified, otherwise use default
             if vmaf_models_dir and os.path.exists(vmaf_models_dir):
@@ -385,10 +386,10 @@ class AnalysisTab(QWidget):
             if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
                 try:
                     vmaf_settings = self.parent.options_manager.get_setting("vmaf")
-                    if vmaf_settings and 'default_model' in vmaf_settings:
+                    if vmaf_settings and isinstance(vmaf_settings, dict) and 'default_model' in vmaf_settings:
                         default_model = vmaf_settings['default_model']
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error getting default VMAF model from settings: {e}")
             
             # Scan directory for .json model files
             model_files = []
@@ -420,10 +421,13 @@ class AnalysisTab(QWidget):
             
         except Exception as e:
             logger.error(f"Error populating VMAF models: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             # Add defaults as fallback
             self.combo_vmaf_model.clear()
             self.combo_vmaf_model.addItem("vmaf_v0.6.1", "vmaf_v0.6.1")
             self.combo_vmaf_model.addItem("vmaf_4k_v0.6.1", "vmaf_4k_v0.6.1")
+            self.combo_vmaf_model.addItem("vmaf_b_v0.6.3", "vmaf_b_v0.6.3")
     
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated"""

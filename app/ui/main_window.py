@@ -170,7 +170,7 @@ class MainWindow(QMainWindow):
             # Check if logo path is set in options
             logo_path = None
             if hasattr(self, 'options_manager') and self.options_manager:
-                theme_settings = self.options_manager.get_setting("theme", {})
+                theme_settings = self.options_manager.get_setting("theme")
                 
                 # Handle both dictionary and string theme settings
                 if isinstance(theme_settings, dict):
@@ -207,6 +207,8 @@ class MainWindow(QMainWindow):
                 
         except Exception as e:
             logger.error(f"Error setting application logo: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
 
     def closeEvent(self, event):
         """Handle application close event"""
