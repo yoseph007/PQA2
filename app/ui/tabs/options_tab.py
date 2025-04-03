@@ -661,7 +661,7 @@ class OptionsTab(QWidget):
                     'primary_color': self.color_primary.text(),
                     'logo_path': getattr(self, 'logo_path', ''),
                     'contact_phone': self.txt_contact_phone.text(),
-                    'contact_email: self.txt_contact_email.text(),
+                    'contact_email': self.txt_contact_email.text(),
                     'contact_address': self.txt_contact_address.text()
                 }
 
