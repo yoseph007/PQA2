@@ -605,17 +605,17 @@ class OptionsManager(QObject):
         return "ffmpeg" # Replace with your actual ffmpeg path detection
 
     def get_capture_formats(self, device_name):
-        """Get available capture formats for a device using ffmpeg -list_options"""
+        """Get available capture formats for a device using ffmpeg with decklink"""
         formats = []
 
         try:
-            # Build ffmpeg command to list device options
+            # Build ffmpeg command to list device options - using decklink format
             cmd = [
                 self.get_ffmpeg_path(),
-                "-f", "dshow",
+                "-f", "decklink",
                 "-hide_banner",
-                "-list_options", "true",
-                "-i", f"video={device_name}"
+                "-list_formats", "1",
+                "-i", f"{device_name}"
             ]
 
             # Run the command and capture output

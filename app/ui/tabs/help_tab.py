@@ -54,6 +54,17 @@ class HelpTab(QWidget):
 
         help_tabs.addTab(setup_tab, "Installation & Setup")
 
+        # Capture Formats tab
+        formats_tab = QWidget()
+        formats_layout = QVBoxLayout(formats_tab)
+
+        formats_browser = QTextBrowser()
+        formats_browser.setOpenExternalLinks(True)
+        formats_browser.setHtml(self._get_capture_formats_content())
+        formats_layout.addWidget(formats_browser)
+
+        help_tabs.addTab(formats_tab, "Capture Formats")
+
         # VMAF Standards tab
         standards_tab = QWidget()
         standards_layout = QVBoxLayout(standards_tab)
@@ -818,6 +829,305 @@ class HelpTab(QWidget):
             </ol>
 
             <p>For reporting bugs or requesting features, please visit our project repository.</p>
+        </body>
+        </html>
+        """
+
+        </body>
+        </html>
+        """
+
+    def _get_capture_formats_content(self):
+        """Get the HTML content for the Capture Formats section"""
+        return """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                h1 { color: #4CAF50; }
+                h2 { color: #2196F3; }
+                h3 { color: #673AB7; }
+                .section { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-left: 4px solid #4CAF50; }
+                .note { background-color: #e3f2fd; padding: 10px; margin: 10px 0; border-left: 4px solid #2196F3; }
+                table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                .code { font-family: monospace; background-color: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto; }
+            </style>
+        </head>
+        <body>
+            <h1>Video Capture and Format Guide</h1>
+
+            <p>This guide provides information about video formats, color spaces, and capture settings used with DeckLink/Blackmagic devices.</p>
+
+            <h2>Format Code and Resolution</h2>
+
+            <div class="section">
+                <p>Format codes specify the resolution, frame rate, and scan type for video capture.</p>
+                
+                <table>
+                    <tr>
+                        <th>Format Code</th>
+                        <th>Resolution</th>
+                        <th>Frame Rate</th>
+                        <th>Notes</th>
+                    </tr>
+                    <tr>
+                        <td>ntsc</td>
+                        <td>720x486</td>
+                        <td>29.97i</td>
+                        <td>Standard Definition (SD) - NTSC</td>
+                    </tr>
+                    <tr>
+                        <td>pal</td>
+                        <td>720x576</td>
+                        <td>25i</td>
+                        <td>Standard Definition (SD) - PAL</td>
+                    </tr>
+                    <tr>
+                        <td>720p50</td>
+                        <td>1280x720</td>
+                        <td>50p</td>
+                        <td>High Definition (HD)</td>
+                    </tr>
+                    <tr>
+                        <td>720p59.94</td>
+                        <td>1280x720</td>
+                        <td>59.94p</td>
+                        <td>High Definition (HD)</td>
+                    </tr>
+                    <tr>
+                        <td>720p60</td>
+                        <td>1280x720</td>
+                        <td>60p</td>
+                        <td>High Definition (HD)</td>
+                    </tr>
+                    <tr>
+                        <td>1080p23.98</td>
+                        <td>1920x1080</td>
+                        <td>23.98p</td>
+                        <td>Full HD</td>
+                    </tr>
+                    <tr>
+                        <td>1080p24</td>
+                        <td>1920x1080</td>
+                        <td>24p</td>
+                        <td>Full HD</td>
+                    </tr>
+                    <tr>
+                        <td>1080p25</td>
+                        <td>1920x1080</td>
+                        <td>25p</td>
+                        <td>Full HD</td>
+                    </tr>
+                    <tr>
+                        <td>1080p29.97</td>
+                        <td>1920x1080</td>
+                        <td>29.97p</td>
+                        <td>Full HD</td>
+                    </tr>
+                    <tr>
+                        <td>1080p30</td>
+                        <td>1920x1080</td>
+                        <td>30p</td>
+                        <td>Full HD</td>
+                    </tr>
+                    <tr>
+                        <td>1080i50</td>
+                        <td>1920x1080</td>
+                        <td>25i</td>
+                        <td>Full HD interlaced</td>
+                    </tr>
+                    <tr>
+                        <td>1080i59.94</td>
+                        <td>1920x1080</td>
+                        <td>29.97i</td>
+                        <td>Full HD interlaced</td>
+                    </tr>
+                    <tr>
+                        <td>1080i60</td>
+                        <td>1920x1080</td>
+                        <td>30i</td>
+                        <td>Full HD interlaced</td>
+                    </tr>
+                    <tr>
+                        <td>2160p23.98</td>
+                        <td>3840x2160</td>
+                        <td>23.98p</td>
+                        <td>4K UHD</td>
+                    </tr>
+                    <tr>
+                        <td>2160p24</td>
+                        <td>3840x2160</td>
+                        <td>24p</td>
+                        <td>4K UHD</td>
+                    </tr>
+                    <tr>
+                        <td>2160p25</td>
+                        <td>3840x2160</td>
+                        <td>25p</td>
+                        <td>4K UHD</td>
+                    </tr>
+                    <tr>
+                        <td>2160p29.97</td>
+                        <td>3840x2160</td>
+                        <td>29.97p</td>
+                        <td>4K UHD</td>
+                    </tr>
+                    <tr>
+                        <td>2160p30</td>
+                        <td>3840x2160</td>
+                        <td>30p</td>
+                        <td>4K UHD</td>
+                    </tr>
+                    <tr>
+                        <td>4k2160p50</td>
+                        <td>4096x2160</td>
+                        <td>50p</td>
+                        <td>DCI 4K</td>
+                    </tr>
+                    <tr>
+                        <td>4k2160p60</td>
+                        <td>4096x2160</td>
+                        <td>60p</td>
+                        <td>DCI 4K</td>
+                    </tr>
+                </table>
+
+                <h3>Interlaced vs. Progressive Scan</h3>
+                <p><b>Progressive (p):</b> The entire frame is drawn in a single pass from top to bottom.</p>
+                <p><b>Interlaced (i):</b> The frame is drawn in two passes - first all odd-numbered lines, then all even-numbered lines.</p>
+            </div>
+
+            <h2>Pixel Formats</h2>
+
+            <div class="section">
+                <p>Pixel formats define how color information is encoded and stored.</p>
+                
+                <table>
+                    <tr>
+                        <th>Format</th>
+                        <th>Description</th>
+                        <th>When to Use</th>
+                    </tr>
+                    <tr>
+                        <td>uyvy422</td>
+                        <td>Packed YUV 4:2:2. Most common format for Blackmagic/DeckLink.</td>
+                        <td>Default choice for DeckLink devices, best compatibility.</td>
+                    </tr>
+                    <tr>
+                        <td>yuv422p</td>
+                        <td>Planar YUV 4:2:2. Chroma has half horizontal resolution.</td>
+                        <td>Good quality with reasonable file size.</td>
+                    </tr>
+                    <tr>
+                        <td>yuv420p</td>
+                        <td>Planar YUV 4:2:0. Most common format for video (H.264).</td>
+                        <td>Efficient encoding, used by most streaming services.</td>
+                    </tr>
+                    <tr>
+                        <td>yuv444p</td>
+                        <td>Planar YUV 4:4:4. No chroma subsampling (full quality).</td>
+                        <td>High quality with larger file size, good for post-processing.</td>
+                    </tr>
+                    <tr>
+                        <td>rgb24</td>
+                        <td>Packed 24-bit RGB: 8 bits each for R, G, B.</td>
+                        <td>When color accuracy is important (no subsampling).</td>
+                    </tr>
+                    <tr>
+                        <td>bgr24</td>
+                        <td>Like rgb24, but in BGR order. Used by Windows APIs.</td>
+                        <td>When working with Windows-based processing.</td>
+                    </tr>
+                    <tr>
+                        <td>rgba</td>
+                        <td>32-bit RGB with alpha channel for transparency.</td>
+                        <td>When alpha transparency is needed.</td>
+                    </tr>
+                    <tr>
+                        <td>bgra</td>
+                        <td>32-bit BGR with alpha. Common in Windows screen capture.</td>
+                        <td>When working with Windows UI elements.</td>
+                    </tr>
+                </table>
+
+                <h3>Understanding YUV Subsampling</h3>
+                <p>YUV separates brightness (Y) from color information (U and V):</p>
+                <ul>
+                    <li><b>4:4:4</b> - No subsampling, full color resolution</li>
+                    <li><b>4:2:2</b> - Horizontal subsampling (half horizontal chroma resolution)</li>
+                    <li><b>4:2:0</b> - Both horizontal and vertical subsampling (quarter chroma resolution)</li>
+                </ul>
+                <p>Human vision is more sensitive to brightness changes than to color changes, so subsampling has minimal perceptual impact while reducing file size.</p>
+            </div>
+
+            <h2>Using Auto-Detect for DeckLink Devices</h2>
+
+            <div class="section">
+                <p>The "Auto-Detect Formats" button queries your DeckLink device for supported formats.</p>
+                
+                <h3>How to use:</h3>
+                <ol>
+                    <li>Select your DeckLink device from the dropdown</li>
+                    <li>Click "Auto-Detect Formats"</li>
+                    <li>The application will populate the Format Code / Resolution dropdown with formats supported by your device</li>
+                    <li>Select the appropriate format for your capture needs</li>
+                </ol>
+                
+                <p>If detection fails, try the following:</p>
+                <ul>
+                    <li>Ensure the DeckLink device is properly connected</li>
+                    <li>Verify that no other application is using the device</li>
+                    <li>Check that you have the latest DeckLink drivers installed</li>
+                </ul>
+            </div>
+
+            <h2>Output Formats</h2>
+
+            <div class="section">
+                <p>VMAF analysis works with various container formats:</p>
+                
+                <table>
+                    <tr>
+                        <th>Format</th>
+                        <th>Description</th>
+                        <th>Recommended Use</th>
+                    </tr>
+                    <tr>
+                        <td>mp4</td>
+                        <td>MPEG-4 container, versatile and widely supported</td>
+                        <td>General use, good compatibility</td>
+                    </tr>
+                    <tr>
+                        <td>mkv</td>
+                        <td>Matroska container, supports almost any codec</td>
+                        <td>When additional metadata or multiple tracks are needed</td>
+                    </tr>
+                    <tr>
+                        <td>mov</td>
+                        <td>QuickTime container, good compatibility with Mac/iOS</td>
+                        <td>When working with Mac/iOS environments</td>
+                    </tr>
+                    <tr>
+                        <td>mpegts</td>
+                        <td>MPEG transport stream, used for broadcasting</td>
+                        <td>Broadcast applications</td>
+                    </tr>
+                </table>
+
+                <p>The application captures video using the mp4 container format with H.264 encoding, which provides excellent quality and compatibility.</p>
+            </div>
+
+            <div class="note">
+                <h3>Best Practices</h3>
+                <ul>
+                    <li>Use <b>uyvy422</b> pixel format with DeckLink devices for best compatibility</li>
+                    <li>Choose the format code that matches your source material to avoid unnecessary scaling</li>
+                    <li>For highest quality capture, use progressive formats when possible</li>
+                    <li>Ensure your computer has sufficient disk I/O performance for high-resolution formats</li>
+                </ul>
+            </div>
         </body>
         </html>
         """

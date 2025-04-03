@@ -124,10 +124,10 @@ class OptionsTab(QWidget):
         device_group = QGroupBox("Capture Device Settings")
         device_layout = QVBoxLayout()
 
-        # Auto-detect formats button
+        # Device selection and format detection
         auto_detect_layout = QHBoxLayout()
         self.combo_device_for_formats = QComboBox()
-        auto_detect_layout.addWidget(QLabel("Device:"))
+        auto_detect_layout.addWidget(QLabel("DeckLink Device:"))
         auto_detect_layout.addWidget(self.combo_device_for_formats)
         self.btn_auto_detect_formats = QPushButton("Auto-Detect Formats")
         self.btn_auto_detect_formats.clicked.connect(self.auto_detect_formats)
@@ -137,30 +137,45 @@ class OptionsTab(QWidget):
         # Populate device list after creating the combo box
         self._populate_device_list()
 
-        # Format settings
-        format_settings = QFormLayout()
-
-        self.combo_capture_api = QComboBox()
-        self.combo_capture_api.addItems(["dshow", "decklink", "v4l2"])
-        format_settings.addRow("Capture API:", self.combo_capture_api)
-
-        self.combo_pixel_format = QComboBox()
-        self.combo_pixel_format.addItems(["uyvy422", "yuyv422", "rgb24", "bgr24"])
-        format_settings.addRow("Pixel Format:", self.combo_pixel_format)
-
+        # Format settings in a grid layout for better organization
+        format_group = QGroupBox("Format Settings")
+        format_grid = QGridLayout()
+        
+        # Format code/resolution with integrated frame rate
+        format_grid.addWidget(QLabel("Format Code / Resolution:"), 0, 0)
         self.combo_default_resolution = QComboBox()
+        # Format codes will be populated by auto-detect
         self.combo_default_resolution.addItems([
-            "1920x1080", "1280x720", "720x576", "720x486", "3840x2160"
+            "1080p29.97 (1920x1080 @ 29.97 fps)", 
+            "1080p30 (1920x1080 @ 30 fps)",
+            "720p59.94 (1280x720 @ 59.94 fps)", 
+            "720p60 (1280x720 @ 60 fps)"
         ])
-        format_settings.addRow("Default Resolution:", self.combo_default_resolution)
-
-        self.combo_default_fps = QComboBox()
-        self.combo_default_fps.addItems([
-            "23.976", "24", "25", "29.97", "30", "50", "59.94", "60"
-        ])
-        format_settings.addRow("Default Frame Rate:", self.combo_default_fps)
-
-        device_layout.addLayout(format_settings)
+        format_grid.addWidget(self.combo_default_resolution, 0, 1)
+        
+        # Pixel format with comprehensive options
+        format_grid.addWidget(QLabel("Pixel Format:"), 1, 0)
+        self.combo_pixel_format = QComboBox()
+        pixel_formats = [
+            "uyvy422 - Packed YUV 4:2:2 (DeckLink default)",
+            "yuv422p - Planar YUV 4:2:2",
+            "yuv420p - Planar YUV 4:2:0",
+            "yuv444p - Planar YUV 4:4:4 (Full quality)",
+            "rgb24 - Packed 24-bit RGB",
+            "bgr24 - Packed 24-bit BGR",
+            "rgba - 32-bit RGB with alpha",
+            "bgra - 32-bit BGR with alpha"
+        ]
+        self.combo_pixel_format.addItems(pixel_formats)
+        format_grid.addWidget(self.combo_pixel_format, 1, 1)
+        
+        # Information label
+        info_label = QLabel("Note: Use 'Auto-Detect Formats' to discover available formats for your device.")
+        info_label.setStyleSheet("font-style: italic; color: #666;")
+        format_grid.addWidget(info_label, 2, 0, 1, 2)
+        
+        format_group.setLayout(format_grid)
+        device_layout.addWidget(format_group)
         device_group.setLayout(device_layout)
         capture_layout.addWidget(device_group)
 
@@ -397,10 +412,22 @@ class OptionsTab(QWidget):
 
                 # Populate capture settings
                 capture = settings.get('capture', {})
-                self.combo_capture_api.setCurrentText(capture.get('capture_api', 'dshow'))
-                self.combo_pixel_format.setCurrentText(capture.get('pixel_format', 'uyvy422'))
-                self.combo_default_resolution.setCurrentText(capture.get('resolution', '1920x1080'))
-                self.combo_default_fps.setCurrentText(str(capture.get('frame_rate', '29.97')))
+                # Pixel format handling - find matching entry or first one
+                pixel_format = capture.get('pixel_format', 'uyvy422')
+                pixel_format_index = -1
+                for i in range(self.combo_pixel_format.count()):
+                    if self.combo_pixel_format.itemText(i).startswith(pixel_format):
+                        pixel_format_index = i
+                        break
+                
+                if pixel_format_index >= 0:
+                    self.combo_pixel_format.setCurrentIndex(pixel_format_index)
+                
+                # Resolution/format handling
+                resolution = capture.get('resolution', '1920x1080 @ 29.97 fps')
+                resolution_index = self.combo_default_resolution.findText(resolution, Qt.MatchContains)
+                if resolution_index >= 0:
+                    self.combo_default_resolution.setCurrentIndex(resolution_index)
 
                 # Populate bookend settings
                 bookend = settings.get('bookend', {})
@@ -518,10 +545,10 @@ class OptionsTab(QWidget):
 
                     # Capture settings
                     'capture': {
-                        'capture_api': self.combo_capture_api.currentText(),
-                        'pixel_format': self.combo_pixel_format.currentText(),
-                        'resolution': self.combo_default_resolution.currentText(),
-                        'frame_rate': self.combo_default_fps.currentText(),
+                        'capture_api': 'decklink',  # Hardcoded to decklink
+                        'pixel_format': self.combo_pixel_format.currentText().split(' - ')[0],  # Extract actual format value
+                        'resolution': self.combo_default_resolution.currentText(),  # Store full format string
+                        'frame_rate': '',  # Frame rate is now integrated with resolution
                     },
 
                     # Bookend settings
@@ -801,85 +828,109 @@ class OptionsTab(QWidget):
                 logger.error(f"Error populating device list: {e}")
 
     def auto_detect_formats(self):
-        """Auto-detect formats for the selected device directly from FFmpeg"""
+        """Auto-detect formats for the selected DeckLink device"""
         device = self.combo_device_for_formats.currentText()
         if not device:
-            QMessageBox.warning(self, "Warning", "Please select a device first.")
+            QMessageBox.warning(self, "Warning", "Please select a DeckLink device first.")
             return
 
         try:
             if hasattr(self.parent, 'options_manager'):
                 # Show a message box indicating detection is in progress
                 QMessageBox.information(self, "Auto-Detect", 
-                                       "Detecting formats for the selected device.\nThis may take a few moments.")
+                                       "Detecting formats for the selected DeckLink device.\nThis may take a few moments.")
 
                 try:
-                    # Run FFmpeg command directly to get formats
+                    # Run FFmpeg command directly to get formats using decklink
                     import subprocess
-                    cmd = ["ffmpeg", "-f", "dshow", "-hide_banner", "-list_options", "true", "-i", f"video=Decklink Video Capture"]
+                    cmd = ["ffmpeg", "-f", "decklink", "-hide_banner", "-list_formats", "1", "-i", device]
                     logger.info(f"Getting device formats using command: {' '.join(cmd)}")
                     
                     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    stdout, stderr = process.communicate(timeout=10)
+                    stdout, stderr = process.communicate(timeout=15)
                     combined_output = stdout + stderr
                     
                     # Parse the output lines directly
                     import re
                     
-                    # Format patterns for pixel_format and vcodec lines
-                    pixel_format_pattern = r'pixel_format=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
-                    vcodec_pattern = r'vcodec=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
+                    # Format pattern for decklink formats
+                    format_pattern = r'format_code\s+:\s+(\w+)\s+\(([^)]+)\)'
+                    resolution_pattern = r'(\d+)x(\d+)'
+                    fps_pattern = r'(\d+(?:\.\d+)?)(p|i)'
                     
                     format_list = []
-                    pixel_formats = set()
+                    pixel_formats = [
+                        "uyvy422 - Packed YUV 4:2:2 (DeckLink default)",
+                        "yuv422p - Planar YUV 4:2:2",
+                        "yuv420p - Planar YUV 4:2:0",
+                        "yuv444p - Planar YUV 4:4:4 (Full quality)",
+                        "rgb24 - Packed 24-bit RGB",
+                        "bgr24 - Packed 24-bit BGR",
+                        "rgba - 32-bit RGB with alpha",
+                        "bgra - 32-bit BGR with alpha"
+                    ]
                     
                     # Process all the lines in the output
                     for line in combined_output.splitlines():
-                        # Try to match pixel_format pattern
-                        pixel_match = re.search(pixel_format_pattern, line)
-                        if pixel_match:
-                            pixel_format, resolution, fps = pixel_match.groups()
-                            format_list.append({
-                                'pixel_format': pixel_format,
-                                'resolution': resolution,
-                                'fps': fps,
-                                'display': f"{resolution} @ {fps} fps ({pixel_format})"
-                            })
-                            pixel_formats.add(pixel_format)
-                            continue
+                        # Try to match format pattern
+                        format_match = re.search(format_pattern, line)
+                        if format_match:
+                            format_code, format_desc = format_match.groups()
                             
-                        # Try to match vcodec pattern
-                        vcodec_match = re.search(vcodec_pattern, line)
-                        if vcodec_match:
-                            vcodec, resolution, fps = vcodec_match.groups()
-                            format_list.append({
-                                'vcodec': vcodec,
+                            # Extract resolution if present
+                            res_match = re.search(resolution_pattern, format_desc)
+                            resolution = f"{res_match.group(1)}x{res_match.group(2)}" if res_match else "Unknown"
+                            
+                            # Extract frame rate if present
+                            fps_match = re.search(fps_pattern, format_code)
+                            frame_rate = fps_match.group(1) if fps_match else ""
+                            scan_type = fps_match.group(2) if fps_match else ""
+                            
+                            # Create display name
+                            if scan_type == 'i':
+                                display = f"{format_code} ({resolution} @ {frame_rate}i - Interlaced)"
+                            else:
+                                display = f"{format_code} ({resolution} @ {frame_rate}p)"
+                                
+                            # Add format info
+                            format_info = {
+                                'format_code': format_code,
                                 'resolution': resolution,
-                                'fps': fps,
-                                'display': f"{resolution} @ {fps} fps ({vcodec})"
-                            })
-                            continue
+                                'frame_rate': frame_rate + scan_type,
+                                'description': format_desc,
+                                'display': display
+                            }
+                            format_list.append(format_info)
                     
-                    # Update the resolution dropdown with the exact formats
+                    # Update the resolution/format dropdown with the detected formats
                     self.combo_default_resolution.clear()
                     if format_list:
-                        for fmt in format_list:
-                            display = fmt['display']
-                            self.combo_default_resolution.addItem(display, fmt)
+                        for fmt in sorted(format_list, key=lambda x: x['display']):
+                            self.combo_default_resolution.addItem(fmt['display'], fmt)
                         
                         logger.info(f"Parsed {len(format_list)} formats from FFmpeg output")
                     else:
-                        logger.warning("No formats found in FFmpeg output")
+                        # Add default formats if none detected
+                        default_formats = [
+                            "1080p29.97 (1920x1080 @ 29.97 fps)",
+                            "1080p30 (1920x1080 @ 30 fps)",
+                            "720p59.94 (1280x720 @ 59.94 fps)",
+                            "720p60 (1280x720 @ 60 fps)"
+                        ]
+                        for fmt in default_formats:
+                            self.combo_default_resolution.addItem(fmt)
                         
-                    # Update the pixel format dropdown
+                        logger.warning("No formats found in FFmpeg output, using defaults")
+                        
+                    # Update the pixel format dropdown with comprehensive options
                     self.combo_pixel_format.clear()
-                    for pix_fmt in sorted(pixel_formats):
+                    for pix_fmt in pixel_formats:
                         self.combo_pixel_format.addItem(pix_fmt)
                     
                     QMessageBox.information(
                         self, 
                         "Auto-Detect Complete", 
-                        f"Found {len(format_list)} device formats with {len(pixel_formats)} pixel formats."
+                        f"Found {len(format_list)} format codes for your DeckLink device."
                     )
                     
                 except subprocess.TimeoutExpired:
