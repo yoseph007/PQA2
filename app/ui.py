@@ -3293,7 +3293,7 @@ class MainWindow(QMainWindow):
         
         # Store the selection
         if hasattr(self, 'options_manager') and self.options_manager:
-            theme_settings = self.options_manager.get_setting("theme", {})
+            theme_settings = self.options_manager.get_setting("theme")
             theme_settings["selected_theme"] = theme
             
             # Save custom theme colors if applicable
@@ -3306,8 +3306,7 @@ class MainWindow(QMainWindow):
                 theme_settings["text_color"] = text_color
                 theme_settings["accent_color"] = accent_color
             
-            self.options_manager.set_setting("theme", theme_settings)
-            self.options_manager.save_settings()
+            self.options_manager.update_category("theme", theme_settings)
         
         # Apply theme
         app = QApplication.instance()
@@ -3381,10 +3380,9 @@ class MainWindow(QMainWindow):
             
             # Save the logo path
             if hasattr(self, 'options_manager') and self.options_manager:
-                theme_settings = self.options_manager.get_setting("theme", {})
+                theme_settings = self.options_manager.get_setting("theme")
                 theme_settings["logo_path"] = logo_path
-                self.options_manager.set_setting("theme", theme_settings)
-                self.options_manager.save_settings()
+                self.options_manager.update_category("theme", theme_settings)
     
     def _reset_logo(self):
         """Reset to default logo"""
@@ -3399,10 +3397,9 @@ class MainWindow(QMainWindow):
             
             # Save the default logo path
             if hasattr(self, 'options_manager') and self.options_manager:
-                theme_settings = self.options_manager.get_setting("theme", {})
+                theme_settings = self.options_manager.get_setting("theme")
                 theme_settings["logo_path"] = default_logo
-                self.options_manager.set_setting("theme", theme_settings)
-                self.options_manager.save_settings()
+                self.options_manager.update_category("theme", theme_settings)
         else:
             self.logo_label.setText("Default logo not found")
 
