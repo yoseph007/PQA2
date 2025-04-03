@@ -166,6 +166,10 @@ class OptionsManager(QObject):
 
         self.settings[category][key] = value
         return self.save_settings()
+        
+    def set_setting(self, category, values):
+        """Set an entire category of settings (alias for update_category)"""
+        return self.update_category(category, values)
 
     def update_category(self, category, values):
         """Update an entire category of settings"""
