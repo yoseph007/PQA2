@@ -1,3 +1,4 @@
+
 import sys
 import logging
 import os
@@ -56,8 +57,22 @@ if __name__ == "__main__":
         app.setApplicationName("VMAF Test Application")
         app.setOrganizationName("Quality Testing")
 
+        # Create required manager objects
+        from app.capture import CaptureManager
+        from app.utils import FileManager
+        from app.options_manager import OptionsManager
+        
+        # Initialize managers
+        capture_manager = CaptureManager()
+        file_manager = FileManager()
+        options_manager = OptionsManager()
+        
+        # Connect managers
+        capture_manager.path_manager = file_manager
+        capture_manager.options_manager = options_manager
+
         # Create and show the main window
-        window = MainWindow()
+        window = MainWindow(capture_manager, file_manager, options_manager)
         window.show()
 
         # Run the application event loop
