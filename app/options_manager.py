@@ -17,7 +17,7 @@ class OptionsManager(QObject):
 
     def __init__(self, settings_file=None):
         super().__init__()
-        
+
         # Initialize timing variables for debouncing
         self.last_save_time = 0  # Track the last time settings were saved
         self.save_debounce_ms = 1000  # Minimum time between saves in milliseconds
@@ -30,7 +30,7 @@ class OptionsManager(QObject):
             self.settings_file = os.path.join(config_dir, "settings.json")
         else:
             self.settings_file = settings_file
-            
+
         logger.info(f"Using settings file: {self.settings_file}")
 
         # Default settings
@@ -160,7 +160,7 @@ class OptionsManager(QObject):
         default_value = None
         if category in self.default_settings and key in self.default_settings[category]:
             default_value = self.default_settings[category][key]
-            
+
         return self.settings[category].get(key, default_value)
 
     def update_setting(self, category, key, value):
@@ -170,7 +170,7 @@ class OptionsManager(QObject):
 
         self.settings[category][key] = value
         return self.save_settings()
-        
+
     def set_setting(self, category, values):
         """Set an entire category of settings (alias for update_category)"""
         return self.update_category(category, values)
@@ -234,12 +234,12 @@ class OptionsManager(QObject):
         """Get available formats for a DeckLink device"""
         format_list = []
         format_map = {}  # Map of resolution -> list of frame rates
-        
+
         try:
             # Try using dshow for Windows first for more detailed format information
             if platform.system() == 'Windows':
                 return self.get_decklink_formats_dshow(device)
-            
+
             # Use regular decklink format if dshow fails or on other platforms
             # Check if ffmpeg is available
             ffmpeg_path = self._find_ffmpeg()
@@ -286,14 +286,14 @@ class OptionsManager(QObject):
                 match = re.search(format_pattern, line)
                 if match:
                     format_id, resolution, frame_rate = match.groups()
-                    
+
                     # Parse frame rate (handle both fractional and decimal)
                     if '/' in frame_rate:
                         num, denom = frame_rate.split('/')
                         rate = float(num) / float(denom)
                     else:
                         rate = float(frame_rate)
-                    
+
                     # Format the rate nicely
                     nice_rate = rate
                     if abs(rate - 23.976) < 0.01:
@@ -302,7 +302,7 @@ class OptionsManager(QObject):
                         nice_rate = 29.97
                     elif abs(rate - 59.94) < 0.01:
                         nice_rate = 59.94
-                        
+
                     format_item = {
                         "id": format_id,
                         "resolution": resolution,
@@ -310,7 +310,7 @@ class OptionsManager(QObject):
                         "display": f"{resolution} @ {nice_rate} fps"
                     }
                     format_list.append(format_item)
-                    
+
                     # Add to format map
                     if resolution not in format_map:
                         format_map[resolution] = []
@@ -354,17 +354,17 @@ class OptionsManager(QObject):
                 "formats": [],
                 "format_map": default_format_map
             }
-            
+
     def get_decklink_formats_dshow(self, device):
         """Get available formats for a DeckLink device using DirectShow on Windows"""
         format_list = []
         format_map = {}  # Map of resolution -> list of frame rates
-        
+
         try:
             # Use ffmpeg to get available formats using dshow
             cmd = ["ffmpeg", "-hide_banner", "-f", "dshow", "-list_options", "true", "-i", f"video=Decklink Video Capture"]
             logger.info(f"Getting formats using dshow: {' '.join(cmd)}")
-            
+
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             try:
                 stdout, stderr = process.communicate(timeout=10)  # 10 second timeout
@@ -372,25 +372,25 @@ class OptionsManager(QObject):
                 process.kill()
                 logger.warning("Timeout getting dshow formats")
                 return {"formats": [], "format_map": {}}
-                
+
             # Combine output
             output = stdout + stderr
             lines = output.splitlines()
-            
+
             # Log output for debugging
             for line in lines[:15]:  # Log first 15 lines
                 logger.info(f"Format line: {line}")
-            
+
             # Format pattern for dshow output
             format_pattern = r'pixel_format=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)\s+max\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
-            
+
             for line in lines:
                 match = re.search(format_pattern, line)
                 if match:
                     pixel_format, min_res, min_fps, max_res, max_fps = match.groups()
                     resolution = min_res  # Assuming min and max are the same
                     frame_rate = float(min_fps)
-                    
+
                     # Format the rate nicely
                     nice_rate = frame_rate
                     if abs(frame_rate - 23.976) < 0.01:
@@ -399,7 +399,7 @@ class OptionsManager(QObject):
                         nice_rate = 29.97
                     elif abs(frame_rate - 59.94) < 0.01:
                         nice_rate = 59.94
-                    
+
                     format_item = {
                         "id": f"{resolution}_{nice_rate}",
                         "resolution": resolution,
@@ -408,28 +408,28 @@ class OptionsManager(QObject):
                         "display": f"{resolution} @ {nice_rate} fps"
                     }
                     format_list.append(format_item)
-                    
+
                     # Add to format map
                     if resolution not in format_map:
                         format_map[resolution] = []
                     if nice_rate not in format_map[resolution]:
                         format_map[resolution].append(nice_rate)
-            
+
             # If no formats found, return empty
             if not format_list:
                 logger.warning("No formats found via dshow")
                 return {"formats": [], "format_map": {}}
-                
+
             # Sort frame rates within each resolution
             for res in format_map:
                 format_map[res] = sorted(format_map[res])
-                
+
             logger.info(f"Found formats via dshow: {len(format_list)} formats")
             return {
                 "formats": format_list,
                 "format_map": format_map
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting dshow formats: {str(e)}")
             return {"formats": [], "format_map": {}}
