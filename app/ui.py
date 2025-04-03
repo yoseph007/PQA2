@@ -2370,7 +2370,7 @@ class MainWindow(QMainWindow):
                 format_info["resolutions"] = default_resolutionsions
 
             # Extract all frame rates from format_map
-    frame_rates = []
+            frame_rates = []
     if "format_map" in format_info and format_info["format_map"]:
         for res in format_info["format_map"]:
             for rate in format_info["format_map"][res]:
