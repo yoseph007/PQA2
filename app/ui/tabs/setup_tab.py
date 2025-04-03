@@ -150,17 +150,23 @@ class SetupTab(QWidget):
                 for video_path in sorted(video_files):
                     # Ensure the path is a string, not a dict or other unhashable type
                     if isinstance(video_path, str) and os.path.exists(video_path):
-                        self.combo_reference_videos.addItem(os.path.basename(video_path), video_path)
+                        # Add the item with basename as display text and full path as data
+                        self.combo_reference_videos.addItem(os.path.basename(video_path))
+                        # Set the item data separately to avoid type issues
+                        index = self.combo_reference_videos.count() - 1
+                        self.combo_reference_videos.setItemData(index, video_path)
                 logger.info(f"Found {len(video_files)} reference videos")
             else:
-                self.combo_reference_videos.addItem("No reference videos found", "")
+                self.combo_reference_videos.addItem("No reference videos found")
+                self.combo_reference_videos.setItemData(0, "")
                 logger.info("No reference videos found in the configured directory")
             self.combo_reference_videos.setEnabled(True)
         except Exception as e:
             logger.error(f"Error loading reference videos: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-            self.combo_reference_videos.addItem("Error loading videos", "")
+            self.combo_reference_videos.addItem("Error loading videos")
+            self.combo_reference_videos.setItemData(0, "")
             self.combo_reference_videos.setEnabled(True)
 
 
@@ -169,8 +175,8 @@ class SetupTab(QWidget):
         if index < 0:
             return
 
-        file_path = self.combo_reference_videos.currentData()
-        if file_path and os.path.exists(file_path):
+        file_path = self.combo_reference_videos.itemData(index)
+        if isinstance(file_path, str) and file_path and os.path.exists(file_path):
             # Update UI
             self.lbl_reference_path.setText("Selected: " + os.path.basename(file_path))
             self.lbl_reference_path.setToolTip(file_path)
