@@ -196,6 +196,24 @@ class OptionsManager(QObject):
         """Reset all settings to defaults"""
         self.settings = self.default_settings.copy()
         return self.save_settings()
+        
+    def update_settings(self, settings):
+        """Update multiple settings at once"""
+        # Update each category with provided values
+        for key, value in settings.items():
+            if key in self.settings:
+                # If this is a dict and the target is a dict, update recursively
+                if isinstance(value, dict) and isinstance(self.settings[key], dict):
+                    self.settings[key].update(value)
+                else:
+                    # Otherwise just replace the value
+                    self.settings[key] = value
+            else:
+                # Add new setting category
+                self.settings[key] = value
+                
+        # Save the updated settings
+        return self.save_settings()
 
     def get_decklink_devices(self):
         """Query available DeckLink devices using FFmpeg"""

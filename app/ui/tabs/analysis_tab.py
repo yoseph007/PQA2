@@ -37,8 +37,8 @@ class AnalysisTab(QWidget):
         model_layout = QHBoxLayout()
         model_layout.addWidget(QLabel("VMAF Model:"))
         self.combo_vmaf_model = QComboBox()
-        self.combo_vmaf_model.addItem("vmaf_v0.6.1", "vmaf_v0.6.1")
-        self.combo_vmaf_model.addItem("vmaf_4k_v0.6.1", "vmaf_4k_v0.6.1")
+        # We'll populate this from the models directory
+        self._populate_vmaf_models()
         model_layout.addWidget(self.combo_vmaf_model)
         settings_row.addLayout(model_layout)
 
@@ -353,6 +353,78 @@ class AnalysisTab(QWidget):
         )
         self.parent.statusBar().showMessage(message)
         
+    def _populate_vmaf_models(self):
+        """Scan models directory and populate the VMAF model dropdown"""
+        try:
+            # Clear current items
+            self.combo_vmaf_model.clear()
+            
+            # Find models directory
+            import os
+            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            models_dir = os.path.join(root_dir, "models")
+            
+            # Get custom models directory from options if available
+            vmaf_models_dir = None
+            if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                try:
+                    settings = self.parent.options_manager.get_settings()
+                    if 'vmaf_models_dir' in settings and settings['vmaf_models_dir']:
+                        vmaf_models_dir = settings['vmaf_models_dir']
+                except:
+                    pass
+            
+            # Use custom directory if specified, otherwise use default
+            if vmaf_models_dir and os.path.exists(vmaf_models_dir):
+                models_dir = vmaf_models_dir
+                
+            logger.info(f"Scanning for VMAF models in: {models_dir}")
+                
+            # Get default model from settings if available
+            default_model = "vmaf_v0.6.1"
+            if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                try:
+                    vmaf_settings = self.parent.options_manager.get_setting("vmaf")
+                    if vmaf_settings and 'default_model' in vmaf_settings:
+                        default_model = vmaf_settings['default_model']
+                except:
+                    pass
+            
+            # Scan directory for .json model files
+            model_files = []
+            if os.path.exists(models_dir):
+                for file in os.listdir(models_dir):
+                    if file.endswith('.json'):
+                        # Remove .json extension for display
+                        model_name = os.path.splitext(file)[0]
+                        model_files.append(model_name)
+            
+            # Sort models alphabetically
+            model_files.sort()
+            
+            # If no models found, add defaults
+            if not model_files:
+                model_files = ["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"]
+                logger.warning(f"No VMAF models found in {models_dir}, using defaults")
+            
+            # Add models to dropdown
+            for model in model_files:
+                self.combo_vmaf_model.addItem(model, model)
+            
+            # Set default model if found
+            default_index = self.combo_vmaf_model.findData(default_model)
+            if default_index >= 0:
+                self.combo_vmaf_model.setCurrentIndex(default_index)
+                
+            logger.info(f"Populated VMAF model dropdown with {len(model_files)} models")
+            
+        except Exception as e:
+            logger.error(f"Error populating VMAF models: {e}")
+            # Add defaults as fallback
+            self.combo_vmaf_model.clear()
+            self.combo_vmaf_model.addItem("vmaf_v0.6.1", "vmaf_v0.6.1")
+            self.combo_vmaf_model.addItem("vmaf_4k_v0.6.1", "vmaf_4k_v0.6.1")
+    
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated"""
         # Check for vmaf_thread

@@ -22,6 +22,9 @@ class OptionsTab(QWidget):
     def _setup_ui(self):
         """Set up the Options tab UI"""
         layout = QVBoxLayout(self)
+        
+        # Populate device list when UI is setup
+        self._populate_device_list()
 
         # Create tabbed interface for different settings categories
         options_tabs = QTabWidget()
@@ -218,6 +221,11 @@ class OptionsTab(QWidget):
         self.combo_alignment_method.addItems(["SSIM", "Bookend Detection", "Combined"])
         vmaf_layout.addRow("Alignment Method:", self.combo_alignment_method)
         
+        # Add default VMAF model selection
+        self.combo_default_vmaf_model = QComboBox()
+        self._populate_vmaf_models()
+        vmaf_layout.addRow("Default VMAF Model:", self.combo_default_vmaf_model)
+        
         vmaf_group.setLayout(vmaf_layout)
         analysis_layout.addWidget(vmaf_group)
         
@@ -302,6 +310,13 @@ class OptionsTab(QWidget):
                 self.check_auto_alignment.setChecked(settings.get('auto_alignment', True))
                 self.combo_alignment_method.setCurrentText(settings.get('alignment_method', 'Bookend Detection'))
                 
+                # Populate VMAF models and set default
+                self._populate_vmaf_models()
+                default_model = settings.get('default_vmaf_model', 'vmaf_v0.6.1')
+                index = self.combo_default_vmaf_model.findText(default_model)
+                if index >= 0:
+                    self.combo_default_vmaf_model.setCurrentIndex(index)
+                
                 # Populate debug settings
                 self.combo_log_level.setCurrentText(settings.get('log_level', 'INFO'))
                 self.check_save_logs.setChecked(settings.get('save_logs', True))
@@ -354,6 +369,7 @@ class OptionsTab(QWidget):
                     'save_plots': self.check_save_plots.isChecked(),
                     'auto_alignment': self.check_auto_alignment.isChecked(),
                     'alignment_method': self.combo_alignment_method.currentText(),
+                    'default_vmaf_model': self.combo_default_vmaf_model.currentText(),
                     
                     # Debug settings
                     'log_level': self.combo_log_level.currentText(),
@@ -408,6 +424,49 @@ class OptionsTab(QWidget):
         if directory:
             self.txt_output_dir.setText(directory)
     
+    def _populate_vmaf_models(self):
+        """Populate VMAF models dropdown in options tab"""
+        try:
+            # Clear existing items
+            self.combo_default_vmaf_model.clear()
+            
+            # Find models directory
+            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            models_dir = os.path.join(root_dir, "models")
+            
+            # Use custom directory if specified
+            custom_dir = self.txt_vmaf_dir.text()
+            if custom_dir and os.path.exists(custom_dir):
+                models_dir = custom_dir
+            
+            # Scan for model files
+            if os.path.exists(models_dir):
+                model_files = []
+                for file in os.listdir(models_dir):
+                    if file.endswith('.json'):
+                        model_name = os.path.splitext(file)[0]
+                        model_files.append(model_name)
+                
+                # Sort models alphabetically
+                model_files.sort()
+                
+                # Add to dropdown
+                for model in model_files:
+                    self.combo_default_vmaf_model.addItem(model, model)
+                
+                if not model_files:
+                    # Add defaults if no models found
+                    self.combo_default_vmaf_model.addItems(["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"])
+            else:
+                # Add defaults if directory doesn't exist
+                self.combo_default_vmaf_model.addItems(["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"])
+                
+        except Exception as e:
+            logger.error(f"Error populating VMAF models in options: {e}")
+            # Add defaults as fallback
+            self.combo_default_vmaf_model.clear()
+            self.combo_default_vmaf_model.addItems(["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"])
+    
     def browse_vmaf_directory(self):
         """Browse for VMAF models directory"""
         directory = QFileDialog.getExistingDirectory(
@@ -418,6 +477,8 @@ class OptionsTab(QWidget):
         
         if directory:
             self.txt_vmaf_dir.setText(directory)
+            # Update VMAF models dropdown after changing directory
+            self._populate_vmaf_models()
     
     def browse_ffmpeg_path(self):
         """Browse for FFmpeg executable"""
@@ -436,6 +497,18 @@ class OptionsTab(QWidget):
         """Handle theme selection change"""
         if hasattr(self.parent, 'theme_manager'):
             self.parent.theme_manager.set_theme(theme_name)
+    
+    def _populate_device_list(self):
+        """Populate the device dropdown with available devices"""
+        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+            try:
+                devices = self.parent.options_manager.get_decklink_devices()
+                self.combo_device_for_formats.clear()
+                for device in devices:
+                    self.combo_device_for_formats.addItem(device)
+                logger.info(f"Populated device dropdown with {len(devices)} devices")
+            except Exception as e:
+                logger.error(f"Error populating device list: {e}")
     
     def auto_detect_formats(self):
         """Auto-detect formats for the selected device"""
@@ -467,15 +540,49 @@ class OptionsTab(QWidget):
                         if 'pixel_format' in fmt:
                             pixel_formats.add(fmt['pixel_format'])
                     
-                    # Update the resolution dropdown
+                    # Update the resolution dropdown with detailed information
                     self.combo_default_resolution.clear()
                     for res in sorted(resolutions, key=lambda x: int(x.split('x')[0]) if 'x' in x else 0, reverse=True):
-                        self.combo_default_resolution.addItem(res)
+                        display_text = res
+                        # Look for formats with this resolution to get more details
+                        details = []
+                        for fmt in formats:
+                            if fmt.get('resolution') == res:
+                                # Add details like color format, frame rate if available
+                                if 'pixel_format' in fmt:
+                                    if fmt['pixel_format'] not in details:
+                                        details.append(fmt['pixel_format'])
+                        
+                        # Add details to display text if available
+                        if details:
+                            display_text = f"{res} ({', '.join(details)})"
+                            
+                        self.combo_default_resolution.addItem(display_text, res)
                     
-                    # Update the frame rate dropdown
+                    # Update the frame rate dropdown with more details
                     self.combo_default_fps.clear()
                     for fps in sorted(frame_rates, key=float):
-                        self.combo_default_fps.addItem(str(fps))
+                        display_text = str(fps)
+                        
+                        # Check for common frame rates and add standard names
+                        if abs(float(fps) - 23.98) < 0.01:
+                            display_text = f"{fps} (23.98 - Film)"
+                        elif abs(float(fps) - 24.0) < 0.01:
+                            display_text = f"{fps} (24p - Cinema)"
+                        elif abs(float(fps) - 25.0) < 0.01:
+                            display_text = f"{fps} (25p - PAL)"
+                        elif abs(float(fps) - 29.97) < 0.01:
+                            display_text = f"{fps} (29.97 - NTSC)"
+                        elif abs(float(fps) - 30.0) < 0.01:
+                            display_text = f"{fps} (30p)"
+                        elif abs(float(fps) - 50.0) < 0.01:
+                            display_text = f"{fps} (50p - PAL HD)"
+                        elif abs(float(fps) - 59.94) < 0.01:
+                            display_text = f"{fps} (59.94 - NTSC HD)"
+                        elif abs(float(fps) - 60.0) < 0.01:
+                            display_text = f"{fps} (60p)"
+                            
+                        self.combo_default_fps.addItem(display_text, str(fps))
                     
                     # Update the pixel format dropdown
                     self.combo_pixel_format.clear()
