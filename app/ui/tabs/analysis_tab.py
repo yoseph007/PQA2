@@ -244,7 +244,7 @@ class AnalysisTab(QWidget):
 
         # Get test name and output directory
         # Check if txt_test_name is a QComboBox or QLineEdit
-        if hasattr(self.parent.setup_tab.txt_test_name, 'currentText'):
+        if hasattr(self.parent.setup_tab.txt_test_name, 'currentText') and callable(self.parent.setup_tab.txt_test_name.currentText):
             test_name = self.parent.setup_tab.txt_test_name.currentText()
         else:
             test_name = self.parent.setup_tab.txt_test_name.text()
