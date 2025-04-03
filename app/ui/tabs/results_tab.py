@@ -258,8 +258,13 @@ class ResultsTab(QWidget):
 
             # Get output directory
             output_dir = self.parent.setup_tab.txt_output_dir.text()
-            if not output_dir or output_dir == "Default output directory" and hasattr(self.parent, 'file_manager'):
-                output_dir = self.parent.file_manager.get_default_base_dir()
+            if not output_dir or output_dir == "Default output directory":
+                if hasattr(self.parent, 'file_mgr'):
+                    output_dir = self.parent.file_mgr.get_default_base_dir()
+                else:
+                    # Fallback to a default directory
+                    output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tests", "test_results")
+                    os.makedirs(output_dir, exist_ok=True)
 
             if not os.path.exists(output_dir):
                 logger.warning(f"Output directory does not exist: {output_dir}")

@@ -301,7 +301,7 @@ class OptionsManager(QObject):
                 return {"formats": [], "format_map": {}}
 
             # Use ffmpeg to get available formats
-            cmd = [ffmpeg_path, "-hide_banner", "-f", "decklink", "-list_formats", "1", "-i", f'"{device}"']
+            cmd = [ffmpeg_path, "-hide_banner", "-f", "decklink", "-list_formats", "1", "-i", device]
             logger.info(f"Getting formats for {device} using command: {' '.join(cmd)}")
 
             # Set a timeout to prevent hanging
@@ -487,10 +487,10 @@ class OptionsManager(QObject):
             logger.error(f"Error getting dshow formats: {str(e)}")
             return {"formats": [], "format_map": {}}
 
-    def get_device_formats(self, device):
+    def get_device_formats(self, device_name):
         """Get available formats for the specified device directly from ffmpeg output"""
         try:
-            logger.info(f"Getting formats for device: {device}")
+            logger.info(f"Getting formats for device: {device_name}")
 
             # Use DirectShow to get actual device formats on Windows
             cmd = ["ffmpeg", "-hide_banner", "-f", "dshow", "-list_options", "true", "-i", f"video=Decklink Video Capture"]
@@ -570,7 +570,7 @@ class OptionsManager(QObject):
                     format_id += 1
 
             if formats:
-                logger.info(f"Found {len(formats)} formats for device {device}")
+                logger.info(f"Found {len(formats)} formats for device {device_name}")
                 return formats
 
             # If no formats found or parsing failed, use default formats
