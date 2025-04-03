@@ -57,8 +57,13 @@ def main():
 
     # Create managers
     options_manager = OptionsManager()
-    file_manager = FileManager(options_manager)
-    capture_manager = CaptureManager(options_manager, file_manager)
+    file_manager = FileManager()
+    
+    # Initialize capture manager with proper parameters
+    capture_manager = CaptureManager()
+    # Set options_manager and file_manager after initialization
+    capture_manager.options_manager = options_manager
+    capture_manager.path_manager = file_manager
 
     # Create and show main window
     window = MainWindow(capture_manager, file_manager, options_manager)
