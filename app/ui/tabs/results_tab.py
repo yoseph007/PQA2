@@ -1,4 +1,3 @@
-
 import os
 import json
 import logging
@@ -15,12 +14,12 @@ logger = logging.getLogger(__name__)
 
 class ResultsTab(QWidget):
     """Results tab for displaying and interacting with analysis results"""
-    
+
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
         self._setup_ui()
-        
+
     def _setup_ui(self):
         """Set up the Results tab with data grid for historical results"""
         layout = QVBoxLayout(self)
@@ -35,10 +34,10 @@ class ResultsTab(QWidget):
         history_tab = QWidget()
         results_tabs.addTab(current_tab, "Current Result")
         results_tabs.addTab(history_tab, "History")
-        
+
         # Setup current result tab
         current_layout = QVBoxLayout(current_tab)
-        
+
         # VMAF score display
         score_group = QGroupBox("VMAF Scores")
         score_layout = QVBoxLayout()
@@ -89,10 +88,10 @@ class ResultsTab(QWidget):
 
         files_group.setLayout(files_layout)
         current_layout.addWidget(files_group)
-        
+
         # Setup history tab with data grid
         history_layout = QVBoxLayout(history_tab)
-        
+
         # Create table for results history
         self.results_table = QTableWidget()
         self.results_table.setColumnCount(8)
@@ -103,26 +102,26 @@ class ResultsTab(QWidget):
         self.results_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.results_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        
+
         # Add controls above table
         history_controls = QHBoxLayout()
         self.btn_refresh_history = QPushButton("Refresh History")
         self.btn_refresh_history.clicked.connect(self.load_results_history)
         history_controls.addWidget(self.btn_refresh_history)
-        
+
         self.btn_delete_selected = QPushButton("Delete Selected")
         self.btn_delete_selected.clicked.connect(self.delete_selected_results)
         history_controls.addWidget(self.btn_delete_selected)
-        
+
         self.btn_export_selected = QPushButton("Export Selected")
         self.btn_export_selected.clicked.connect(self.export_selected_results)
         history_controls.addWidget(self.btn_export_selected)
-        
+
         history_controls.addStretch()
-        
+
         history_layout.addLayout(history_controls)
         history_layout.addWidget(self.results_table)
-        
+
         # Add results tabs to main layout
         layout.addWidget(results_tabs)
 
@@ -138,10 +137,10 @@ class ResultsTab(QWidget):
         nav_layout.addWidget(self.btn_new_test)
 
         layout.addLayout(nav_layout)
-        
+
         # Load results history
         self.load_results_history()
-        
+
     def update_with_results(self, results):
         """Update UI with VMAF analysis results"""
         # Update test name in header
@@ -152,7 +151,7 @@ class ResultsTab(QWidget):
         vmaf_score = results.get('vmaf_score')
         psnr = results.get('psnr')
         ssim = results.get('ssim')
-        
+
         if vmaf_score is not None:
             self.lbl_vmaf_score.setText(f"VMAF Score: {vmaf_score:.2f}")
         else:
@@ -171,10 +170,10 @@ class ResultsTab(QWidget):
         # Enable export buttons
         self.btn_export_pdf.setEnabled(True)
         self.btn_export_csv.setEnabled(True)
-        
+
         # Update result files list
         self.update_result_files_list(results)
-        
+
     def update_result_files_list(self, results):
         """Update the list of result files"""
         self.list_result_files.clear()
@@ -223,7 +222,7 @@ class ResultsTab(QWidget):
                     item = QListWidgetItem(f"Aligned {key.title()}: {os.path.basename(path)}")
                     item.setData(Qt.UserRole, path)
                     self.list_result_files.addItem(item)
-        
+
     def export_pdf_certificate(self):
         """Export VMAF results as PDF certificate"""
         # For now, we'll just show a placeholder message
@@ -251,50 +250,49 @@ class ResultsTab(QWidget):
             except Exception as e:
                 QMessageBox.warning(self, "Error Opening File", 
                                   f"Could not open file: {str(e)}")
-    
+
     def load_results_history(self):
         """Load historical test results into the data grid"""
         try:
-            # Clear current table
             self.results_table.setRowCount(0)
-            
+
             # Get output directory
             output_dir = self.parent.setup_tab.txt_output_dir.text()
-            if output_dir == "Default output directory" and hasattr(self.parent, 'file_manager'):
+            if not output_dir or output_dir == "Default output directory" and hasattr(self.parent, 'file_manager'):
                 output_dir = self.parent.file_manager.get_default_base_dir()
-            
+
             if not os.path.exists(output_dir):
                 logger.warning(f"Output directory does not exist: {output_dir}")
                 return
-                
+
             # Find all test directories
             test_dirs = []
             for item in os.listdir(output_dir):
                 item_path = os.path.join(output_dir, item)
                 if os.path.isdir(item_path) and item.startswith("Test_"):
                     test_dirs.append(item_path)
-            
+
             # Sort by most recent
             test_dirs.sort(key=os.path.getmtime, reverse=True)
-            
+
             # Process each test directory
             row = 0
             for test_dir in test_dirs:
                 # Look for VMAF JSON result files
                 json_files = [f for f in os.listdir(test_dir) if f.endswith("_vmaf.json")]
-                
+
                 for json_file in json_files:
                     try:
                         json_path = os.path.join(test_dir, json_file)
-                        
+
                         # Extract test name and date
                         dir_name = os.path.basename(test_dir)
                         parts = dir_name.split("_")
-                        
+
                         # Default values
                         test_name = "Unknown"
                         timestamp = ""
-                        
+
                         # Try to parse test name and timestamp
                         if len(parts) >= 3:
                             test_name = parts[0] + "_" + parts[1]
@@ -304,17 +302,17 @@ class ResultsTab(QWidget):
                                 timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
                             except:
                                 timestamp = date_str
-                        
+
                         # Get data from JSON file
                         with open(json_path, 'r') as f:
                             data = json.load(f)
-                            
+
                         # Extract scores
                         vmaf_score = None
                         psnr_score = None
                         ssim_score = None
                         duration = None
-                        
+
                         # Try to get from pooled metrics first
                         if "pooled_metrics" in data:
                             pool = data["pooled_metrics"]
@@ -324,7 +322,7 @@ class ResultsTab(QWidget):
                                 psnr_score = pool.get("psnr", {}).get("mean", pool.get("psnr_y", {}).get("mean"))
                             if "ssim" in pool or "ssim_y" in pool:
                                 ssim_score = pool.get("ssim", {}).get("mean", pool.get("ssim_y", {}).get("mean"))
-                        
+
                         # Look in frames if not found in pooled metrics
                         if "frames" in data and (vmaf_score is None or psnr_score is None or ssim_score is None):
                             frames = data["frames"]
@@ -337,71 +335,71 @@ class ResultsTab(QWidget):
                                     psnr_score = metrics.get("psnr", metrics.get("psnr_y"))
                                 if ssim_score is None and ("ssim" in metrics or "ssim_y" in metrics):
                                     ssim_score = metrics.get("ssim", metrics.get("ssim_y"))
-                                
+
                                 # Estimate duration from frame count
                                 duration = len(frames) / 30.0  # Assuming 30fps
-                        
+
                         # Figure out reference name
                         reference_name = "Unknown"
                         for f in os.listdir(test_dir):
                             if "reference" in f.lower() or "ref" in f.lower():
                                 reference_name = f
                                 break
-                        
+
                         # Add row to table
                         self.results_table.insertRow(row)
-                        
+
                         # Add test name
                         self.results_table.setItem(row, 0, QTableWidgetItem(test_name))
-                        
+
                         # Add timestamp
                         self.results_table.setItem(row, 1, QTableWidgetItem(timestamp))
-                        
+
                         # Add VMAF score
                         vmaf_str = f"{vmaf_score:.2f}" if vmaf_score is not None else "N/A"
                         self.results_table.setItem(row, 2, QTableWidgetItem(vmaf_str))
-                        
+
                         # Add PSNR score
                         psnr_str = f"{psnr_score:.2f}" if psnr_score is not None else "N/A"
                         self.results_table.setItem(row, 3, QTableWidgetItem(psnr_str))
-                        
+
                         # Add SSIM score
                         ssim_str = f"{ssim_score:.4f}" if ssim_score is not None else "N/A"
                         self.results_table.setItem(row, 4, QTableWidgetItem(ssim_str))
-                        
+
                         # Add reference name
                         self.results_table.setItem(row, 5, QTableWidgetItem(reference_name))
-                        
+
                         # Add duration
                         duration_str = f"{duration:.2f}s" if duration is not None else "N/A"
                         self.results_table.setItem(row, 6, QTableWidgetItem(duration_str))
-                        
+
                         # Create action buttons
                         actions_widget = QWidget()
                         actions_layout = QHBoxLayout(actions_widget)
                         actions_layout.setContentsMargins(0, 0, 0, 0)
-                        
+
                         # Add buttons for view/export/delete
                         btn_view = QPushButton("View")
                         btn_view.setProperty("row", row)
                         btn_view.setProperty("dir", test_dir)
                         btn_view.clicked.connect(self._view_result)
                         actions_layout.addWidget(btn_view)
-                        
+
                         btn_export = QPushButton("Export")
                         btn_export.setProperty("row", row)
                         btn_export.setProperty("dir", test_dir)
                         btn_export.clicked.connect(self._export_result)
                         actions_layout.addWidget(btn_export)
-                        
+
                         btn_delete = QPushButton("Delete")
                         btn_delete.setProperty("row", row)
                         btn_delete.setProperty("dir", test_dir)
                         btn_delete.clicked.connect(self._delete_result)
                         actions_layout.addWidget(btn_delete)
-                        
+
                         self.results_table.setCellWidget(row, 7, actions_widget)
-                        
+
                         # Store metadata in the row
                         for col in range(7):
                             item = self.results_table.item(row, col)
@@ -412,76 +410,76 @@ class ResultsTab(QWidget):
                                     "test_name": test_name,
                                     "timestamp": timestamp
                                 })
-                        
+
                         row += 1
                     except Exception as e:
                         logger.error(f"Error processing result file {json_file}: {str(e)}")
-            
+
             # Update row count label
             if row > 0:
                 self.results_table.setToolTip(f"Found {row} historical test results")
             else:
                 self.results_table.setToolTip("No historical test results found")
-                
+
         except Exception as e:
             logger.error(f"Error loading results history: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-            
+
     def _view_result(self):
         """View a historical test result"""
         sender = self.sender()
         row = sender.property("row")
         test_dir = sender.property("dir")
-        
+
         try:
             # Show the results in a dialog
             from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QScrollArea
-            
+
             dialog = QDialog(self)
             dialog.setWindowTitle("Test Result Details")
             dialog.resize(600, 400)
-            
+
             layout = QVBoxLayout(dialog)
-            
+
             # Create a scroll area for content
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
-            
+
             content_widget = QWidget()
             content_layout = QVBoxLayout(content_widget)
-            
+
             # Add test name and timestamp
             item = self.results_table.item(row, 0)
             test_name = item.text() if item else "Unknown"
-            
+
             item = self.results_table.item(row, 1)
             timestamp = item.text() if item else "Unknown"
-            
+
             content_layout.addWidget(QLabel(f"<h2>{test_name} - {timestamp}</h2>"))
-            
+
             # Add VMAF, PSNR, SSIM scores
             score_layout = QVBoxLayout()
-            
+
             item = self.results_table.item(row, 2)
             vmaf_score = item.text() if item else "N/A"
             vmaf_label = QLabel(f"<b>VMAF Score:</b> {vmaf_score}")
             vmaf_label.setStyleSheet("font-size: 16px;")
             score_layout.addWidget(vmaf_label)
-            
+
             item = self.results_table.item(row, 3)
             psnr_score = item.text() if item else "N/A"
             score_layout.addWidget(QLabel(f"<b>PSNR:</b> {psnr_score}"))
-            
+
             item = self.results_table.item(row, 4)
             ssim_score = item.text() if item else "N/A"
             score_layout.addWidget(QLabel(f"<b>SSIM:</b> {ssim_score}"))
-            
+
             content_layout.addLayout(score_layout)
-            
+
             # Add list of files in the test directory
             content_layout.addWidget(QLabel("<h3>Result Files:</h3>"))
-            
+
             file_list = QListWidget()
             for f in sorted(os.listdir(test_dir)):
                 file_path = os.path.join(test_dir, f)
@@ -489,44 +487,44 @@ class ResultsTab(QWidget):
                     item = QListWidgetItem(f)
                     item.setData(Qt.UserRole, file_path)
                     file_list.addItem(item)
-            
+
             file_list.itemDoubleClicked.connect(self.open_result_file)
             file_list.setMinimumHeight(200)
             content_layout.addWidget(file_list)
-            
+
             # Add buttons at the bottom
             button_layout = QHBoxLayout()
-            
+
             btn_export = QPushButton("Export Report")
             btn_export.clicked.connect(lambda: self._export_result(test_dir=test_dir))
             button_layout.addWidget(btn_export)
-            
+
             btn_close = QPushButton("Close")
             btn_close.clicked.connect(dialog.accept)
             button_layout.addWidget(btn_close)
-            
+
             # Set content widget in scroll area
             scroll.setWidget(content_widget)
             layout.addWidget(scroll)
             layout.addLayout(button_layout)
-            
+
             dialog.exec_()
-            
+
         except Exception as e:
             logger.error(f"Error viewing result: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-    
+
     def _export_result(self, test_dir=None):
         """Export a test result"""
         if test_dir is None:
             sender = self.sender()
             test_dir = sender.property("dir")
-        
+
         try:
             # Create export dialog
             from PyQt5.QtWidgets import QFileDialog
-            
+
             # Get default export filename
             basename = os.path.basename(test_dir)
             export_pdf = QFileDialog.getSaveFileName(
@@ -535,7 +533,7 @@ class ResultsTab(QWidget):
                 os.path.join(os.path.expanduser("~"), f"{basename}_report.pdf"),
                 "PDF Files (*.pdf)"
             )[0]
-            
+
             if export_pdf:
                 # For now just show a placeholder message
                 QMessageBox.information(
@@ -543,18 +541,18 @@ class ResultsTab(QWidget):
                     "Export to PDF",
                     f"Result would be exported to: {export_pdf}\n\nThis feature will be fully implemented in the future."
                 )
-                
+
         except Exception as e:
             logger.error(f"Error exporting result: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-    
+
     def _delete_result(self):
         """Delete a test result directory"""
         sender = self.sender()
         row = sender.property("row")
         test_dir = sender.property("dir")
-        
+
         try:
             # Confirm deletion
             msg_box = QMessageBox()
@@ -563,33 +561,33 @@ class ResultsTab(QWidget):
             msg_box.setWindowTitle("Confirm Deletion")
             msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             msg_box.setDefaultButton(QMessageBox.No)
-            
+
             if msg_box.exec_() == QMessageBox.Yes:
                 import shutil
-                
+
                 # Delete the directory
                 shutil.rmtree(test_dir)
-                
+
                 # Remove row from table
                 self.results_table.removeRow(row)
-                
+
                 QMessageBox.information(
                     self,
                     "Deletion Complete",
                     f"Test result has been deleted."
                 )
-                
+
         except Exception as e:
             logger.error(f"Error deleting result: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-            
+
             QMessageBox.critical(
                 self,
                 "Deletion Failed",
                 f"Failed to delete test result: {str(e)}"
             )
-    
+
     def delete_selected_results(self):
         """Delete selected results from the history table"""
         try:
@@ -597,7 +595,7 @@ class ResultsTab(QWidget):
             selected_rows = set()
             for item in self.results_table.selectedItems():
                 selected_rows.add(item.row())
-            
+
             if not selected_rows:
                 QMessageBox.information(
                     self,
@@ -605,7 +603,7 @@ class ResultsTab(QWidget):
                     "Please select at least one test result to delete."
                 )
                 return
-            
+
             # Confirm deletion
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Warning)
@@ -613,7 +611,7 @@ class ResultsTab(QWidget):
             msg_box.setWindowTitle("Confirm Deletion")
             msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             msg_box.setDefaultButton(QMessageBox.No)
-            
+
             if msg_box.exec_() == QMessageBox.Yes:
                 # Delete from bottom to top to avoid index issues
                 for row in sorted(selected_rows, reverse=True):
@@ -624,16 +622,16 @@ class ResultsTab(QWidget):
                             data = item.data(Qt.UserRole)
                             if data and "test_dir" in data:
                                 test_dir = data["test_dir"]
-                                
+
                                 # Delete directory
                                 import shutil
                                 shutil.rmtree(test_dir)
-                                
+
                                 # Remove row
                                 self.results_table.removeRow(row)
                     except Exception as e:
                         logger.error(f"Error deleting row {row}: {str(e)}")
-                
+
                 QMessageBox.information(
                     self,
                     "Deletion Complete",
@@ -643,13 +641,13 @@ class ResultsTab(QWidget):
             logger.error(f"Error deleting selected results: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-            
+
             QMessageBox.critical(
                 self,
                 "Deletion Failed",
                 f"Failed to delete selected results: {str(e)}"
             )
-    
+
     def export_selected_results(self):
         """Export selected results from the history table"""
         try:
@@ -657,7 +655,7 @@ class ResultsTab(QWidget):
             selected_rows = set()
             for item in self.results_table.selectedItems():
                 selected_rows.add(item.row())
-            
+
             if not selected_rows:
                 QMessageBox.information(
                     self,
@@ -665,7 +663,7 @@ class ResultsTab(QWidget):
                     "Please select at least one test result to export."
                 )
                 return
-            
+
             # For now just show a placeholder message
             QMessageBox.information(
                 self,
@@ -676,7 +674,7 @@ class ResultsTab(QWidget):
             logger.error(f"Error exporting selected results: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-            
+
     def start_new_test(self):
         """Reset application for a new test"""
         # Reset state variables in parent
