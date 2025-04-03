@@ -762,8 +762,7 @@ class HelpTab(QWidget):
                 <p>Application interface appears broken or incomplete.</p>
 
                 <div class="solution">
-                    <h4>Solutions:</h4>
-                    <ol>
+                    <h4>Solutions:</h4>                    <ol>
                         <li>Verify PyQt5 is properly installed</li>
                         <li>Try resetting the application settings in the Options tab</li>
                         <li>Make sure your display resolution meets minimum requirements</li>
@@ -833,10 +832,6 @@ class HelpTab(QWidget):
         </html>
         """
 
-        </body>
-        </html>
-        """
-
     def _get_capture_formats_content(self):
         """Get the HTML content for the Capture Formats section"""
         return """
@@ -864,7 +859,7 @@ class HelpTab(QWidget):
 
             <div class="section">
                 <p>Format codes specify the resolution, frame rate, and scan type for video capture.</p>
-                
+
                 <table>
                     <tr>
                         <th>Format Code</th>
@@ -1003,7 +998,7 @@ class HelpTab(QWidget):
 
             <div class="section">
                 <p>Pixel formats define how color information is encoded and stored.</p>
-                
+
                 <table>
                     <tr>
                         <th>Format</th>
@@ -1066,7 +1061,7 @@ class HelpTab(QWidget):
 
             <div class="section">
                 <p>The "Auto-Detect Formats" button queries your DeckLink device for supported formats.</p>
-                
+
                 <h3>How to use:</h3>
                 <ol>
                     <li>Select your DeckLink device from the dropdown</li>
@@ -1074,7 +1069,7 @@ class HelpTab(QWidget):
                     <li>The application will populate the Format Code / Resolution dropdown with formats supported by your device</li>
                     <li>Select the appropriate format for your capture needs</li>
                 </ol>
-                
+
                 <p>If detection fails, try the following:</p>
                 <ul>
                     <li>Ensure the DeckLink device is properly connected</li>
@@ -1087,7 +1082,7 @@ class HelpTab(QWidget):
 
             <div class="section">
                 <p>VMAF analysis works with various container formats:</p>
-                
+
                 <table>
                     <tr>
                         <th>Format</th>
