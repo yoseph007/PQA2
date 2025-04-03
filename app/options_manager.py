@@ -301,7 +301,7 @@ class OptionsManager(QObject):
                 return {"formats": [], "format_map": {}}
 
             # Use ffmpeg to get available formats
-            cmd = [ffmpeg_path, "-f", "decklink", "-list_formats", "1", "-i", device]
+            cmd = [ffmpeg_path, "-hide_banner", "-f", "decklink", "-list_formats", "1", "-i", f'"{device}"']
             logger.info(f"Getting formats for {device} using command: {' '.join(cmd)}")
 
             # Set a timeout to prevent hanging
@@ -612,10 +612,10 @@ class OptionsManager(QObject):
             # Build ffmpeg command to list device options - using decklink format
             cmd = [
                 self.get_ffmpeg_path(),
-                "-f", "decklink",
                 "-hide_banner",
+                "-f", "decklink",
                 "-list_formats", "1",
-                "-i", f"{device_name}"
+                "-i", f'"{device_name}"'
             ]
 
             # Run the command and capture output

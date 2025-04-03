@@ -843,7 +843,7 @@ class OptionsTab(QWidget):
                 try:
                     # Run FFmpeg command directly to get formats using decklink
                     import subprocess
-                    cmd = ["ffmpeg", "-f", "decklink", "-hide_banner", "-list_formats", "1", "-i", device]
+                    cmd = ["ffmpeg", "-hide_banner", "-f", "decklink", "-list_formats", "1", "-i", f'"{device}"']
                     logger.info(f"Getting device formats using command: {' '.join(cmd)}")
                     
                     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
