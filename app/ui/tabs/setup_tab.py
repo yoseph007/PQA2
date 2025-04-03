@@ -26,24 +26,38 @@ class SetupTab(QWidget):
         reference_group = QGroupBox("Reference Video")
         reference_layout = QVBoxLayout()
 
-        # Reference file selection
+        # Reference file selection - direct file selector
         ref_file_layout = QHBoxLayout()
-        self.lbl_reference_path = QLabel("Select a reference video:")
-        self.combo_reference_videos = QComboBox()
-        self.combo_reference_videos.setMinimumWidth(300)
-        self.combo_reference_videos.currentIndexChanged.connect(self.reference_selected)
-        self.btn_refresh_references = QPushButton("Refresh List")
-        self.btn_refresh_references.clicked.connect(self.refresh_reference_videos)
+        self.lbl_reference_path = QLabel("Reference video:")
+        self.txt_reference_path = QLineEdit()
+        self.txt_reference_path.setMinimumWidth(300)
+        self.txt_reference_path.setReadOnly(True)
+        self.btn_browse_reference = QPushButton("Browse...")
+        self.btn_browse_reference.clicked.connect(self.browse_reference_video)
+        
         ref_file_layout.addWidget(self.lbl_reference_path)
-        ref_file_layout.addWidget(self.combo_reference_videos)
-        ref_file_layout.addWidget(self.btn_refresh_references)
+        ref_file_layout.addWidget(self.txt_reference_path)
+        ref_file_layout.addWidget(self.btn_browse_reference)
         reference_layout.addLayout(ref_file_layout)
+
+        # Reference directory path display
+        dir_layout = QHBoxLayout()
+        self.lbl_ref_dir_title = QLabel("Reference videos directory:")
+        self.lbl_ref_dir_path = QLabel("Not set")
+        self.lbl_ref_dir_path.setStyleSheet("font-style: italic;")
+        dir_layout.addWidget(self.lbl_ref_dir_title)
+        dir_layout.addWidget(self.lbl_ref_dir_path)
+        dir_layout.addStretch()
+        reference_layout.addLayout(dir_layout)
 
         # Reference details
         self.lbl_reference_details = QLabel("Reference details: None")
         reference_layout.addWidget(self.lbl_reference_details)
         
-        # Video preview area
+        # Video preview - arrange side by side with details for larger screens
+        preview_area = QHBoxLayout()
+        
+        # Left side - preview
         preview_layout = QVBoxLayout()
         preview_layout.addWidget(QLabel("Reference Video Preview:"))
         self.video_preview = QLabel()
@@ -53,26 +67,32 @@ class SetupTab(QWidget):
         self.video_preview.setStyleSheet("background-color: #000000;")
         self.video_preview.setText("No video selected")
         preview_layout.addWidget(self.video_preview)
-        reference_layout.addLayout(preview_layout)
+        preview_layout.addStretch()
+        
+        preview_area.addLayout(preview_layout)
+        reference_layout.addLayout(preview_area)
 
         # Add to group
         reference_group.setLayout(reference_layout)
         layout.addWidget(reference_group)
 
-        # Output settings
+        # Output settings with improved layout
         output_group = QGroupBox("Output Settings")
         output_layout = QVBoxLayout()
 
-        # Output directory
+        # Output directory with better layout
         output_dir_layout = QHBoxLayout()
-        self.lbl_output_dir = QLabel("Default output directory")
+        self.lbl_output_dir_title = QLabel("Output directory:")
+        self.txt_output_dir = QLineEdit()
+        self.txt_output_dir.setReadOnly(True)
         self.btn_browse_output = QPushButton("Browse...")
         self.btn_browse_output.clicked.connect(self.browse_output_dir)
-        output_dir_layout.addWidget(self.lbl_output_dir)
+        output_dir_layout.addWidget(self.lbl_output_dir_title)
+        output_dir_layout.addWidget(self.txt_output_dir, 1)  # Give the text field more space
         output_dir_layout.addWidget(self.btn_browse_output)
         output_layout.addLayout(output_dir_layout)
 
-        # Test name
+        # Test name with better layout
         test_name_layout = QHBoxLayout()
         test_name_layout.addWidget(QLabel("Test Name:"))
         self.txt_test_name = QLineEdit("Test_01")
@@ -99,131 +119,61 @@ class SetupTab(QWidget):
         # Add stretch to push everything up
         layout.addStretch()
 
-    def refresh_reference_videos(self):
-        """Refresh the reference video dropdown list"""
-        try:
-            self.combo_reference_videos.clear()
-            self.lbl_reference_details.setText("Reference details: None")
-
-            # Get reference directory from options
-            ref_dir = ""
+    def browse_reference_video(self):
+        """Browse for a reference video file"""
+        # Determine starting directory
+        start_dir = ""
+        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+            paths = self.parent.options_manager.get_setting('paths', {})
+            start_dir = paths.get('reference_video_dir', '')
+            
+        if not start_dir or not os.path.exists(start_dir):
+            start_dir = os.path.expanduser("~")
+            
+        # Store reference directory for display
+        self.lbl_ref_dir_path.setText(start_dir)
+        self.lbl_ref_dir_path.setToolTip(start_dir)
+            
+        # Show file dialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Reference Video",
+            start_dir,
+            "Video Files (*.mp4 *.mov *.avi *.mkv);;All Files (*.*)"
+        )
+        
+        if file_path and os.path.exists(file_path):
+            # Update UI
+            self.txt_reference_path.setText(file_path)
+            self.txt_reference_path.setToolTip(file_path)
+            
+            # Update directory display
+            ref_dir = os.path.dirname(file_path)
+            self.lbl_ref_dir_path.setText(ref_dir)
+            self.lbl_ref_dir_path.setToolTip(ref_dir)
+            
+            # Save the directory to options
             if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
                 paths = self.parent.options_manager.get_setting('paths', {})
-                ref_dir = paths.get('reference_video_dir', '')
-
-            if not ref_dir or not os.path.exists(ref_dir):
-                self.combo_reference_videos.addItem("No reference directory set")
-                return
-
-            # Add a loading indicator
-            self.combo_reference_videos.addItem("Loading...")
-            self.combo_reference_videos.setEnabled(False)
-
-            # Process events to update UI
-            from PyQt5.QtCore import QCoreApplication
-            QCoreApplication.processEvents()
-
-            # Start a thread to scan for video files
-            self.reference_thread = threading.Thread(
-                target=self._scan_references,
-                args=(ref_dir,)
-            )
-            self.reference_thread.daemon = True
-
-            try:
-                self.reference_thread.start()
-            except KeyboardInterrupt:
-                logging.warning("Reference scanning was interrupted by user")
-                self.combo_reference_videos.clear()
-                self.combo_reference_videos.addItem("Scanning interrupted")
-                self.combo_reference_videos.setEnabled(True)
-                return
-
-        except Exception as e:
-            logger.error(f"Error refreshing reference videos: {str(e)}")
-            self.combo_reference_videos.addItem("Error loading videos", "")
-            self.combo_reference_videos.setEnabled(True)
-
-
-    def _scan_references(self, ref_dir):
-        video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
-        video_files = []
-        try:
-            for file in os.listdir(ref_dir):
-                if any(file.lower().endswith(ext) for ext in video_extensions):
-                    video_files.append(os.path.join(ref_dir, file))
-
-            # Update UI on the main thread
-            from PyQt5.QtCore import QCoreApplication, QMetaObject, Qt
-            from PyQt5.QtWidgets import QApplication
-            
-            # Clear the combo box
-            self.combo_reference_videos.clear()
-            
-            if video_files:
-                # Use signal-safe method to update the combobox
-                def update_combo():
-                    for video_path in sorted(video_files):
-                        if isinstance(video_path, str) and os.path.exists(video_path):
-                            basename = os.path.basename(video_path)
-                            self.combo_reference_videos.addItem(basename)
-                            # Store the path as a string in the item data
-                            index = self.combo_reference_videos.count() - 1
-                            self.combo_reference_videos.setItemData(index, video_path, Qt.UserRole)
-                    self.combo_reference_videos.setEnabled(True)
+                paths['reference_video_dir'] = ref_dir
+                self.parent.options_manager.update_setting('paths', paths)
                 
-                # Execute on the main thread
-                QMetaObject.invokeMethod(self, update_combo, Qt.QueuedConnection)
-                logger.info(f"Found {len(video_files)} reference videos")
-            else:
-                # No videos found
-                def no_videos():
-                    self.combo_reference_videos.addItem("No reference videos found")
-                    self.combo_reference_videos.setItemData(0, "", Qt.UserRole)
-                    self.combo_reference_videos.setEnabled(True)
-                
-                QMetaObject.invokeMethod(self, no_videos, Qt.QueuedConnection)
-                logger.info("No reference videos found in the configured directory")
-            
-            # Process events to ensure UI updates
-            QCoreApplication.processEvents()
-        except Exception as e:
-            logger.error(f"Error loading reference videos: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            
-            # Handle error in a thread-safe way
-            def handle_error():
-                self.combo_reference_videos.clear()
-                self.combo_reference_videos.addItem("Error loading videos")
-                self.combo_reference_videos.setItemData(0, "", Qt.UserRole)
-                self.combo_reference_videos.setEnabled(True)
-            
-            QMetaObject.invokeMethod(self, handle_error, Qt.QueuedConnection)
-
-
-    def reference_selected(self, index):
-        """Handle reference video selection from dropdown"""
-        if index < 0:
-            return
-
-        from PyQt5.QtCore import Qt
-        
-        # Get file path from user role
-        file_path = self.combo_reference_videos.itemData(index, Qt.UserRole)
-        # Log the value for debugging
-        logger.debug(f"Selected reference video data: {file_path} (type: {type(file_path)})")
-        
-        if file_path and isinstance(file_path, str) and os.path.exists(file_path):
-            # Update UI
-            self.lbl_reference_path.setText("Selected: " + os.path.basename(file_path))
-            self.lbl_reference_path.setToolTip(file_path)
-
-            # Analyze the reference video
+            # Analyze the selected video
             self.analyze_reference(file_path)
-        else:
-            self.lbl_reference_path.setText("Invalid reference path")
-            self.lbl_setup_status.setText("Please select a valid reference video")
+            
+    def analyze_reference(self, file_path):
+        """Analyze reference video to extract metadata"""
+        self.log_to_setup(f"Analyzing reference video: {os.path.basename(file_path)}")
+
+        # Create analysis thread
+        from app.reference_analyzer import ReferenceAnalysisThread
+        self.reference_thread = ReferenceAnalysisThread(file_path)
+        self.reference_thread.progress_update.connect(self.log_to_setup)
+        self.reference_thread.error_occurred.connect(self.handle_reference_error)
+        self.reference_thread.analysis_complete.connect(self.handle_reference_analyzed)
+
+        # Start analysis
+        self.reference_thread.start()
 
     def analyze_reference(self, file_path):
         """Analyze reference video to extract metadata"""
@@ -317,8 +267,8 @@ class SetupTab(QWidget):
 
         if directory:
             # Set output directory in UI and managers
-            self.lbl_output_dir.setText(directory)
-            self.lbl_output_dir.setToolTip(directory)
+            self.txt_output_dir.setText(directory)
+            self.txt_output_dir.setToolTip(directory)
 
             if hasattr(self.parent, 'file_manager'):
                 self.parent.file_manager.base_dir = directory

@@ -3,3 +3,5 @@ PyQt5==5.15.9
 opencv-python==4.8.0
 numpy==1.24.3
 qdarkstyle==3.1
+opencv-python
+PyQt5
