@@ -155,12 +155,13 @@ class VMAFAnalyzer(QObject):
             try:
                 logger.info("Trying basic VMAF command with relative paths...")
                 # Use -lavfi instead of -filter_complex for simpler syntax
+                # Add PSNR and SSIM metrics to the libvmaf parameters
                 basic_cmd = [
                     ffmpeg_exe,
                     "-hide_banner",
                     "-i", distorted_path_ffmpeg,
                     "-i", reference_path_ffmpeg,
-                    "-lavfi", f"libvmaf=log_path={rel_vmaf_json}:log_fmt=json",
+                    "-lavfi", f"libvmaf=log_path={rel_vmaf_json}:log_fmt=json:psnr=1:ssim=1",
                     "-f", "null", "-"
                 ]
                 

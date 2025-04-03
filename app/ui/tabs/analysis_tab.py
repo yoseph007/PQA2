@@ -284,6 +284,14 @@ class AnalysisTab(QWidget):
         
     def handle_vmaf_complete(self, results):
         """Handle completion of VMAF analysis"""
+        # Check if we've already processed this result (prevent duplicate processing)
+        if hasattr(self, '_last_result_id') and self._last_result_id == id(results):
+            logger.warning("Ignoring duplicate VMAF analysis result")
+            return
+            
+        # Store the ID of this result object to prevent duplicate processing
+        self._last_result_id = id(results)
+        
         self.parent.vmaf_results = results
 
         vmaf_score = results.get('vmaf_score')

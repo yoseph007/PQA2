@@ -289,39 +289,43 @@ class OptionsTab(QWidget):
         ui_theme_group.setLayout(ui_theme_layout)
         theme_layout.addWidget(ui_theme_group)
         
-        # White-label branding settings
-        branding_group = QGroupBox("White-Label Branding")
+        # Custom branding settings
+        branding_group = QGroupBox("Customization & Branding")
         branding_layout = QFormLayout()
         
-        self.check_enable_white_label = QCheckBox()
-        branding_layout.addRow("Enable White-Label:", self.check_enable_white_label)
-        
         self.txt_app_name = QLineEdit("VMAF Test App")
-        branding_layout.addRow("Application Name:", self.txt_app_name)
+        branding_layout.addRow("Application Title:", self.txt_app_name)
         
         self.txt_company_name = QLineEdit("Chroma")
-        branding_layout.addRow("Company Name:", self.txt_company_name)
+        branding_layout.addRow("Organization Name:", self.txt_company_name)
         
         self.txt_footer_text = QLineEdit("© 2025 Chroma")
-        branding_layout.addRow("Footer Text:", self.txt_footer_text)
+        branding_layout.addRow("Report Footer Text:", self.txt_footer_text)
         
         self.color_primary = QLineEdit("#4CAF50")
-        branding_layout.addRow("Primary Brand Color:", self.color_primary)
+        branding_layout.addRow("Brand Accent Color:", self.color_primary)
         self.btn_pick_primary = QPushButton("...")
         self.btn_pick_primary.setMaximumWidth(30)
         self.btn_pick_primary.clicked.connect(lambda: self.pick_color(self.color_primary))
         branding_layout.addWidget(self.btn_pick_primary)
         
-        # Logo selection
+        # Logo selection - upload and save to assets folder
         logo_layout = QHBoxLayout()
-        logo_layout.addWidget(QLabel("Logo:"))
-        self.txt_logo_path = QLineEdit()
-        self.txt_logo_path.setReadOnly(True)
-        logo_layout.addWidget(self.txt_logo_path)
-        self.btn_browse_logo = QPushButton("Browse...")
-        self.btn_browse_logo.clicked.connect(self.browse_logo)
-        logo_layout.addWidget(self.btn_browse_logo)
+        preview_layout = QHBoxLayout()
+        
+        logo_layout.addWidget(QLabel("Company Logo:"))
+        self.btn_upload_logo = QPushButton("Upload Logo")
+        self.btn_upload_logo.clicked.connect(self.upload_logo)
+        logo_layout.addWidget(self.btn_upload_logo)
+        
+        # Logo preview label
+        self.lbl_logo_preview = QLabel("No logo selected")
+        self.lbl_logo_preview.setMinimumHeight(50)
+        self.lbl_logo_preview.setAlignment(Qt.AlignCenter)
+        preview_layout.addWidget(self.lbl_logo_preview)
+        
         branding_layout.addRow(logo_layout)
+        branding_layout.addRow("Preview:", self.lbl_logo_preview)
         
         branding_group.setLayout(branding_layout)
         theme_layout.addWidget(branding_group)
@@ -517,15 +521,14 @@ class OptionsTab(QWidget):
                         'selected_theme': self.combo_theme.currentText()
                     }
                 
-                # Add branding settings if they exist
-                if hasattr(self, 'check_enable_white_label'):
-                    settings['branding'] = {
-                        'enable_white_label': self.check_enable_white_label.isChecked(),
-                        'app_name': self.txt_app_name.text(),
-                        'company_name': self.txt_company_name.text(),
-                        'footer_text': self.txt_footer_text.text(),
-                        'primary_color': self.color_primary.text()
-                    }
+                # Add branding settings
+                settings['branding'] = {
+                    'app_name': self.txt_app_name.text(),
+                    'company_name': self.txt_company_name.text(),
+                    'footer_text': self.txt_footer_text.text(),
+                    'primary_color': self.color_primary.text(),
+                    'logo_path': getattr(self, 'logo_path', '')
+                }
                 
                 # Update settings
                 self.parent.options_manager.update_settings(settings)
@@ -672,18 +675,53 @@ class OptionsTab(QWidget):
         except Exception as e:
             logger.error(f"Error picking color: {e}")
             
-    def browse_logo(self):
-        """Browse for logo file"""
+    def upload_logo(self):
+        """Upload and save logo to assets folder"""
         file_filter = "Images (*.png *.jpg *.jpeg *.gif *.bmp);;All Files (*.*)"
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Logo Image",
-            self.txt_logo_path.text() or os.path.expanduser("~"),
+            "Select Company Logo",
+            os.path.expanduser("~"),
             file_filter
         )
         
         if file_path:
-            self.txt_logo_path.setText(file_path)
+            try:
+                # Get the file extension
+                _, ext = os.path.splitext(file_path)
+                
+                # Create target path in assets folder
+                root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                assets_dir = os.path.join(root_dir, "assets")
+                os.makedirs(assets_dir, exist_ok=True)
+                
+                target_path = os.path.join(assets_dir, f"company_logo{ext}")
+                
+                # Copy the logo to the assets directory
+                import shutil
+                shutil.copy2(file_path, target_path)
+                
+                # Store the relative path in settings
+                rel_path = os.path.join("assets", f"company_logo{ext}")
+                self.logo_path = rel_path
+                
+                # Update preview
+                from PyQt5.QtGui import QPixmap
+                pixmap = QPixmap(target_path)
+                if not pixmap.isNull():
+                    pixmap = pixmap.scaledToHeight(50, Qt.SmoothTransformation)
+                    self.lbl_logo_preview.setPixmap(pixmap)
+                else:
+                    self.lbl_logo_preview.setText("Failed to load logo preview")
+                
+                QMessageBox.information(self, "Logo Uploaded", "Logo has been uploaded and will be used in reports and UI customization.")
+                logger.info(f"Logo uploaded and saved to {target_path}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to upload logo: {str(e)}")
+                logger.error(f"Error uploading logo: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
     
     def _populate_device_list(self):
         """Populate the device dropdown with available devices"""
@@ -702,7 +740,7 @@ class OptionsTab(QWidget):
                 logger.error(f"Error populating device list: {e}")
     
     def auto_detect_formats(self):
-        """Auto-detect formats for the selected device"""
+        """Auto-detect formats for the selected device directly from FFmpeg"""
         device = self.combo_device_for_formats.currentText()
         if not device:
             QMessageBox.warning(self, "Warning", "Please select a device first.")
@@ -718,62 +756,48 @@ class OptionsTab(QWidget):
                 formats = self.parent.options_manager.get_device_formats(device)
                 
                 if formats:
-                    # Get unique resolutions and frame rates
-                    resolutions = set()
-                    frame_rates = set()
+                    # Get combined format strings (resolution + fps) directly from the device output
+                    combined_formats = set()
                     pixel_formats = set()
                     
                     for fmt in formats:
-                        if 'resolution' in fmt:
-                            resolutions.add(fmt['resolution'])
-                        if 'fps' in fmt:
-                            frame_rates.add(fmt['fps'])
+                        # Create a combined format string that includes both resolution and frame rate
+                        if 'resolution' in fmt and 'fps' in fmt:
+                            combined_format = f"{fmt['resolution']}@{fmt['fps']}fps"
+                            if 'format_name' in fmt:
+                                combined_format = f"{fmt['format_name']} ({combined_format})"
+                            combined_formats.add(combined_format)
+                        
+                        # Also track pixel formats
                         if 'pixel_format' in fmt:
                             pixel_formats.add(fmt['pixel_format'])
                     
-                    # Update the resolution dropdown with detailed information
+                    # Update the resolution dropdown with exact formats from the device
                     self.combo_default_resolution.clear()
-                    for res in sorted(resolutions, key=lambda x: int(x.split('x')[0]) if 'x' in x else 0, reverse=True):
-                        display_text = res
-                        # Look for formats with this resolution to get more details
-                        details = []
-                        for fmt in formats:
-                            if fmt.get('resolution') == res:
-                                # Add details like color format, frame rate if available
-                                if 'pixel_format' in fmt:
-                                    if fmt['pixel_format'] not in details:
-                                        details.append(fmt['pixel_format'])
-                        
-                        # Add details to display text if available
-                        if details:
-                            display_text = f"{res} ({', '.join(details)})"
-                            
-                        self.combo_default_resolution.addItem(display_text, res)
+                    for fmt in sorted(combined_formats):
+                        self.combo_default_resolution.addItem(fmt, fmt)
                     
-                    # Update the frame rate dropdown with more details
-                    self.combo_default_fps.clear()
-                    for fps in sorted(frame_rates, key=float):
-                        display_text = str(fps)
+                    # Remove the separate frame rate dropdown as it's now included in the resolution dropdown
+                    # Just hide it and its label instead of removing it completely
+                    if hasattr(self, 'combo_default_fps'):
+                        frame_rate_label = None
+                        # Find the label for the combo_default_fps
+                        for i in range(self.layout().count()):
+                            item = self.layout().itemAt(i)
+                            if item.widget() and isinstance(item.widget(), QFormLayout):
+                                for row in range(item.widget().rowCount()):
+                                    field = item.widget().itemAt(row, QFormLayout.FieldRole)
+                                    if field and field.widget() == self.combo_default_fps:
+                                        label = item.widget().itemAt(row, QFormLayout.LabelRole)
+                                        if label and label.widget():
+                                            frame_rate_label = label.widget()
+                                            break
                         
-                        # Check for common frame rates and add standard names
-                        if abs(float(fps) - 23.98) < 0.01:
-                            display_text = f"{fps} (23.98 - Film)"
-                        elif abs(float(fps) - 24.0) < 0.01:
-                            display_text = f"{fps} (24p - Cinema)"
-                        elif abs(float(fps) - 25.0) < 0.01:
-                            display_text = f"{fps} (25p - PAL)"
-                        elif abs(float(fps) - 29.97) < 0.01:
-                            display_text = f"{fps} (29.97 - NTSC)"
-                        elif abs(float(fps) - 30.0) < 0.01:
-                            display_text = f"{fps} (30p)"
-                        elif abs(float(fps) - 50.0) < 0.01:
-                            display_text = f"{fps} (50p - PAL HD)"
-                        elif abs(float(fps) - 59.94) < 0.01:
-                            display_text = f"{fps} (59.94 - NTSC HD)"
-                        elif abs(float(fps) - 60.0) < 0.01:
-                            display_text = f"{fps} (60p)"
-                            
-                        self.combo_default_fps.addItem(display_text, str(fps))
+                        # Hide the combo box and its label
+                        if self.combo_default_fps:
+                            self.combo_default_fps.hide()
+                        if frame_rate_label:
+                            frame_rate_label.hide()
                     
                     # Update the pixel format dropdown
                     self.combo_pixel_format.clear()
@@ -783,13 +807,13 @@ class OptionsTab(QWidget):
                     QMessageBox.information(
                         self, 
                         "Auto-Detect Complete", 
-                        f"Found {len(formats)} formats with {len(resolutions)} resolutions and {len(frame_rates)} frame rates."
+                        f"Found {len(combined_formats)} device formats with {len(pixel_formats)} pixel formats."
                     )
                 else:
                     QMessageBox.warning(
                         self,
                         "No Formats Found",
-                        "No formats were detected for the selected device."
+                        "No formats were detected for the selected device. Make sure the BlackMagic device is connected properly."
                     )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error detecting formats: {e}")

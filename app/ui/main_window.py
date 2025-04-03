@@ -1,10 +1,9 @@
-
 import os
 import logging
 from datetime import datetime
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter, QApplication, QStyle
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QIcon
 
 # Import UI components
 from .tabs.setup_tab import SetupTab
@@ -12,6 +11,7 @@ from .tabs.capture_tab import CaptureTab
 from .tabs.analysis_tab import AnalysisTab
 from .tabs.results_tab import ResultsTab
 from .tabs.options_tab import OptionsTab
+from .tabs.help_tab import HelpTab # Added import for HelpTab
 from .theme_manager import ThemeManager
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("VMAF Test App")
         self.setGeometry(100, 100, 1200, 800)
         self.setFixedSize(1200, 800)  # Set fixed size to prevent resizing
-        
+
         # Set application icon/logo
         self._set_application_logo()
 
@@ -59,26 +59,30 @@ class MainWindow(QMainWindow):
 
         # Create tabs
         self.tabs = QTabWidget()
-        
+
         # Create tab widgets
         self.setup_tab = SetupTab(self)
         self.capture_tab = CaptureTab(self)
         self.analysis_tab = AnalysisTab(self)
         self.results_tab = ResultsTab(self)
         self.options_tab = OptionsTab(self)
+        self.help_tab = HelpTab(self) # Added HelpTab instantiation
 
-        self.tabs.addTab(self.setup_tab, "Setup")
-        self.tabs.addTab(self.capture_tab, "Capture")
-        self.tabs.addTab(self.analysis_tab, "Analysis")
-        self.tabs.addTab(self.results_tab, "Results")
-        self.tabs.addTab(self.options_tab, "Options")
+        # Add tabs to tab widget with icons
+        self.tabs.addTab(self.setup_tab, QIcon.fromTheme("document-new", QApplication.style().standardIcon(QStyle.SP_FileDialogStart)), "Setup")
+        self.tabs.addTab(self.capture_tab, QIcon.fromTheme("camera-video", QApplication.style().standardIcon(QStyle.SP_DesktopIcon)), "Capture")
+        self.tabs.addTab(self.analysis_tab, QIcon.fromTheme("system-run", QApplication.style().standardIcon(QStyle.SP_MediaPlay)), "Analysis")
+        self.tabs.addTab(self.results_tab, QIcon.fromTheme("format-justify-fill", QApplication.style().standardIcon(QStyle.SP_FileDialogInfoView)), "Results")
+        self.tabs.addTab(self.options_tab, QIcon.fromTheme("preferences-system", QApplication.style().standardIcon(QStyle.SP_FileDialogDetailedView)), "Options")
+        self.tabs.addTab(self.help_tab, QIcon.fromTheme("help-browser", QApplication.style().standardIcon(QStyle.SP_DialogHelpButton)), "Help") # Added Help tab
+
 
         # Add tabs to main layout
         main_layout.addWidget(self.tabs)
 
         # Status bar
         self.statusBar().showMessage("Ready")
-        
+
         # Apply theme
         self.theme_manager.apply_current_theme()
 
@@ -103,7 +107,7 @@ class MainWindow(QMainWindow):
 
         # Initialize reference video dropdown
         self.setup_tab.refresh_reference_videos()
-        
+
         # Connect tab navigation signals
         self.setup_tab.btn_next_to_capture.clicked.connect(lambda: self.tabs.setCurrentIndex(1))
         self.capture_tab.btn_prev_to_setup.clicked.connect(lambda: self.tabs.setCurrentIndex(0))
@@ -118,7 +122,7 @@ class MainWindow(QMainWindow):
 
         # Update device status indicator in capture tab
         self.capture_tab.populate_devices_and_check_status()
-        
+
         # Apply theme if changed
         self.theme_manager.apply_current_theme()
 
@@ -171,14 +175,14 @@ class MainWindow(QMainWindow):
             logo_path = None
             if hasattr(self, 'options_manager') and self.options_manager:
                 theme_settings = self.options_manager.get_setting("theme")
-                
+
                 # Handle both dictionary and string theme settings
                 if isinstance(theme_settings, dict):
                     logo_path = theme_settings.get("logo_path", "")
                 elif isinstance(theme_settings, str):
                     # If theme_settings is a string, it's just the theme name
                     logo_path = ""
-                
+
             # If not set or doesn't exist, use default
             if not logo_path or not os.path.exists(logo_path):
                 # Try multiple potential logo locations
@@ -188,23 +192,23 @@ class MainWindow(QMainWindow):
                     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
                                "assets", "chroma-logo.png")
                 ]
-                
+
                 for path in possible_paths:
                     if os.path.exists(path):
                         logo_path = path
                         break
-            
+
             # Set the window icon if the logo exists
             if logo_path and os.path.exists(logo_path):
                 from PyQt5.QtGui import QIcon
                 self.setWindowIcon(QIcon(logo_path))
-                
+
                 # Store the logo path for future reference
                 self.logo_path = logo_path
                 logger.info(f"Set application logo: {logo_path}")
             else:
                 logger.warning("Could not find a valid logo file")
-                
+
         except Exception as e:
             logger.error(f"Error setting application logo: {str(e)}")
             import traceback
@@ -230,10 +234,10 @@ class MainWindow(QMainWindow):
         # Call parent close event
         logger.info("Cleanup complete, proceeding with application close")
         super().closeEvent(event)
-        
+
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated before proceeding"""
         # Check each tab's threads
-        for tab in [self.setup_tab, self.capture_tab, self.analysis_tab, self.results_tab]:
+        for tab in [self.setup_tab, self.capture_tab, self.analysis_tab, self.results_tab, self.help_tab]: #Added help_tab
             if hasattr(tab, 'ensure_threads_finished'):
                 tab.ensure_threads_finished()
