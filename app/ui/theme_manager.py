@@ -13,6 +13,20 @@ class ThemeManager:
         self.parent = parent
         self.options_manager = options_manager
         
+    def set_theme(self, theme_name):
+        """Set theme and update settings"""
+        if hasattr(self.options_manager, 'update_setting'):
+            # Update the theme setting
+            if isinstance(self.options_manager.get_setting("theme"), dict):
+                # If theme is stored as a dict, update the selected_theme key
+                self.options_manager.update_setting("theme", "selected_theme", theme_name)
+            else:
+                # If theme is stored as a string, update the whole theme setting
+                self.options_manager.update_setting("theme", None, {"selected_theme": theme_name})
+            
+            # Apply the new theme
+            self.apply_current_theme()
+        
     def apply_current_theme(self):
         """Apply the current theme stored in settings to the application"""
         try:

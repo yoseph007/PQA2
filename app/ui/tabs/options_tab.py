@@ -22,9 +22,6 @@ class OptionsTab(QWidget):
     def _setup_ui(self):
         """Set up the Options tab UI"""
         layout = QVBoxLayout(self)
-        
-        # Populate device list when UI is setup
-        self._populate_device_list()
 
         # Create tabbed interface for different settings categories
         options_tabs = QTabWidget()
@@ -137,6 +134,9 @@ class OptionsTab(QWidget):
         self.btn_auto_detect_formats.clicked.connect(self.auto_detect_formats)
         auto_detect_layout.addWidget(self.btn_auto_detect_formats)
         device_layout.addLayout(auto_detect_layout)
+        
+        # Populate device list after creating the combo box
+        self._populate_device_list()
         
         # Format settings
         format_settings = QFormLayout()

@@ -182,6 +182,21 @@ class OptionsManager(QObject):
     def get_settings(self):
         """Get all settings"""
         return self.settings
+        
+    # Alias for get_settings to maintain compatibility
+    def get_setting(self, category, key=None):
+        """Get a setting value by category and key"""
+        if category not in self.settings:
+            return self.default_settings.get(category, {})
+
+        if key is None:
+            return self.settings[category]
+
+        default_value = None
+        if category in self.default_settings and key in self.default_settings[category]:
+            default_value = self.default_settings[category][key]
+
+        return self.settings[category].get(key, default_value)
 
     def update_setting(self, category, key, value):
         """Update a specific setting"""

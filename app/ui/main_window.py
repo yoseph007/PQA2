@@ -175,6 +175,9 @@ class MainWindow(QMainWindow):
                 # Handle both dictionary and string theme settings
                 if isinstance(theme_settings, dict):
                     logo_path = theme_settings.get("logo_path", "")
+                elif isinstance(theme_settings, str):
+                    # If theme_settings is a string, it's just the theme name
+                    logo_path = ""
                 
             # If not set or doesn't exist, use default
             if not logo_path or not os.path.exists(logo_path):
