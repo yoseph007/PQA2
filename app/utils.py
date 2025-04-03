@@ -61,10 +61,9 @@ def get_ffmpeg_path():
         # Try to find ffplay.exe in PATH  
         ffplay_exe = "ffplay"
     
-    logger.info(f"FFmpeg path: {ffmpeg_exe}")
-    logger.info(f"FFprobe path: {ffprobe_exe}")
-    
-    return (ffmpeg_exe, ffprobe_exe, ffplay_exe)
+    # Check if files exist
+    if not os.path.exists(ffmpeg_exe):
+        logger.warning(f"FFmpeg executable not found at {ffmpeg_exe}")
         # Try to find ffmpeg.exe in PATH
         ffmpeg_exe = "ffmpeg.exe"
     if not os.path.exists(ffprobe_exe):
