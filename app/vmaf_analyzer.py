@@ -486,12 +486,20 @@ class VMAFAnalyzer(QObject):
                 os.chdir(current_dir)
 
                 # Delete the primary capture file if it exists (and if explicitly labeled as a capture)
+                # But only after we've finished using it and only if configured to do so
                 if 'distorted_path' in results:
                     primary_capture = results['distorted_path']
                     try:
-                        if os.path.exists(primary_capture) and "capture" in primary_capture.lower():
+                        # Check if we should delete the capture file - don't delete by default
+                        delete_capture = False
+                        if hasattr(self, 'options_manager') and self.options_manager:
+                            delete_capture = self.options_manager.get_setting("vmaf", "delete_capture_after_analysis", False)
+                        
+                        if delete_capture and os.path.exists(primary_capture) and "capture" in primary_capture.lower():
                             logger.info(f"Deleting primary capture file: {primary_capture}")
                             os.remove(primary_capture)
+                        else:
+                            logger.info(f"Keeping primary capture file: {primary_capture}")
                     except Exception as cleanup_error:
                         logger.warning(f"Could not delete primary capture file: {cleanup_error}")
 

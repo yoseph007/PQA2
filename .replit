@@ -93,3 +93,15 @@ disableInternalPyPIFetch = false
 id = "debug"
 name = "Run VMAF Debug"
 exec = "python vmaf_debug.py -r models/reference_video.mp4 -d models/distorted_video.mp4"
+
+[workflows]
+runButton = "Run VMAF App"
+
+[[workflows.workflow]]
+name = "Run VMAF App"
+author = 40724597
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"

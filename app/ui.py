@@ -21,6 +21,11 @@ from .capture import CaptureManager, CaptureState
 from .bookend_alignment import BookendAlignmentThread
 from .vmaf_analyzer import VMAFAnalysisThread
 from .utils import FileManager, timestamp_string
+
+# Import for theme customization
+import qdarkstyle
+from PyQt5.QtGui import QPalette, QColor
+
 from .options_manager import OptionsManager
 
 logger = logging.getLogger(__name__)
@@ -56,6 +61,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("VMAF Test App")
         self.setGeometry(100, 100, 1200, 800)
         self.setFixedSize(1200, 800)  # Set fixed size to prevent resizing
+        
+        # Set application icon/logo
+        self._set_application_logo()
 
         # Central widget and main layout
         central_widget = QWidget()
@@ -482,13 +490,23 @@ class MainWindow(QMainWindow):
         layout.addLayout(nav_layout)
 
     def _setup_results_tab(self):
-        """Set up the Results tab"""
+        """Set up the Results tab with data grid for historical results"""
         layout = QVBoxLayout(self.results_tab)
 
         # Results summary
         self.lbl_results_summary = QLabel("No VMAF analysis results yet")
         layout.addWidget(self.lbl_results_summary)
 
+        # Create tabs for current result and history
+        results_tabs = QTabWidget()
+        current_tab = QWidget()
+        history_tab = QWidget()
+        results_tabs.addTab(current_tab, "Current Result")
+        results_tabs.addTab(history_tab, "History")
+        
+        # Setup current result tab
+        current_layout = QVBoxLayout(current_tab)
+        
         # VMAF score display
         score_group = QGroupBox("VMAF Scores")
         score_layout = QVBoxLayout()
@@ -506,7 +524,7 @@ class MainWindow(QMainWindow):
         score_layout.addLayout(scores_detail)
 
         score_group.setLayout(score_layout)
-        layout.addWidget(score_group)
+        current_layout.addWidget(score_group)
 
         # Export options
         export_group = QGroupBox("Export Results")
@@ -527,7 +545,7 @@ class MainWindow(QMainWindow):
         export_layout.addLayout(export_buttons)
 
         export_group.setLayout(export_layout)
-        layout.addWidget(export_group)
+        current_layout.addWidget(export_group)
 
         # Results files
         files_group = QGroupBox("Result Files")
@@ -538,9 +556,47 @@ class MainWindow(QMainWindow):
         files_layout.addWidget(self.list_result_files)
 
         files_group.setLayout(files_layout)
-        layout.addWidget(files_group)
+        current_layout.addWidget(files_group)
+        
+        # Setup history tab with data grid
+        history_layout = QVBoxLayout(history_tab)
+        
+        # Create table for results history
+        from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView
+        
+        self.results_table = QTableWidget()
+        self.results_table.setColumnCount(8)
+        self.results_table.setHorizontalHeaderLabels([
+            "Test Name", "Date/Time", "VMAF Score", "PSNR", "SSIM", 
+            "Reference", "Duration", "Actions"
+        ])
+        self.results_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.results_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        # Add controls above table
+        history_controls = QHBoxLayout()
+        self.btn_refresh_history = QPushButton("Refresh History")
+        self.btn_refresh_history.clicked.connect(self.load_results_history)
+        history_controls.addWidget(self.btn_refresh_history)
+        
+        self.btn_delete_selected = QPushButton("Delete Selected")
+        self.btn_delete_selected.clicked.connect(self.delete_selected_results)
+        history_controls.addWidget(self.btn_delete_selected)
+        
+        self.btn_export_selected = QPushButton("Export Selected")
+        self.btn_export_selected.clicked.connect(self.export_selected_results)
+        history_controls.addWidget(self.btn_export_selected)
+        
+        history_controls.addStretch()
+        
+        history_layout.addLayout(history_controls)
+        history_layout.addWidget(self.results_table)
+        
+        # Add results tabs to main layout
+        layout.addWidget(results_tabs)
 
-        # Navigation buttons
+        # Navigation buttons at the bottom
         nav_layout = QHBoxLayout()
         self.btn_prev_to_analysis = QPushButton("Back: Analysis")
         self.btn_prev_to_analysis.clicked.connect(lambda: self.tabs.setCurrentIndex(2))
@@ -1342,6 +1398,9 @@ class MainWindow(QMainWindow):
         psnr = results.get('psnr')
         ssim = results.get('ssim')
 
+        # Ensure progress bar shows 100% when complete
+        self.pb_vmaf_progress.setValue(100)
+        
         # Re-enable analysis button
         self.btn_run_combined_analysis.setEnabled(True)
         self.vmaf_running = False # Reset vmaf_running flag
@@ -1665,6 +1724,9 @@ class MainWindow(QMainWindow):
         # Load current settings
         settings = self.options_manager.settings
 
+        # Create theme customization group
+        theme_group = self._create_theme_options_group(settings)
+        
         # Create section groupboxes
         bookend_group = self._create_bookend_options_group(settings)
         vmaf_group = self._create_vmaf_options_group(settings)
@@ -1672,6 +1734,7 @@ class MainWindow(QMainWindow):
         paths_group = self._create_paths_options_group(settings)
 
         # Add sections to layout
+        scroll_layout.addWidget(theme_group)
         scroll_layout.addWidget(bookend_group)
         scroll_layout.addWidget(vmaf_group)
         scroll_layout.addWidget(capture_group)
@@ -1695,6 +1758,148 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.btn_reset_options)
         button_layout.addWidget(self.btn_save_options)
         layout.addLayout(button_layout)
+        
+    def _create_theme_options_group(self, settings):
+        """Create the theme options group"""
+        theme_group = QGroupBox("Theme Settings")
+        theme_layout = QVBoxLayout()
+        
+        # Theme selection
+        theme_row = QHBoxLayout()
+        theme_row.addWidget(QLabel("Application Theme:"))
+        
+        self.combo_theme = QComboBox()
+        self.combo_theme.addItems(["Light", "Dark", "System", "Custom"])
+        
+        # Get current theme
+        current_theme = settings.get("theme", {}).get("selected_theme", "System")
+        index = self.combo_theme.findText(current_theme)
+        if index >= 0:
+            self.combo_theme.setCurrentIndex(index)
+            
+        self.combo_theme.currentTextChanged.connect(self._update_theme_preview)
+        theme_row.addWidget(self.combo_theme)
+        
+        # Add apply theme button
+        self.btn_apply_theme = QPushButton("Apply Theme")
+        self.btn_apply_theme.clicked.connect(self._apply_selected_theme)
+        theme_row.addWidget(self.btn_apply_theme)
+        
+        theme_row.addStretch()
+        theme_layout.addLayout(theme_row)
+        
+        # Theme preview
+        self.theme_preview = QFrame()
+        self.theme_preview.setMinimumHeight(100)
+        self.theme_preview.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
+        preview_layout = QVBoxLayout(self.theme_preview)
+        
+        # Add some sample widgets to the preview
+        preview_label = QLabel("Theme Preview")
+        preview_label.setAlignment(Qt.AlignCenter)
+        preview_layout.addWidget(preview_label)
+        
+        preview_buttons = QHBoxLayout()
+        preview_buttons.addWidget(QPushButton("Normal Button"))
+        
+        check_box = QCheckBox("Checkbox")
+        check_box.setChecked(True)
+        preview_buttons.addWidget(check_box)
+        
+        combo = QComboBox()
+        combo.addItems(["Item 1", "Item 2", "Item 3"])
+        preview_buttons.addWidget(combo)
+        
+        preview_layout.addLayout(preview_buttons)
+        
+        theme_layout.addWidget(self.theme_preview)
+        
+        # Custom theme options
+        self.custom_theme_group = QGroupBox("Custom Theme Options")
+        self.custom_theme_group.setVisible(self.combo_theme.currentText() == "Custom")
+        
+        custom_layout = QFormLayout(self.custom_theme_group)
+        
+        # Background color
+        bg_layout = QHBoxLayout()
+        self.bg_color_button = QPushButton()
+        self.bg_color_button.setFixedSize(24, 24)
+        bg_color = settings.get("theme", {}).get("bg_color", "#2D2D30")
+        self.bg_color_button.setStyleSheet(f"background-color: {bg_color}; border: 1px solid #888;")
+        self.bg_color_button.clicked.connect(lambda: self._pick_color("bg_color"))
+        bg_layout.addWidget(self.bg_color_button)
+        bg_layout.addWidget(QLabel(bg_color))
+        bg_layout.addStretch()
+        custom_layout.addRow("Background Color:", bg_layout)
+        
+        # Text color
+        text_layout = QHBoxLayout()
+        self.text_color_button = QPushButton()
+        self.text_color_button.setFixedSize(24, 24)
+        text_color = settings.get("theme", {}).get("text_color", "#FFFFFF")
+        self.text_color_button.setStyleSheet(f"background-color: {text_color}; border: 1px solid #888;")
+        self.text_color_button.clicked.connect(lambda: self._pick_color("text_color"))
+        text_layout.addWidget(self.text_color_button)
+        text_layout.addWidget(QLabel(text_color))
+        text_layout.addStretch()
+        custom_layout.addRow("Text Color:", text_layout)
+        
+        # Accent color
+        accent_layout = QHBoxLayout()
+        self.accent_color_button = QPushButton()
+        self.accent_color_button.setFixedSize(24, 24)
+        accent_color = settings.get("theme", {}).get("accent_color", "#007ACC")
+        self.accent_color_button.setStyleSheet(f"background-color: {accent_color}; border: 1px solid #888;")
+        self.accent_color_button.clicked.connect(lambda: self._pick_color("accent_color"))
+        accent_layout.addWidget(self.accent_color_button)
+        accent_layout.addWidget(QLabel(accent_color))
+        accent_layout.addStretch()
+        custom_layout.addRow("Accent Color:", accent_layout)
+        
+        theme_layout.addWidget(self.custom_theme_group)
+        
+        # Logo section
+        logo_group = QGroupBox("Application Logo")
+        logo_layout = QVBoxLayout(logo_group)
+        
+        # Logo preview
+        self.logo_label = QLabel()
+        self.logo_label.setAlignment(Qt.AlignCenter)
+        logo_path = settings.get("theme", {}).get("logo_path", "")
+        
+        if logo_path and os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            scaled_pixmap = pixmap.scaled(200, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.logo_label.setPixmap(scaled_pixmap)
+        else:
+            # Load default logo from assets
+            default_logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                                     "attached_assets", "chroma-logo.png")
+            if os.path.exists(default_logo):
+                pixmap = QPixmap(default_logo)
+                scaled_pixmap = pixmap.scaled(200, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.logo_label.setPixmap(scaled_pixmap)
+            else:
+                self.logo_label.setText("Logo not found")
+        
+        logo_layout.addWidget(self.logo_label)
+        
+        # Logo controls
+        logo_buttons = QHBoxLayout()
+        self.btn_change_logo = QPushButton("Change Logo")
+        self.btn_change_logo.clicked.connect(self._change_logo)
+        logo_buttons.addWidget(self.btn_change_logo)
+        
+        self.btn_reset_logo = QPushButton("Reset to Default")
+        self.btn_reset_logo.clicked.connect(self._reset_logo)
+        logo_buttons.addWidget(self.btn_reset_logo)
+        
+        logo_layout.addLayout(logo_buttons)
+        
+        theme_layout.addWidget(logo_group)
+        
+        theme_group.setLayout(theme_layout)
+        return theme_group
 
     def _create_bookend_options_group(self, settings):
         """Create the bookend options group with improved clarity"""
@@ -2616,3 +2821,627 @@ class MainWindow(QMainWindow):
                     logger.warning(f"{thread_name} thread didn't respond to quit - forcing termination")
                     thread.terminate()
                     thread.wait(1000)
+
+    def load_results_history(self):
+        """Load historical test results into the data grid"""
+        try:
+            # Clear current table
+            self.results_table.setRowCount(0)
+            
+            # Get output directory
+            output_dir = self.lbl_output_dir.text()
+            if output_dir == "Default output directory" and hasattr(self, 'file_manager'):
+                output_dir = self.file_manager.get_default_base_dir()
+            
+            if not os.path.exists(output_dir):
+                logger.warning(f"Output directory does not exist: {output_dir}")
+                return
+                
+            # Find all test directories
+            test_dirs = []
+            for item in os.listdir(output_dir):
+                item_path = os.path.join(output_dir, item)
+                if os.path.isdir(item_path) and item.startswith("Test_"):
+                    test_dirs.append(item_path)
+            
+            # Sort by most recent
+            test_dirs.sort(key=os.path.getmtime, reverse=True)
+            
+            # Process each test directory
+            row = 0
+            for test_dir in test_dirs:
+                # Look for VMAF JSON result files
+                json_files = [f for f in os.listdir(test_dir) if f.endswith("_vmaf.json")]
+                
+                for json_file in json_files:
+                    try:
+                        json_path = os.path.join(test_dir, json_file)
+                        
+                        # Extract test name and date
+                        dir_name = os.path.basename(test_dir)
+                        parts = dir_name.split("_")
+                        
+                        # Default values
+                        test_name = "Unknown"
+                        timestamp = ""
+                        
+                        # Try to parse test name and timestamp
+                        if len(parts) >= 3:
+                            test_name = parts[0] + "_" + parts[1]
+                            date_str = "_".join(parts[2:])
+                            try:
+                                dt = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+                                timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+                            except:
+                                timestamp = date_str
+                        
+                        # Get data from JSON file
+                        with open(json_path, 'r') as f:
+                            data = json.load(f)
+                            
+                        # Extract scores
+                        vmaf_score = None
+                        psnr_score = None
+                        ssim_score = None
+                        duration = None
+                        
+                        # Try to get from pooled metrics first
+                        if "pooled_metrics" in data:
+                            pool = data["pooled_metrics"]
+                            if "vmaf" in pool:
+                                vmaf_score = pool["vmaf"]["mean"]
+                            if "psnr" in pool or "psnr_y" in pool:
+                                psnr_score = pool.get("psnr", {}).get("mean", pool.get("psnr_y", {}).get("mean"))
+                            if "ssim" in pool or "ssim_y" in pool:
+                                ssim_score = pool.get("ssim", {}).get("mean", pool.get("ssim_y", {}).get("mean"))
+                        
+                        # Look in frames if not found in pooled metrics
+                        if "frames" in data and (vmaf_score is None or psnr_score is None or ssim_score is None):
+                            frames = data["frames"]
+                            if frames:
+                                # Get the metrics from the first frame as fallback
+                                metrics = frames[0].get("metrics", {})
+                                if vmaf_score is None and "vmaf" in metrics:
+                                    vmaf_score = metrics["vmaf"]
+                                if psnr_score is None and ("psnr" in metrics or "psnr_y" in metrics):
+                                    psnr_score = metrics.get("psnr", metrics.get("psnr_y"))
+                                if ssim_score is None and ("ssim" in metrics or "ssim_y" in metrics):
+                                    ssim_score = metrics.get("ssim", metrics.get("ssim_y"))
+                                
+                                # Estimate duration from frame count
+                                duration = len(frames) / 30.0  # Assuming 30fps
+                        
+                        # Figure out reference name
+                        reference_name = "Unknown"
+                        for f in os.listdir(test_dir):
+                            if "reference" in f.lower() or "ref" in f.lower():
+                                reference_name = f
+                                break
+                        
+                        # Add row to table
+                        self.results_table.insertRow(row)
+                        
+                        # Add test name
+                        self.results_table.setItem(row, 0, QTableWidgetItem(test_name))
+                        
+                        # Add timestamp
+                        self.results_table.setItem(row, 1, QTableWidgetItem(timestamp))
+                        
+                        # Add VMAF score
+                        vmaf_str = f"{vmaf_score:.2f}" if vmaf_score is not None else "N/A"
+                        self.results_table.setItem(row, 2, QTableWidgetItem(vmaf_str))
+                        
+                        # Add PSNR score
+                        psnr_str = f"{psnr_score:.2f}" if psnr_score is not None else "N/A"
+                        self.results_table.setItem(row, 3, QTableWidgetItem(psnr_str))
+                        
+                        # Add SSIM score
+                        ssim_str = f"{ssim_score:.4f}" if ssim_score is not None else "N/A"
+                        self.results_table.setItem(row, 4, QTableWidgetItem(ssim_str))
+                        
+                        # Add reference name
+                        self.results_table.setItem(row, 5, QTableWidgetItem(reference_name))
+                        
+                        # Add duration
+                        duration_str = f"{duration:.2f}s" if duration is not None else "N/A"
+                        self.results_table.setItem(row, 6, QTableWidgetItem(duration_str))
+                        
+                        # Create action buttons
+                        actions_widget = QWidget()
+                        actions_layout = QHBoxLayout(actions_widget)
+                        actions_layout.setContentsMargins(0, 0, 0, 0)
+                        
+                        # Add buttons for view/export/delete
+                        btn_view = QPushButton("View")
+                        btn_view.setProperty("row", row)
+                        btn_view.setProperty("dir", test_dir)
+                        btn_view.clicked.connect(self._view_result)
+                        actions_layout.addWidget(btn_view)
+                        
+                        btn_export = QPushButton("Export")
+                        btn_export.setProperty("row", row)
+                        btn_export.setProperty("dir", test_dir)
+                        btn_export.clicked.connect(self._export_result)
+                        actions_layout.addWidget(btn_export)
+                        
+                        btn_delete = QPushButton("Delete")
+                        btn_delete.setProperty("row", row)
+                        btn_delete.setProperty("dir", test_dir)
+                        btn_delete.clicked.connect(self._delete_result)
+                        actions_layout.addWidget(btn_delete)
+                        
+                        self.results_table.setCellWidget(row, 7, actions_widget)
+                        
+                        # Store metadata in the row
+                        for col in range(7):
+                            item = self.results_table.item(row, col)
+                            if item:
+                                item.setData(Qt.UserRole, {
+                                    "test_dir": test_dir,
+                                    "json_path": json_path,
+                                    "test_name": test_name,
+                                    "timestamp": timestamp
+                                })
+                        
+                        row += 1
+                    except Exception as e:
+                        logger.error(f"Error processing result file {json_file}: {str(e)}")
+            
+            # Update row count label
+            if row > 0:
+                self.results_table.setToolTip(f"Found {row} historical test results")
+            else:
+                self.results_table.setToolTip("No historical test results found")
+                
+        except Exception as e:
+            logger.error(f"Error loading results history: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+    
+    def _view_result(self):
+        """View a historical test result"""
+        sender = self.sender()
+        row = sender.property("row")
+        test_dir = sender.property("dir")
+        
+        try:
+            # Show the results in a dialog
+            from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QScrollArea
+            
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Test Result Details")
+            dialog.resize(600, 400)
+            
+            layout = QVBoxLayout(dialog)
+            
+            # Create a scroll area for content
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            
+            content_widget = QWidget()
+            content_layout = QVBoxLayout(content_widget)
+            
+            # Add test name and timestamp
+            item = self.results_table.item(row, 0)
+            test_name = item.text() if item else "Unknown"
+            
+            item = self.results_table.item(row, 1)
+            timestamp = item.text() if item else "Unknown"
+            
+            content_layout.addWidget(QLabel(f"<h2>{test_name} - {timestamp}</h2>"))
+            
+            # Add VMAF, PSNR, SSIM scores
+            score_layout = QVBoxLayout()
+            
+            item = self.results_table.item(row, 2)
+            vmaf_score = item.text() if item else "N/A"
+            vmaf_label = QLabel(f"<b>VMAF Score:</b> {vmaf_score}")
+            vmaf_label.setStyleSheet("font-size: 16px;")
+            score_layout.addWidget(vmaf_label)
+            
+            item = self.results_table.item(row, 3)
+            psnr_score = item.text() if item else "N/A"
+            score_layout.addWidget(QLabel(f"<b>PSNR:</b> {psnr_score}"))
+            
+            item = self.results_table.item(row, 4)
+            ssim_score = item.text() if item else "N/A"
+            score_layout.addWidget(QLabel(f"<b>SSIM:</b> {ssim_score}"))
+            
+            content_layout.addLayout(score_layout)
+            
+            # Add list of files in the test directory
+            content_layout.addWidget(QLabel("<h3>Result Files:</h3>"))
+            
+            file_list = QListWidget()
+            for f in sorted(os.listdir(test_dir)):
+                file_path = os.path.join(test_dir, f)
+                if os.path.isfile(file_path):
+                    item = QListWidgetItem(f)
+                    item.setData(Qt.UserRole, file_path)
+                    file_list.addItem(item)
+            
+            file_list.itemDoubleClicked.connect(self.open_result_file)
+            file_list.setMinimumHeight(200)
+            content_layout.addWidget(file_list)
+            
+            # Add buttons at the bottom
+            button_layout = QHBoxLayout()
+            
+            btn_export = QPushButton("Export Report")
+            btn_export.clicked.connect(lambda: self._export_result(test_dir=test_dir))
+            button_layout.addWidget(btn_export)
+            
+            btn_close = QPushButton("Close")
+            btn_close.clicked.connect(dialog.accept)
+            button_layout.addWidget(btn_close)
+            
+            # Set content widget in scroll area
+            scroll.setWidget(content_widget)
+            layout.addWidget(scroll)
+            layout.addLayout(button_layout)
+            
+            dialog.exec_()
+            
+        except Exception as e:
+            logger.error(f"Error viewing result: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+    
+    def _export_result(self, test_dir=None):
+        """Export a test result"""
+        if test_dir is None:
+            sender = self.sender()
+            test_dir = sender.property("dir")
+        
+        try:
+            # Create export dialog
+            from PyQt5.QtWidgets import QFileDialog
+            
+            # Get default export filename
+            basename = os.path.basename(test_dir)
+            export_pdf = QFileDialog.getSaveFileName(
+                self,
+                "Export Result as PDF",
+                os.path.join(os.path.expanduser("~"), f"{basename}_report.pdf"),
+                "PDF Files (*.pdf)"
+            )[0]
+            
+            if export_pdf:
+                # For now just show a placeholder message
+                QMessageBox.information(
+                    self,
+                    "Export to PDF",
+                    f"Result would be exported to: {export_pdf}\n\nThis feature will be fully implemented in the future."
+                )
+                
+        except Exception as e:
+            logger.error(f"Error exporting result: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+    
+    def _delete_result(self):
+        """Delete a test result directory"""
+        sender = self.sender()
+        row = sender.property("row")
+        test_dir = sender.property("dir")
+        
+        try:
+            # Confirm deletion
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setText(f"Are you sure you want to delete this test result?\n\nDirectory: {test_dir}")
+            msg_box.setWindowTitle("Confirm Deletion")
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg_box.setDefaultButton(QMessageBox.No)
+            
+            if msg_box.exec_() == QMessageBox.Yes:
+                import shutil
+                
+                # Delete the directory
+                shutil.rmtree(test_dir)
+                
+                # Remove row from table
+                self.results_table.removeRow(row)
+                
+                QMessageBox.information(
+                    self,
+                    "Deletion Complete",
+                    f"Test result has been deleted."
+                )
+                
+        except Exception as e:
+            logger.error(f"Error deleting result: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            QMessageBox.critical(
+                self,
+                "Deletion Failed",
+                f"Failed to delete test result: {str(e)}"
+            )
+    
+    def delete_selected_results(self):
+        """Delete selected results from the history table"""
+        try:
+            # Get selected rows
+            selected_rows = set()
+            for item in self.results_table.selectedItems():
+                selected_rows.add(item.row())
+            
+            if not selected_rows:
+                QMessageBox.information(
+                    self,
+                    "No Selection",
+                    "Please select at least one test result to delete."
+                )
+                return
+            
+            # Confirm deletion
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setText(f"Are you sure you want to delete {len(selected_rows)} selected test results?")
+            msg_box.setWindowTitle("Confirm Deletion")
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg_box.setDefaultButton(QMessageBox.No)
+            
+            if msg_box.exec_() == QMessageBox.Yes:
+                # Delete from bottom to top to avoid index issues
+                for row in sorted(selected_rows, reverse=True):
+                    try:
+                        # Get directory
+                        item = self.results_table.item(row, 0)
+                        if item:
+                            data = item.data(Qt.UserRole)
+                            if data and "test_dir" in data:
+                                test_dir = data["test_dir"]
+                                
+                                # Delete directory
+                                import shutil
+                                shutil.rmtree(test_dir)
+                                
+                                # Remove row
+                                self.results_table.removeRow(row)
+                    except Exception as e:
+                        logger.error(f"Error deleting row {row}: {str(e)}")
+                
+                QMessageBox.information(
+                    self,
+                    "Deletion Complete",
+                    f"Selected test results have been deleted."
+                )
+        except Exception as e:
+            logger.error(f"Error deleting selected results: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            QMessageBox.critical(
+                self,
+                "Deletion Failed",
+                f"Failed to delete selected results: {str(e)}"
+            )
+    
+    def export_selected_results(self):
+        """Export selected results from the history table"""
+        try:
+            # Get selected rows
+            selected_rows = set()
+            for item in self.results_table.selectedItems():
+                selected_rows.add(item.row())
+            
+            if not selected_rows:
+                QMessageBox.information(
+                    self,
+                    "No Selection",
+                    "Please select at least one test result to export."
+                )
+                return
+            
+            # For now just show a placeholder message
+            QMessageBox.information(
+                self,
+                "Export Selected Results",
+                f"Would export {len(selected_rows)} selected results.\n\nThis feature will be fully implemented in the future."
+            )
+        except Exception as e:
+            logger.error(f"Error exporting selected results: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+
+    def _update_theme_preview(self):
+        """Update the theme preview based on selected theme"""
+        theme = self.combo_theme.currentText()
+        
+        # Show/hide custom theme options
+        self.custom_theme_group.setVisible(theme == "Custom")
+        
+        # Update preview style
+        if theme == "Light":
+            self.theme_preview.setStyleSheet("")
+            self.theme_preview.setPalette(self.style().standardPalette())
+        elif theme == "Dark":
+            self.theme_preview.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+        elif theme == "System":
+            # Use system theme (default)
+            self.theme_preview.setStyleSheet("")
+            self.theme_preview.setPalette(self.style().standardPalette())
+        elif theme == "Custom":
+            # Use custom colors
+            palette = QPalette()
+            bg_color = self.bg_color_button.styleSheet().split("background-color:")[1].split(";")[0].strip()
+            text_color = self.text_color_button.styleSheet().split("background-color:")[1].split(";")[0].strip()
+            accent_color = self.accent_color_button.styleSheet().split("background-color:")[1].split(";")[0].strip()
+            
+            palette.setColor(QPalette.Window, QColor(bg_color))
+            palette.setColor(QPalette.WindowText, QColor(text_color))
+            palette.setColor(QPalette.Base, QColor(bg_color).lighter(110))
+            palette.setColor(QPalette.AlternateBase, QColor(bg_color))
+            palette.setColor(QPalette.ToolTipBase, QColor(text_color))
+            palette.setColor(QPalette.ToolTipText, QColor(text_color))
+            palette.setColor(QPalette.Text, QColor(text_color))
+            palette.setColor(QPalette.Button, QColor(bg_color).lighter(110))
+            palette.setColor(QPalette.ButtonText, QColor(text_color))
+            palette.setColor(QPalette.BrightText, QColor(text_color).lighter(150))
+            palette.setColor(QPalette.Highlight, QColor(accent_color))
+            palette.setColor(QPalette.HighlightedText, QColor(text_color).lighter(150))
+            
+            self.theme_preview.setPalette(palette)
+    
+    def _apply_selected_theme(self):
+        """Apply the selected theme to the entire application"""
+        theme = self.combo_theme.currentText()
+        
+        # Store the selection
+        if hasattr(self, 'options_manager') and self.options_manager:
+            theme_settings = self.options_manager.get_setting("theme", {})
+            theme_settings["selected_theme"] = theme
+            
+            # Save custom theme colors if applicable
+            if theme == "Custom":
+                bg_color = self.bg_color_button.styleSheet().split("background-color:")[1].split(";")[0].strip()
+                text_color = self.text_color_button.styleSheet().split("background-color:")[1].split(";")[0].strip()
+                accent_color = self.accent_color_button.styleSheet().split("background-color:")[1].split(";")[0].strip()
+                
+                theme_settings["bg_color"] = bg_color
+                theme_settings["text_color"] = text_color
+                theme_settings["accent_color"] = accent_color
+            
+            self.options_manager.set_setting("theme", theme_settings)
+            self.options_manager.save_settings()
+        
+        # Apply theme
+        app = QApplication.instance()
+        if app:
+            if theme == "Light":
+                app.setStyleSheet("")
+                app.setPalette(self.style().standardPalette())
+            elif theme == "Dark":
+                app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+            elif theme == "System":
+                # Use system theme (default)
+                app.setStyleSheet("")
+                app.setPalette(self.style().standardPalette())
+            elif theme == "Custom":
+                # Use custom colors
+                palette = QPalette()
+                bg_color = self.bg_color_button.styleSheet().split("background-color:")[1].split(";")[0].strip()
+                text_color = self.text_color_button.styleSheet().split("background-color:")[1].split(";")[0].strip()
+                accent_color = self.accent_color_button.styleSheet().split("background-color:")[1].split(";")[0].strip()
+                
+                palette.setColor(QPalette.Window, QColor(bg_color))
+                palette.setColor(QPalette.WindowText, QColor(text_color))
+                palette.setColor(QPalette.Base, QColor(bg_color).lighter(110))
+                palette.setColor(QPalette.AlternateBase, QColor(bg_color))
+                palette.setColor(QPalette.ToolTipBase, QColor(text_color))
+                palette.setColor(QPalette.ToolTipText, QColor(text_color))
+                palette.setColor(QPalette.Text, QColor(text_color))
+                palette.setColor(QPalette.Button, QColor(bg_color).lighter(110))
+                palette.setColor(QPalette.ButtonText, QColor(text_color))
+                palette.setColor(QPalette.BrightText, QColor(text_color).lighter(150))
+                palette.setColor(QPalette.Highlight, QColor(accent_color))
+                palette.setColor(QPalette.HighlightedText, QColor(text_color).lighter(150))
+                
+                app.setPalette(palette)
+    
+    def _pick_color(self, color_type):
+        """Open color picker dialog for custom theme colors"""
+        from PyQt5.QtWidgets import QColorDialog
+        
+        # Get current color
+        sender = self.sender()
+        current_color = sender.styleSheet().split("background-color:")[1].split(";")[0].strip()
+        
+        # Open color dialog
+        color = QColorDialog.getColor(QColor(current_color), self, f"Select {color_type.replace('_', ' ').title()}")
+        
+        if color.isValid():
+            # Update button color
+            sender.setStyleSheet(f"background-color: {color.name()}; border: 1px solid #888;")
+            
+            # Update preview
+            self._update_theme_preview()
+    
+    def _change_logo(self):
+        """Change the application logo"""
+        from PyQt5.QtWidgets import QFileDialog
+        
+        # Open file dialog
+        logo_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Logo Image",
+            "",
+            "Image Files (*.png *.jpg *.jpeg *.gif *.svg)"
+        )
+        
+        if logo_path:
+            # Load and display the logo
+            pixmap = QPixmap(logo_path)
+            scaled_pixmap = pixmap.scaled(200, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.logo_label.setPixmap(scaled_pixmap)
+            
+            # Save the logo path
+            if hasattr(self, 'options_manager') and self.options_manager:
+                theme_settings = self.options_manager.get_setting("theme", {})
+                theme_settings["logo_path"] = logo_path
+                self.options_manager.set_setting("theme", theme_settings)
+                self.options_manager.save_settings()
+    
+    def _reset_logo(self):
+        """Reset to default logo"""
+        # Load default logo
+        default_logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                                 "attached_assets", "chroma-logo.png")
+        
+        if os.path.exists(default_logo):
+            pixmap = QPixmap(default_logo)
+            scaled_pixmap = pixmap.scaled(200, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.logo_label.setPixmap(scaled_pixmap)
+            
+            # Save the default logo path
+            if hasattr(self, 'options_manager') and self.options_manager:
+                theme_settings = self.options_manager.get_setting("theme", {})
+                theme_settings["logo_path"] = default_logo
+                self.options_manager.set_setting("theme", theme_settings)
+                self.options_manager.save_settings()
+        else:
+            self.logo_label.setText("Default logo not found")
+
+
+    def _set_application_logo(self):
+        """Set the application logo/icon"""
+        try:
+            # Check if logo path is set in options
+            logo_path = None
+            if hasattr(self, 'options_manager') and self.options_manager:
+                theme_settings = self.options_manager.get_setting("theme", {})
+                logo_path = theme_settings.get("logo_path", "")
+            
+            # If not set or doesn't exist, use default
+            if not logo_path or not os.path.exists(logo_path):
+                # Use the Chroma logo from assets
+                logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                                      "attached_assets", "chroma-logo.png")
+            
+            # Set the window icon if the logo exists
+            if os.path.exists(logo_path):
+                from PyQt5.QtGui import QIcon
+                self.setWindowIcon(QIcon(logo_path))
+                
+                # Also add the logo to the title bar
+                title_layout = QHBoxLayout()
+                logo_label = QLabel()
+                pixmap = QPixmap(logo_path)
+                scaled_pixmap = pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                logo_label.setPixmap(scaled_pixmap)
+                title_layout.addWidget(logo_label)
+                title_layout.addWidget(QLabel("VMAF Test App"))
+                title_layout.addStretch()
+                
+                # Set a title bar widget to show logo
+                title_widget = QWidget()
+                title_widget.setLayout(title_layout)
+                
+                # Store the logo path for future reference
+                self.logo_path = logo_path
+        except Exception as e:
+            logger.error(f"Error setting application logo: {str(e)}")

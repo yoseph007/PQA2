@@ -55,6 +55,14 @@ def main():
         # Create main window and connect to managers
         window = MainWindow(capture_manager, file_manager, options_manager)
         window.headless_mode = headless  # Pass headless mode flag to window
+        
+        # Apply dark theme by default for better appearance
+        try:
+            import qdarkstyle
+            app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+        except ImportError:
+            logger.warning("QDarkStyle not installed, using default theme")
+            
         window.show()
         
         # Start application loop
