@@ -339,7 +339,7 @@ class HelpTab(QWidget):
         <body>
             <h1>Installation & Setup Guide</h1>
             
-            <p>This guide provides detailed instructions for installing and configuring the VMAF Test App.</p>
+            <p>This guide provides instructions for installing and configuring the VMAF Test App.</p>
             
             <h2>System Requirements</h2>
             
@@ -355,81 +355,37 @@ class HelpTab(QWidget):
                 
                 <h3>Software Requirements</h3>
                 <ul>
-                    <li><b>Operating System:</b> Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+)</li>
-                    <li><b>Python:</b> Version 3.8 or higher</li>
-                    <li><b>FFmpeg:</b> Version 4.4 or higher with libvmaf support</li>
+                    <li><b>Operating System:</b> Windows 10/11</li>
                     <li><b>BlackMagic Desktop Video:</b> Latest version compatible with your capture device</li>
-                    <li><b>Additional dependencies:</b> See below for installation instructions</li>
                 </ul>
             </div>
             
-            <h2>Installation Steps</h2>
+            <h2>Installation</h2>
             
             <div class="section">
-                <h3>1. Install Python</h3>
-                <p>Download and install Python 3.8 or higher from <a href="https://www.python.org/downloads/">python.org</a>.</p>
-                <p>Make sure to select "Add Python to PATH" during installation.</p>
+                <h3>1. Install the Application</h3>
+                <p>Run the installer package and follow the on-screen instructions to complete the installation.</p>
+                <p>The application is packaged as a single file installer that includes all necessary components, including FFmpeg.</p>
                 
                 <h3>2. Install BlackMagic Desktop Video</h3>
-                <p>Download the latest version of BlackMagic Desktop Video for your operating system from <a href="https://www.blackmagicdesign.com/support">BlackMagic Design Support</a>.</p>
+                <p>Download the latest version of BlackMagic Desktop Video for Windows from <a href="https://www.blackmagicdesign.com/support">BlackMagic Design Support</a>.</p>
                 <p>Follow the installation instructions provided by BlackMagic Design.</p>
-                
-                <h3>3. Install FFmpeg</h3>
-                <p>FFmpeg must be installed with libvmaf support for VMAF analysis.</p>
-                
-                <h4>Windows:</h4>
-                <p>Download a pre-built version with libvmaf from <a href="https://www.gyan.dev/ffmpeg/builds/">gyan.dev</a> (use the "full" version).</p>
-                <p>Extract the archive and add the bin folder to your system PATH.</p>
-                
-                <h4>macOS:</h4>
-                <div class="code">
-                brew install ffmpeg --with-libvmaf
-                </div>
-                
-                <h4>Linux:</h4>
-                <div class="code">
-                sudo apt update
-                sudo apt install ffmpeg libvmaf-dev
-                </div>
-                
-                <h3>4. Download and Install VMAF Test App</h3>
-                <p>Clone the repository or download the application package:</p>
-                <div class="code">
-                git clone https://github.com/your-org/vmaf-test-app.git
-                cd vmaf-test-app
-                </div>
-                
-                <p>Create a virtual environment and install dependencies:</p>
-                <div class="code">
-                python -m venv .venv
-                # On Windows:
-                .venv\\Scripts\\activate
-                # On macOS/Linux:
-                source .venv/bin/activate
-                
-                pip install -r requirements.txt
-                </div>
             </div>
             
             <h2>Configuration</h2>
             
             <div class="section">
                 <h3>1. First-time Setup</h3>
-                <p>Run the application for the first time:</p>
-                <div class="code">
-                python main.py
-                </div>
-                
-                <p>The application will create default configuration files in your user directory.</p>
+                <p>When you run the application for the first time, it will create a configuration folder and settings file automatically.</p>
+                <p>No additional setup is required as FFmpeg is included in the <code>/ffmpeg_bin/</code> folder of the application.</p>
                 
                 <h3>2. Configure Application Settings</h3>
                 <p>In the application, navigate to the <b>Options</b> tab to configure:</p>
                 <ul>
                     <li>Reference video directory</li>
                     <li>Output directory for test results</li>
-                    <li>FFmpeg paths (if not in system PATH)</li>
-                    <li>VMAF models directory</li>
                     <li>Capture device settings</li>
+                    <li>Branding and UI preferences</li>
                 </ul>
                 
                 <h3>3. Test Your Setup</h3>
@@ -447,24 +403,8 @@ class HelpTab(QWidget):
                         <li>Make sure the device is properly connected and powered</li>
                         <li>Verify BlackMagic Desktop Video is installed correctly</li>
                         <li>Check that you have the latest drivers for your device</li>
-                        <li>On Windows, try running the application as Administrator</li>
+                        <li>Try running the application as Administrator</li>
                     </ul>
-                </div>
-            </div>
-            
-            <h2>Updating</h2>
-            
-            <div class="section">
-                <p>To update the application to the latest version:</p>
-                <div class="code">
-                # Navigate to the application directory
-                cd path/to/vmaf-test-app
-                
-                # Update the repository
-                git pull
-                
-                # Update dependencies
-                pip install -r requirements.txt --upgrade
                 </div>
             </div>
             

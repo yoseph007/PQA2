@@ -488,44 +488,104 @@ class OptionsManager(QObject):
             return {"formats": [], "format_map": {}}
             
     def get_device_formats(self, device):
-        """Get available formats for the specified device - adapter method"""
+        """Get available formats for the specified device directly from ffmpeg output"""
         try:
             logger.info(f"Getting formats for device: {device}")
             
-            # Try to use decklink format detection first
-            formats_data = self.get_decklink_formats(device)
+            # Use DirectShow to get actual device formats on Windows
+            cmd = ["ffmpeg", "-hide_banner", "-f", "dshow", "-list_options", "true", "-i", f"video=Decklink Video Capture"]
+            logger.info(f"Getting formats using dshow command: {' '.join(cmd)}")
             
-            # Extract just the format list
-            formats = formats_data.get("formats", [])
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                stdout, stderr = process.communicate(timeout=10)  # 10 second timeout
+                combined_output = stdout + stderr
+            except subprocess.TimeoutExpired:
+                process.kill()
+                logger.warning("Timeout getting dshow formats")
+                combined_output = ""
+            
+            # Parse the output to extract formats
+            formats = []
+            format_id = 1
+            
+            # Parse format using regex pattern that matches ffmpeg output format
+            format_pattern = r'pixel_format=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
+            
+            # Also look for v210 codec formats
+            vcodec_pattern = r'vcodec=(\w+)\s+min\s+s=(\d+x\d+)\s+fps=(\d+(?:\.\d+)?)'
+            
+            for line in combined_output.splitlines():
+                # Try pixel_format pattern first
+                match = re.search(format_pattern, line)
+                if match:
+                    pixel_format, resolution, fps = match.groups()
+                    fps_float = float(fps)
+                    
+                    # Format the rate nicely
+                    if abs(fps_float - 23.976) < 0.01:
+                        nice_rate = 23.98
+                    elif abs(fps_float - 29.97) < 0.01:
+                        nice_rate = 29.97
+                    elif abs(fps_float - 59.94) < 0.01:
+                        nice_rate = 59.94
+                    else:
+                        nice_rate = round(fps_float, 2)
+                    
+                    format_item = {
+                        "id": f"fmt{format_id}",
+                        "resolution": resolution,
+                        "frame_rate": nice_rate,
+                        "pixel_format": pixel_format,
+                        "display": f"{resolution} @ {nice_rate} fps ({pixel_format})"
+                    }
+                    formats.append(format_item)
+                    format_id += 1
+                    continue
+                
+                # Try vcodec pattern if pixel_format didn't match
+                match = re.search(vcodec_pattern, line)
+                if match:
+                    vcodec, resolution, fps = match.groups()
+                    fps_float = float(fps)
+                    
+                    # Format the rate nicely
+                    if abs(fps_float - 23.976) < 0.01:
+                        nice_rate = 23.98
+                    elif abs(fps_float - 29.97) < 0.01:
+                        nice_rate = 29.97
+                    elif abs(fps_float - 59.94) < 0.01:
+                        nice_rate = 59.94
+                    else:
+                        nice_rate = round(fps_float, 2)
+                    
+                    format_item = {
+                        "id": f"fmt{format_id}",
+                        "resolution": resolution,
+                        "frame_rate": nice_rate,
+                        "vcodec": vcodec,
+                        "display": f"{resolution} @ {nice_rate} fps ({vcodec})"
+                    }
+                    formats.append(format_item)
+                    format_id += 1
             
             if formats:
                 logger.info(f"Found {len(formats)} formats for device {device}")
                 return formats
-            else:
-                # If no formats found with decklink, try using default presets
-                default_formats = []
-                
-                # Common formats for HD capture devices
-                resolutions = ["1920x1080", "1280x720", "720x576", "720x480"]
-                frame_rates = [23.98, 24, 25, 29.97, 30, 50, 59.94, 60]
-                pixel_formats = ["uyvy422", "yuyv422", "rgb24"]
-                
-                # Generate format combinations
-                format_id = 1
-                for res in resolutions:
-                    for fps in frame_rates:
-                        for pix_fmt in pixel_formats[:1]:  # Just use first pixel format to avoid too many combinations
-                            default_formats.append({
-                                "id": f"fmt{format_id}",
-                                "resolution": res,
-                                "frame_rate": fps,
-                                "pixel_format": pix_fmt,
-                                "display": f"{res} @ {fps} fps ({pix_fmt})"
-                            })
-                            format_id += 1
-                
-                logger.info(f"Using {len(default_formats)} default formats for device {device}")
-                return default_formats
+            
+            # If no formats found or parsing failed, use default formats
+            logger.warning("Failed to parse formats from ffmpeg output, using defaults")
+            default_formats = [
+                {"id": "fmt1", "resolution": "1920x1080", "frame_rate": 29.97, "pixel_format": "uyvy422", "display": "1920x1080 @ 29.97 fps (uyvy422)"},
+                {"id": "fmt2", "resolution": "1920x1080", "frame_rate": 25, "pixel_format": "uyvy422", "display": "1920x1080 @ 25 fps (uyvy422)"},
+                {"id": "fmt3", "resolution": "1920x1080", "frame_rate": 30, "pixel_format": "uyvy422", "display": "1920x1080 @ 30 fps (uyvy422)"},
+                {"id": "fmt4", "resolution": "1280x720", "frame_rate": 59.94, "pixel_format": "uyvy422", "display": "1280x720 @ 59.94 fps (uyvy422)"},
+                {"id": "fmt5", "resolution": "1280x720", "frame_rate": 50, "pixel_format": "uyvy422", "display": "1280x720 @ 50 fps (uyvy422)"},
+                {"id": "fmt6", "resolution": "720x576", "frame_rate": 25, "pixel_format": "uyvy422", "display": "720x576 @ 25 fps (uyvy422)"},
+                {"id": "fmt7", "resolution": "720x486", "frame_rate": 29.97, "pixel_format": "uyvy422", "display": "720x486 @ 29.97 fps (uyvy422)"}
+            ]
+            
+            return default_formats
                 
         except Exception as e:
             logger.error(f"Error in get_device_formats: {e}")
