@@ -18,21 +18,7 @@ logging.basicConfig(
 
 logger = logging.getLogger("main")
 
-def initialize_vmaf_enhancer():
-    """Initialize the VMAF enhancer to prepare for analysis"""
-    try:
-        from app.vmaf_enhancer import VMAFEnhancer
-        # Create temporary directory
-        os.makedirs('temp', exist_ok=True)
-        # Initialize enhancer
-        enhancer = VMAFEnhancer()
-        logger.info("VMAF enhancer initialized and ready")
-        return enhancer
-    except Exception as e:
-        logger.warning(f"Could not initialize VMAF enhancer: {str(e)}")
-        import traceback
-        logger.warning(traceback.format_exc())
-        return None
+
 
 if __name__ == "__main__":
     try:
@@ -48,9 +34,6 @@ if __name__ == "__main__":
         if platform.system() == 'Windows':
             logger.info("Running on Windows, configuring font paths")
             os.environ["QT_QPA_FONTDIR"] = os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "Fonts")
-
-        # Initialize VMAF enhancer
-        enhancer = initialize_vmaf_enhancer()
 
         # Create Qt application
         app = QApplication(sys.argv)

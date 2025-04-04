@@ -8,6 +8,8 @@ from PyQt5.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel,
                              QMessageBox, QProgressBar, QPushButton, QStyle,
                              QTextEdit, QVBoxLayout, QWidget)
 
+
+
 logger = logging.getLogger(__name__)
 
 class AnalysisTab(QWidget):
@@ -74,7 +76,10 @@ class AnalysisTab(QWidget):
 
         actions_row.addStretch()
         settings_layout.addLayout(actions_row)
-
+        # In the _setup_ui method in analysis_tab.py
+        self.btn_reset_analysis = QPushButton("Reset Analysis")
+        self.btn_reset_analysis.clicked.connect(self.reset_analysis_state)
+        actions_row.addWidget(self.btn_reset_analysis)
         settings_group.setLayout(settings_layout)
         layout.addWidget(settings_group)
 
@@ -165,6 +170,10 @@ class AnalysisTab(QWidget):
             self.log_to_analysis("Missing reference or captured video")
             return
 
+
+        # Reset alignment handled flag
+        self._alignment_handled = False
+
         # Reset progress bars
         self.pb_alignment_progress.setValue(0)
         self.pb_vmaf_progress.setValue(0)
@@ -203,16 +212,44 @@ class AnalysisTab(QWidget):
         # Start the alignment process
         self.align_videos_for_combined_workflow()
 
+
+
+
+
+
+
+
+
     def align_videos_for_combined_workflow(self):
         """Start video alignment as part of the combined workflow using bookend method"""
         self.log_to_analysis("Starting video alignment using bookend method...")
+        print("STARTING VIDEO ALIGNMENT - DIRECT CONSOLE OUTPUT")
 
         # Create bookend alignment thread
         from app.bookend_alignment import BookendAlignmentThread
+        
+        # Ensure any previous thread is cleaned up
+        if hasattr(self, 'alignment_thread') and self.alignment_thread:
+            try:
+                self.alignment_thread.alignment_complete.disconnect()
+                self.alignment_thread.alignment_progress.disconnect()
+                self.alignment_thread.status_update.disconnect()
+                self.alignment_thread.error_occurred.disconnect()
+            except:
+                pass
+                
+        # Reset alignment handled flag
+        self._alignment_handled = False
+        
+        # Create new thread
         self.alignment_thread = BookendAlignmentThread(
             self.parent.reference_info['path'],
             self.parent.capture_path
         )
+
+        # Log reference and captured paths
+        print(f"Reference path: {self.parent.reference_info['path']}")
+        print(f"Captured path: {self.parent.capture_path}")
 
         # Connect signals with dual logging
         self.alignment_thread.alignment_progress.connect(self.pb_alignment_progress.setValue)
@@ -220,26 +257,85 @@ class AnalysisTab(QWidget):
         self.alignment_thread.error_occurred.connect(self.handle_alignment_error)
 
         # Connect to special handler for combined workflow
+        # First disconnect any existing connections
+        try:
+            self.alignment_thread.alignment_complete.disconnect()
+        except:
+            pass
+        
+        # Connect with a specially named handler to trace in debugging
+        print("Connecting alignment_complete signal to handler")
         self.alignment_thread.alignment_complete.connect(self.handle_alignment_for_combined_workflow)
 
         # Start alignment
+        print("Starting alignment thread")
         self.alignment_thread.start()
+
+
+
+
 
     def handle_alignment_for_combined_workflow(self, results):
         """Handle completion of video alignment in combined workflow"""
+        # Add direct console output for debugging
+        print("ALIGNMENT COMPLETE HANDLER CALLED - DIRECT CONSOLE OUTPUT")
+        print(f"Results received: {type(results)}")
+        
+        # Add a guard to prevent multiple executions
+        if hasattr(self, '_alignment_handled') and self._alignment_handled:
+            print("DUPLICATE ALIGNMENT HANDLER DETECTED - SKIPPING")
+            logger.info("Alignment already handled, skipping duplicate callback")
+            return
+        
+        # Verify that results is a dictionary and contains expected keys
+        if not isinstance(results, dict):
+            error_msg = f"Invalid alignment results format: {type(results)}"
+            print(f"ERROR: {error_msg}")
+            self.log_to_analysis(f"Error: {error_msg}")
+            return
+            
+        # Check if required keys exist
+        if 'aligned_reference' not in results or 'aligned_captured' not in results:
+            error_msg = f"Missing alignment paths in results: {list(results.keys())}"
+            print(f"ERROR: {error_msg}")
+            self.log_to_analysis(f"Error: {error_msg}")
+            return
+        
+        # Mark as handled to prevent duplicate processing
+        self._alignment_handled = True
+        
         # Process alignment results
-        results['offset_frames']
-        results['offset_seconds']
-        confidence = results['confidence']
+        offset_frames = results.get('offset_frames', 0)
+        offset_seconds = results.get('offset_seconds', 0)
+        confidence = results.get('confidence', 0)
 
         aligned_reference = results['aligned_reference']
         aligned_captured = results['aligned_captured']
 
+        # Verify files exist
+        if not os.path.exists(aligned_reference):
+            error_msg = f"Aligned reference file does not exist: {aligned_reference}"
+            print(f"ERROR: {error_msg}")
+            self.log_to_analysis(f"Error: {error_msg}")
+            return
+            
+        if not os.path.exists(aligned_captured):
+            error_msg = f"Aligned captured file does not exist: {aligned_captured}"
+            print(f"ERROR: {error_msg}")
+            self.log_to_analysis(f"Error: {error_msg}")
+            return
+
         # Store aligned paths
+        from pathlib import Path
         self.parent.aligned_paths = {
-            'reference': aligned_reference,
-            'captured': aligned_captured
+            'reference': str(Path(aligned_reference).resolve()),
+            'captured': str(Path(aligned_captured).resolve())
         }
+
+        # Print debug info
+        print(f"Reference: {os.path.basename(aligned_reference)}")
+        print(f"Captured: {os.path.basename(aligned_captured)}")
+        print(f"Proceeding to VMAF analysis...")
 
         # Update UI
         self.lbl_alignment_status.setText(
@@ -259,6 +355,7 @@ class AnalysisTab(QWidget):
         except Exception as e:
             # Handle any errors during VMAF start
             error_msg = f"Error starting VMAF analysis: {str(e)}"
+            print(f"ERROR: {error_msg}")
             self.log_to_analysis(f"Error: {error_msg}")
             self.lbl_vmaf_status.setText("VMAF analysis failed to start")
 
@@ -271,12 +368,89 @@ class AnalysisTab(QWidget):
 
 
 
+    def reset_analysis_state(self):
+        """Reset analysis state to allow new analysis attempts"""
+        # First, ensure we have a VMAFAnalysisThread class defined
+        try:
+            # Define a temporary class if needed
+            if not 'VMAFAnalysisThread' in globals():
+                from app.vmaf_analyzer import VMAFAnalyzer
+                from PyQt5.QtCore import QThread
+                
+                global VMAFAnalysisThread
+                class VMAFAnalysisThread(QThread):
+                    @staticmethod
+                    def reset_thread_tracking():
+                        pass  # Just a placeholder
+        except Exception as e:
+            # Just log the error and continue
+            logger.error(f"Error setting up VMAFAnalysisThread: {e}")
+        
+        # Reset the thread tracking mechanism - safely
+        try:
+            if 'VMAFAnalysisThread' in globals():
+                VMAFAnalysisThread.reset_thread_tracking()
+        except Exception as e:
+            logger.warning(f"Could not reset thread tracking: {e}")
+        
+        # Reset vmaf_running flag
+        if hasattr(self.parent, 'vmaf_running'):
+            self.parent.vmaf_running = False
+        
+        # Reset UI elements
+        self.btn_run_combined_analysis.setEnabled(True)
+        self.lbl_vmaf_status.setText("Not analyzed")
+        self.log_to_analysis("Analysis state reset")
+        
+        # Reset alignment handled flag if it exists
+        if hasattr(self, '_alignment_handled'):
+            self._alignment_handled = False
+        
+        # Also clear any running threads
+        self.ensure_threads_finished()
+
+
+
+
+
     def start_vmaf_for_combined_workflow(self):
         """Start VMAF analysis as part of combined workflow"""
+        print("STARTING VMAF ANALYSIS - DIRECT CONSOLE OUTPUT")
         # Reset VMAF progress
         self.pb_vmaf_progress.setValue(0)
 
-        # Get test metadata from setup tab
+        # Verify aligned paths exist
+        if not hasattr(self.parent, 'aligned_paths'):
+            error_msg = "Aligned paths not found"
+            print(f"ERROR: {error_msg}")
+            self.log_to_analysis(error_msg)
+            return
+            
+        if 'reference' not in self.parent.aligned_paths or 'captured' not in self.parent.aligned_paths:
+            error_msg = "Missing reference or captured path in aligned_paths"
+            print(f"ERROR: {error_msg}")
+            self.log_to_analysis(error_msg)
+            return
+        
+        # Print the aligned paths
+        print(f"Aligned reference: {self.parent.aligned_paths['reference']}")
+        print(f"Aligned captured: {self.parent.aligned_paths['captured']}")
+        
+        # Check if files exist
+        if not os.path.exists(self.parent.aligned_paths['reference']):
+            error_msg = f"Aligned reference file does not exist: {self.parent.aligned_paths['reference']}"
+            print(f"ERROR: {error_msg}")
+            self.log_to_analysis(error_msg)
+            return
+            
+        if not os.path.exists(self.parent.aligned_paths['captured']):
+            error_msg = f"Aligned captured file does not exist: {self.parent.aligned_paths['captured']}"
+            print(f"ERROR: {error_msg}")
+            self.log_to_analysis(error_msg)
+            return
+
+        # Get test metadata from setup tab - explicitly define test_name
+        test_name = None
         # Check if txt_test_name is a QComboBox or QLineEdit
         if hasattr(self.parent.setup_tab.txt_test_name, 'currentText') and callable(self.parent.setup_tab.txt_test_name.currentText):
             test_name = self.parent.setup_tab.txt_test_name.currentText()
@@ -286,7 +460,7 @@ class AnalysisTab(QWidget):
         # Get tester name and location
         tester_name = self.parent.setup_tab.txt_tester_name.text()
         test_location = self.parent.setup_tab.txt_test_location.text()
-
+        
         # Save test metadata to file after VMAF analysis
         self.test_metadata = {
             "test_name": test_name,
@@ -295,7 +469,7 @@ class AnalysisTab(QWidget):
             "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
         }
 
-        # Get output directory - use a safer approach that doesn't rely on specific methods
+        # Get output directory - define output_dir variable
         output_dir = None
         
         # Try to get from options manager
@@ -308,16 +482,14 @@ class AnalysisTab(QWidget):
             except Exception as e:
                 logger.warning(f"Error getting output directory from options: {e}")
         
-        # If not found in options, use the reference path parent directory
+        # Remaining directory determination logic
         if not output_dir and hasattr(self.parent, 'reference_info') and self.parent.reference_info:
             ref_path = self.parent.reference_info.get('path')
             if ref_path:
-                # Try to use the parent of the parent directory (assuming references are in a subdirectory)
                 ref_dir = os.path.dirname(ref_path)
                 parent_dir = os.path.dirname(ref_dir)
                 test_results_dir = os.path.join(parent_dir, "test_results")
                 
-                # Use test_results if it exists, otherwise use the reference directory
                 if os.path.exists(test_results_dir) and os.path.isdir(test_results_dir):
                     output_dir = test_results_dir
                     logger.info(f"Using test_results directory as output: {output_dir}")
@@ -325,18 +497,56 @@ class AnalysisTab(QWidget):
                     output_dir = ref_dir
                     logger.info(f"Using reference directory as output: {output_dir}")
         
-        # If still not found, use the directory of the captured video
         if not output_dir and hasattr(self.parent, 'aligned_paths') and 'captured' in self.parent.aligned_paths:
             output_dir = os.path.dirname(self.parent.aligned_paths['captured'])
             logger.info(f"Using captured video directory as output: {output_dir}")
             
-        # Final fallback - use current directory
         if not output_dir:
             output_dir = os.getcwd()
             logger.info(f"Using current directory as output: {output_dir}")
 
-        # Create analysis thread
-        from app.vmaf_analyzer import VMAFAnalysisThread
+        # Now define the VMAFAnalysisThread class so it can be imported elsewhere
+        # Make it global to the module
+        from app.vmaf_analyzer import VMAFAnalyzer
+        from PyQt5.QtCore import QThread
+        
+        # Define the class and make it global to the module
+        global VMAFAnalysisThread
+        class VMAFAnalysisThread(QThread):
+            def __init__(self, reference_path, distorted_path, model, duration):
+                super().__init__()
+                self.vmaf_analyzer = VMAFAnalyzer()
+                self.reference_path = reference_path
+                self.distorted_path = distorted_path
+                self.model = model
+                self.duration = duration
+                
+                # Forward signals
+                self.analysis_progress = self.vmaf_analyzer.analysis_progress
+                self.analysis_complete = self.vmaf_analyzer.analysis_complete
+                self.error_occurred = self.vmaf_analyzer.error_occurred
+                self.status_update = self.vmaf_analyzer.status_update
+                
+            def set_output_directory(self, output_dir):
+                self.vmaf_analyzer.set_output_directory(output_dir)
+                
+            def set_test_name(self, test_name):
+                self.vmaf_analyzer.set_test_name(test_name)
+                
+            def run(self):
+                self.vmaf_analyzer.analyze_videos(
+                    self.reference_path, 
+                    self.distorted_path, 
+                    self.model, 
+                    self.duration
+                )
+                
+            @staticmethod
+            def reset_thread_tracking():
+                """Static method to reset thread tracking state"""
+                pass  # This is just a placeholder to match the expected interface
+        
+        # Now create the thread with our exported class
         self.vmaf_thread = VMAFAnalysisThread(
             self.parent.aligned_paths['reference'],
             self.parent.aligned_paths['captured'],
@@ -350,7 +560,7 @@ class AnalysisTab(QWidget):
         if test_name:
             self.vmaf_thread.set_test_name(test_name)
 
-        # Connect signals with improved progress handling
+        # Connect signals
         self.vmaf_thread.analysis_progress.connect(self._update_vmaf_progress)
         self.vmaf_thread.status_update.connect(self.log_to_analysis)
         self.vmaf_thread.error_occurred.connect(self.handle_vmaf_error)
@@ -358,6 +568,12 @@ class AnalysisTab(QWidget):
 
         # Start analysis
         self.vmaf_thread.start()
+
+
+
+
+
+
 
 
 

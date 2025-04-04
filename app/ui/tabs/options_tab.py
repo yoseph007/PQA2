@@ -16,6 +16,23 @@ class OptionsTab(QWidget):
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
+        
+        
+        
+        # Store direct reference to options_manager from parent
+        if hasattr(parent, 'options_manager'):
+            self.options_manager = parent.options_manager
+        else:
+            self.options_manager = None
+            logger.warning("Parent does not have options_manager")       
+        
+        
+        
+        
+        
+        
+        
+        
         self._setup_ui()
 
     def _setup_ui(self):
@@ -432,10 +449,22 @@ class OptionsTab(QWidget):
         try:
             if not hasattr(self, 'options_manager') or not self.options_manager:
                 logger.warning("Options manager not available, cannot load settings")
-                return
+
+
+                # Try to get from parent as fallback
+                if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                    self.options_manager = self.parent.options_manager
+                else:
+                    logger.warning("Options manager not available, cannot load settings")
+                    return
+
 
             # Load frame sampling rate
-            frame_sampling_rate = self.options_manager.get_option('frame_sampling_rate', 5)
+            settings = self.options_manager.get_settings()
+            bookend_settings = settings.get('bookend', {})
+            frame_sampling_rate = bookend_settings.get('frame_sampling_rate', 5)
+
+
             self.frame_sampling_slider.setValue(frame_sampling_rate)
             self._update_frame_sampling_label()
 
@@ -719,9 +748,10 @@ class OptionsTab(QWidget):
             # Clear existing items
             self.combo_default_vmaf_model.clear()
 
-            # Find models directory
-            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            models_dir = os.path.join(root_dir, "models")
+            # Use get_project_paths to find models directory
+            from app.utils import get_project_paths
+            paths = get_project_paths()
+            models_dir = paths['models']
 
             # Use custom directory if specified
             custom_dir = self.txt_vmaf_dir.text()

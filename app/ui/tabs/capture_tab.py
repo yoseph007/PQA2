@@ -483,7 +483,7 @@ class CaptureTab(QWidget):
                     self.lbl_preview.setPixmap(scaled_pixmap)
 
                     # Update status
-                    self.lbl_preview_status.setText(f"Status: Live preview ({width}x{height})")
+                    self.lbl_preview_status.setText(f"Status: Capture in progress")
 
                     # Update frame counter
                     frame_count = getattr(self, '_frame_count', 0) + 1

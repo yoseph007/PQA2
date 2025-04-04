@@ -21,6 +21,28 @@ class MainWindow(QMainWindow):
     """Main application window for VMAF Test App"""
     def __init__(self, capture_manager, file_manager, options_manager):
         super().__init__()
+        
+        
+        # Initialize output_dir before it's used
+        self.output_dir = None
+        
+        # Then try to set it from options if available
+        if hasattr(self, 'options_manager') and self.options_manager:
+            try:
+                paths = self.options_manager.get_setting('paths')
+                if isinstance(paths, dict) and 'output_dir' in paths:
+                    self.output_dir = paths['output_dir']
+            except Exception as e:
+                logger.warning(f"Error getting output directory from options: {e}")
+        
+        # If not found in options, use a default
+        if not self.output_dir:
+            from app.utils import get_project_paths
+            paths = get_project_paths()
+            self.output_dir = os.path.join(paths['root'], "tests", "test_results")       
+        
+        
+
 
         # Store manager references
         self.capture_mgr = capture_manager

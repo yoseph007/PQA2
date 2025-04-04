@@ -304,7 +304,7 @@ class BookendAligner(QObject):
 
             # Handle multi-loop videos
             if content_duration > ref_duration * 1.5:
-                logger.warning(f"Reference duration ({ref_duration:.3f}s) differs from content duration ({content_duration:.3f}s)")
+                logger.info(f"Reference duration ({ref_duration:.3f}s) - content duration ({content_duration:.3f}s)")
                 logger.info("Detected multiple loops in captured video, looking for individual loops")
 
                 # If we have more than 2 bookends, try to find the correct loop
@@ -918,6 +918,16 @@ class BookendAlignmentThread(QThread):
         self.wait()  # Wait for thread to finish before destroying
 
 
+
+
+
+
+
+
+
+
+
+
     def run(self):
         """Run alignment in thread"""
         try:
@@ -960,7 +970,10 @@ class BookendAlignmentThread(QThread):
 
                 # Ensure progress is set to 100% at completion
                 self.alignment_progress.emit(100)
-                self.alignment_complete.emit(result)
+                
+                # IMPORTANT: Remove this line to prevent duplicate signal emission
+                # self.alignment_complete.emit(result)
+                
                 self.status_update.emit("Bookend alignment complete!")
             else:
                 self.error_occurred.emit("Bookend alignment failed")
@@ -971,6 +984,22 @@ class BookendAlignmentThread(QThread):
                 logger.error(error_msg)
                 import traceback
                 logger.error(traceback.format_exc())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def quit(self):
         """Override quit to properly clean up resources"""
