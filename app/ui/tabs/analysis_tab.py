@@ -178,6 +178,12 @@ class AnalysisTab(QWidget):
 
         # Get analysis settings
         self.selected_model = self.combo_vmaf_model.currentData()
+        # If model data is None, use the text instead
+        if self.selected_model is None:
+            self.selected_model = self.combo_vmaf_model.currentText()
+        # Ensure we have a default if still None
+        if not self.selected_model:
+            self.selected_model = "vmaf_v0.6.1"
 
         # Convert duration option to seconds
         duration_option = self.combo_duration.currentData()
@@ -261,6 +267,9 @@ class AnalysisTab(QWidget):
             # Show error to user
             QMessageBox.critical(self, "VMAF Error", error_msg)
 
+
+
+
     def start_vmaf_for_combined_workflow(self):
         """Start VMAF analysis as part of combined workflow"""
         # Reset VMAF progress
@@ -285,11 +294,45 @@ class AnalysisTab(QWidget):
             "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
         }
 
-        # Get output directory
-        output_dir = self.parent.setup_tab.txt_output_dir.text()
-        if (not output_dir or output_dir == "Default output directory") and hasattr(self.parent, 'file_mgr'):
-            output_dir = self.parent.file_mgr.get_default_output_dir()
-            logger.info(f"Using default output directory: {output_dir}")
+        # Get output directory - use a safer approach that doesn't rely on specific methods
+        output_dir = None
+        
+        # Try to get from options manager
+        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+            try:
+                paths = self.parent.options_manager.get_setting('paths')
+                if isinstance(paths, dict) and 'output_dir' in paths:
+                    output_dir = paths['output_dir']
+                    logger.info(f"Using output directory from options: {output_dir}")
+            except Exception as e:
+                logger.warning(f"Error getting output directory from options: {e}")
+        
+        # If not found in options, use the reference path parent directory
+        if not output_dir and hasattr(self.parent, 'reference_info') and self.parent.reference_info:
+            ref_path = self.parent.reference_info.get('path')
+            if ref_path:
+                # Try to use the parent of the parent directory (assuming references are in a subdirectory)
+                ref_dir = os.path.dirname(ref_path)
+                parent_dir = os.path.dirname(ref_dir)
+                test_results_dir = os.path.join(parent_dir, "test_results")
+                
+                # Use test_results if it exists, otherwise use the reference directory
+                if os.path.exists(test_results_dir) and os.path.isdir(test_results_dir):
+                    output_dir = test_results_dir
+                    logger.info(f"Using test_results directory as output: {output_dir}")
+                else:
+                    output_dir = ref_dir
+                    logger.info(f"Using reference directory as output: {output_dir}")
+        
+        # If still not found, use the directory of the captured video
+        if not output_dir and hasattr(self.parent, 'aligned_paths') and 'captured' in self.parent.aligned_paths:
+            output_dir = os.path.dirname(self.parent.aligned_paths['captured'])
+            logger.info(f"Using captured video directory as output: {output_dir}")
+            
+        # Final fallback - use current directory
+        if not output_dir:
+            output_dir = os.getcwd()
+            logger.info(f"Using current directory as output: {output_dir}")
 
         # Create analysis thread
         from app.vmaf_analyzer import VMAFAnalysisThread
@@ -301,7 +344,7 @@ class AnalysisTab(QWidget):
         )
 
         # Set output directory and test name if available
-        if output_dir and output_dir != "Default output directory":
+        if output_dir:
             self.vmaf_thread.set_output_directory(output_dir)
         if test_name:
             self.vmaf_thread.set_test_name(test_name)
@@ -314,6 +357,8 @@ class AnalysisTab(QWidget):
 
         # Start analysis
         self.vmaf_thread.start()
+
+
 
     def handle_alignment_error(self, error_msg):
         """Handle error in video alignment"""
@@ -397,7 +442,7 @@ class AnalysisTab(QWidget):
         self.btn_next_to_results.setEnabled(True)
 
         # Update results tab with results data
-        self.parent.results_tab.update_with_results(results)
+        self.parent.results_tab.update_results(results)
 
         # Show message with VMAF score
         if vmaf_score is not None:

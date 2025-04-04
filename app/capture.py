@@ -1029,7 +1029,7 @@ class BookendCaptureManager(QObject):
 
         device = capture_settings.get("default_device", "Intensity Shuttle")
         resolution = capture_settings.get("resolution", "1920x1080")
-        frame_rate = capture_settings.get("frame_rate", 30)
+        frame_rate = capture_settings.get("frame_rate", 25)
         pixel_format = capture_settings.get("pixel_format", "uyvy422")
         max_capture_time = bookend_settings.get("max_capture_time", 120)
 
@@ -1694,7 +1694,7 @@ class CaptureManager(QObject):
         # Get bookend settings from options or use defaults
         bookend_duration = 0.5  # Default white frame duration in seconds
         min_loops = 3           # Default minimum loops
-        max_capture_time = 120  # Default maximum capture time in seconds
+        max_capture_time = 30  # Default maximum capture time in seconds
 
         # Make sure we use the proper instance of options_manager
         options_manager = getattr(self, 'options_manager', None)
@@ -1705,7 +1705,7 @@ class CaptureManager(QObject):
                 bookend_settings = options_manager.get_setting("bookend")
                 bookend_duration = bookend_settings.get('bookend_duration', 0.5)
                 min_loops = bookend_settings.get('min_loops', 3)
-                max_capture_time = bookend_settings.get('max_capture_time', 120)
+                max_capture_time = bookend_settings.get('max_capture_time', 30)
                 logger.info(f"Using options_manager settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
             except Exception as e:
                 logger.error(f"Error getting settings from options_manager: {e}")
@@ -1714,14 +1714,14 @@ class CaptureManager(QObject):
                     bookend_settings = settings.get('bookend', {})
                     bookend_duration = bookend_settings.get('bookend_duration', 0.5)
                     min_loops = bookend_settings.get('min_loops', 3)
-                    max_capture_time = bookend_settings.get('max_capture_time', 120)
+                    max_capture_time = bookend_settings.get('max_capture_time', 30)
                     logger.info(f"Using fallback settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
         elif settings and 'bookend' in settings:
             # Use settings passed to the method if options_manager not available
             bookend_settings = settings.get('bookend', {})
             bookend_duration = bookend_settings.get('bookend_duration', 0.5)
             min_loops = bookend_settings.get('min_loops', 3)
-            max_capture_time = bookend_settings.get('max_capture_time', 120)
+            max_capture_time = bookend_settings.get('max_capture_time', 30)
             logger.info(f"Using provided settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
 
         loop_duration = ref_duration + (2 * bookend_duration)  # Account for start and end bookends

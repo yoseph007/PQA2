@@ -254,10 +254,18 @@ class VMAFAnalyzer(QObject):
                 duration_cmd = ["-t", str(duration)]
                 self.status_update.emit(f"Analyzing {duration}s of video")
 
+
             # Make sure model has .json extension if not already
+            if model is None:
+                # Use a default model if none is provided
+                model = "vmaf_v0.6.1"
+                logger.info(f"No model specified, using default model: {model}")
+
             model_name = model
             if not model.endswith('.json'):
                 model_name = f"{model}.json"
+
+
 
             # Find the model path in models directory
             current_dir = os.path.dirname(os.path.abspath(__file__))

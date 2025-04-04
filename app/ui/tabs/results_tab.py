@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFileDialog, QComboBox, QProgressBar, QGroupBox,
     QFormLayout, QLineEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QTextEdit,
-    QMessageBox, QSplitter, QFrame, QRadioButton, QButtonGroup,QListWidget,QTableWidget,QHeaderView
+    QMessageBox, QSplitter, QFrame, QRadioButton, QButtonGroup,QListWidget,QTableWidget,QHeaderView,QListWidgetItem
 )
 from PyQt5.QtCore import (
     Qt, QThread, QObject, pyqtSignal, pyqtSlot, QRunnable, QThreadPool, 

@@ -18,7 +18,9 @@ class SetupTab(QWidget):
         self.parent = parent
         self.reference_thread = None
         self.reference_video_path = None #Added to store full path
-        self._setup_ui()
+        self.output_dir = None #Added to store output directory
+        self.setObjectName("setup_tab")
+        self._setup_ui()    
 
     def _setup_ui(self):
         """Set up the Setup tab UI with improved two-column layout"""
@@ -250,6 +252,35 @@ class SetupTab(QWidget):
             # Analyze the selected video
             self.analyze_reference(file_path)
             self.reference_video_path = file_path #Store full path
+
+
+
+
+    # Add this method to set the output directory
+    def set_output_dir(self, directory):
+        """Set the output directory for analysis results"""
+        self.output_dir = directory
+        
+    # Add a getter method for the output directory
+    def get_output_dir(self):
+        """Get the current output directory for analysis results"""
+        # If output_dir is not set directly, try to get it from options
+        if not self.output_dir and hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+            paths = self.parent.options_manager.get_setting('paths')
+            if isinstance(paths, dict) and 'output_dir' in paths:
+                self.output_dir = paths['output_dir']
+                
+        # If still not set, use a default directory
+        if not self.output_dir:
+            self.output_dir = os.path.join(os.path.expanduser("~"), "vmaf_results")
+            # Ensure the directory exists
+            os.makedirs(self.output_dir, exist_ok=True)
+            
+        return self.output_dir
+
+
+
+
 
 
     def analyze_reference(self, file_path):

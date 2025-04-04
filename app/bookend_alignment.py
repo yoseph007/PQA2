@@ -568,13 +568,10 @@ class BookendAligner(QObject):
 
 
 
-
-
-
     def _detect_white_bookends(self, video_path):
         """
-        White bookend detection optimized for videos with lower brightness levels
-        and very short bookends (≥ 3 frames)
+        Performance-optimized white bookend detection that maintains accuracy
+        while significantly reducing processing time
         """
         try:
             bookends = []
@@ -591,9 +588,9 @@ class BookendAligner(QObject):
 
             logger.info(f"Video details: duration={duration:.2f}s, frames={frame_count}, fps={fps:.2f}")
 
-            # Sample brightness values across the video more thoroughly
+            # Sample brightness values across the video
             brightness_samples = []
-            sample_points = 30  # Increased from 20 to get better sampling
+            sample_points = 30
             sample_interval = max(1, frame_count // sample_points)
 
             for i in range(0, min(frame_count, sample_points * sample_interval), sample_interval):
@@ -620,95 +617,169 @@ class BookendAligner(QObject):
 
             logger.info(f"Video brightness stats: avg={avg_brightness:.1f}, std={std_brightness:.1f}, max={max_brightness:.1f}, avg_std_dev={avg_std_dev:.1f}")
 
-            # Dynamic threshold calculation based on video statistics
-            # For videos with low brightness, use relative thresholds based on max/avg values
+            # Dynamic threshold calculation
             dynamic_threshold = max(
-                avg_brightness + 1.5 * std_brightness,  # Statistical approach
-                max_brightness * 0.9,                   # Percentage of max
-                120                                     # Absolute minimum for "white"
+                avg_brightness + 1.5 * std_brightness,
+                max_brightness * 0.9,
+                120
             )
             
-            # Create an adaptive threshold list
+            # Create adaptive thresholds
             thresholds = [
-                dynamic_threshold,                     # Primary threshold
-                dynamic_threshold * 0.9,               # 10% more lenient
-                dynamic_threshold * 0.8,               # 20% more lenient
-                max(avg_brightness + 15, 110)          # Fallback threshold
+                dynamic_threshold,
+                dynamic_threshold * 0.9,
+                max(avg_brightness + 15, 110)
             ]
             
             logger.info(f"Using dynamic thresholds: {[round(t, 1) for t in thresholds]}")
 
-            # Try each threshold
+            # PERFORMANCE OPTIMIZATION 1: Use two-pass approach
+            # First pass: Sample frames at higher intervals to quickly find candidate regions
+            # Second pass: Only analyze the candidate regions in detail
+            
+            # Define regions of interest to examine in detail
+            regions_of_interest = []
+            
+            # Set minimum frame sequence length based on frame rate
+            if fps > 25:
+                min_white_frames = max(3, int(0.1 * fps))
+            else:
+                min_white_frames = 3
+            
+            logger.info(f"Using minimum bookend size of {min_white_frames} frames ({min_white_frames/fps:.3f}s)")
+            
+            # PERFORMANCE OPTIMIZATION 2: Use a larger sampling interval for initial scan
+            initial_sample_rate = max(3, int(fps // 8))  # 8 samples per second
+            logger.info(f"Using initial sampling rate of {initial_sample_rate} (about {fps/initial_sample_rate:.1f} samples/second)")
+            
+            # Std dev threshold based on video characteristics
+            std_dev_threshold = min(40, avg_std_dev * 1.5)
+            
+            # First pass: Quick scan to find potential bookend regions
             for threshold_idx, whiteness_threshold in enumerate(thresholds):
-                logger.info(f"Trying whiteness threshold: {whiteness_threshold:.1f}")
-
+                logger.info(f"Quick scan with threshold: {whiteness_threshold:.1f}")
+                
                 # Reset video position
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-
-                # Always use sample rate of 1 for short bookends
-                sample_rate = 1
-                logger.info(f"Using frame-by-frame sampling to detect short bookends")
-
-                # Minimum frames to consider as bookend - adapt based on frame rate
-                # For higher frame rates, require more frames
-                if fps > 25:
-                    min_white_frames = max(3, int(0.1 * fps))  # At least 0.1 seconds
-                else:
-                    min_white_frames = 3  # Absolute minimum
-                    
-                logger.info(f"Using minimum bookend size of {min_white_frames} frames ({min_white_frames/fps:.3f}s)")
-
-                # Std dev threshold based on video characteristics
-                std_dev_threshold = min(40, avg_std_dev * 1.5)
-                logger.info(f"Using standard deviation threshold of {std_dev_threshold:.1f}")
-
-                consecutive_white_frames = 0
-                current_bookend = None
-                current_bookends = []
-                white_frames = []  # Store frame indices that are white
                 
-                # Store brightness values of all frames for diagnostic purposes
-                all_frame_brightness = []
-
-                # Process each frame
-                for frame_idx in range(0, frame_count, sample_rate):
-                    # Report progress
-                    if frame_count > 1000 and frame_idx % 500 == 0:
-                        progress = int(30 + (frame_idx / frame_count) * 40)  # Scale to 30-70%
-                        self.alignment_progress.emit(progress)
-
+                potential_regions = []
+                current_region = None
+                
+                # Process frames at the initial sampling rate
+                for frame_idx in range(0, frame_count, initial_sample_rate):
                     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
                     ret, frame = cap.read()
-
+                    
                     if not ret:
                         break
-
-                    # Calculate average brightness
+                    
+                    # Calculate brightness
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                     avg_brightness = np.mean(gray)
                     std_dev = np.std(gray)
                     
-                    all_frame_brightness.append((frame_idx, avg_brightness, std_dev))
-
-                    # Adaptive white frame detection
+                    # Determine if this is a candidate white frame
                     is_white_frame = False
-                    
-                    # For stricter thresholds, just check brightness
                     if threshold_idx < 2:
                         is_white_frame = avg_brightness > whiteness_threshold
                     else:
-                        # For more lenient thresholds, also consider uniformity
                         is_white_frame = (avg_brightness > whiteness_threshold and std_dev < std_dev_threshold)
-
-                    # Log frames near the threshold for diagnostics
-                    brightness_diff = abs(avg_brightness - whiteness_threshold)
-                    if brightness_diff < 15 or (is_white_frame and frame_idx % 10 == 0):
-                        logger.debug(f"Frame {frame_idx}: brightness={avg_brightness:.1f}, std_dev={std_dev:.1f}, white={is_white_frame}, diff={brightness_diff:.1f}")
-
+                    
                     if is_white_frame:
-                        white_frames.append(frame_idx)
+                        if current_region is None:
+                            current_region = {
+                                'start_frame': max(0, frame_idx - initial_sample_rate),  # Look a bit before
+                                'brightness': avg_brightness
+                            }
+                    else:
+                        if current_region is not None:
+                            current_region['end_frame'] = min(frame_count - 1, frame_idx + initial_sample_rate)  # Look a bit after
+                            potential_regions.append(current_region)
+                            current_region = None
+                
+                # Handle last region if exists
+                if current_region is not None:
+                    current_region['end_frame'] = min(frame_count - 1, frame_idx + initial_sample_rate)
+                    potential_regions.append(current_region)
+                
+                # If we found potential regions, add them to our analysis list
+                if potential_regions:
+                    logger.info(f"Found {len(potential_regions)} potential bookend regions with threshold {whiteness_threshold:.1f}")
+                    for region in potential_regions:
+                        # Expand region slightly to ensure we don't miss any frames
+                        padding = initial_sample_rate
+                        start = max(0, region['start_frame'] - padding)
+                        end = min(frame_count - 1, region['end_frame'] + padding)
+                        regions_of_interest.append((start, end, whiteness_threshold))
+            
+            # If we didn't find any regions with quick scan, scan the entire video with the most lenient threshold
+            if not regions_of_interest:
+                logger.info("No potential regions found in quick scan, will scan entire video")
+                regions_of_interest = [(0, frame_count - 1, thresholds[-1])]
+            
+            # PERFORMANCE OPTIMIZATION 3: Merge overlapping regions to avoid duplicate processing
+            if len(regions_of_interest) > 1:
+                regions_of_interest.sort()  # Sort by start frame
+                merged_regions = []
+                current_start, current_end, current_threshold = regions_of_interest[0]
+                
+                for start, end, threshold in regions_of_interest[1:]:
+                    if start <= current_end:  # Regions overlap
+                        current_end = max(current_end, end)
+                        current_threshold = min(current_threshold, threshold)  # Use the more lenient threshold
+                    else:
+                        merged_regions.append((current_start, current_end, current_threshold))
+                        current_start, current_end, current_threshold = start, end, threshold
+                
+                merged_regions.append((current_start, current_end, current_threshold))
+                regions_of_interest = merged_regions
+                
+                logger.info(f"Merged into {len(regions_of_interest)} regions for detailed analysis")
+            
+            # Second pass: Detailed analysis of potential regions
+            logger.info("Starting detailed analysis of potential bookend regions")
+            
+            all_bookends = []
+            
+            for region_idx, (start_frame, end_frame, threshold) in enumerate(regions_of_interest):
+                logger.info(f"Analyzing region {region_idx+1}/{len(regions_of_interest)}: frames {start_frame}-{end_frame}")
+                
+                # Use standard detection for detailed pass
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                
+                # Skip too small regions
+                if end_frame - start_frame < min_white_frames:
+                    logger.info(f"Region too small, skipping")
+                    continue
+                    
+                consecutive_white_frames = 0
+                current_bookend = None
+                region_bookends = []
+                
+                # Process each frame in this region
+                for frame_idx in range(start_frame, end_frame + 1):
+                    # Skip setting position if we're already there (big performance gain)
+                    if frame_idx > start_frame:
+                        ret, frame = cap.read()
+                    else:
+                        ret, frame = cap.isOpened(), cap.read()[1] if cap.isOpened() else (False, None)
+                    
+                    if not ret:
+                        break
+                    
+                    # Calculate brightness
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    avg_brightness = np.mean(gray)
+                    std_dev = np.std(gray)
+                    
+                    # Determine if white frame
+                    is_white_frame = False
+                    if avg_brightness > threshold:
+                        is_white_frame = True
+                    
+                    if is_white_frame:
                         consecutive_white_frames += 1
-
+                        
                         # Start a new bookend if needed
                         if current_bookend is None:
                             frame_time = frame_idx / fps
@@ -723,152 +794,70 @@ class BookendAligner(QObject):
                         # Check if we just finished a bookend
                         if current_bookend is not None:
                             # Update end time
-                            current_bookend['end_frame'] = frame_idx - sample_rate
+                            current_bookend['end_frame'] = frame_idx - 1
                             current_bookend['end_time'] = current_bookend['end_frame'] / fps
                             current_bookend['frame_count'] = consecutive_white_frames
-
+                            
                             # Add to bookends if long enough
                             if consecutive_white_frames >= min_white_frames:
-                                current_bookends.append(current_bookend)
+                                region_bookends.append(current_bookend)
                                 logger.info(f"Detected white bookend: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s " +
                                         f"(brightness: {current_bookend.get('brightness', 0):.1f}, frames: {consecutive_white_frames})")
-
+                            
                             # Reset for next bookend
                             current_bookend = None
                             consecutive_white_frames = 0
-
-                # Check if we have an unfinished bookend at the end
-                if current_bookend is not None:
-                    current_bookend['end_frame'] = frame_count - 1
-                    current_bookend['end_time'] = duration
+                
+                # Check for unfinished bookend
+                if current_bookend is not None and consecutive_white_frames >= min_white_frames:
+                    current_bookend['end_frame'] = end_frame
+                    current_bookend['end_time'] = end_frame / fps
                     current_bookend['frame_count'] = consecutive_white_frames
-
-                    if consecutive_white_frames >= min_white_frames:
-                        current_bookends.append(current_bookend)
-                        logger.info(f"Detected white bookend at end: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s " +
-                                f"(brightness: {current_bookend.get('brightness', 0):.1f}, frames: {consecutive_white_frames})")
-
-                # If we found at least 2 bookends, use these results
-                if len(current_bookends) >= 2:
-                    logger.info(f"Found {len(current_bookends)} white bookend sections with threshold {whiteness_threshold:.1f}")
-                    bookends = current_bookends
-                    break
-
-                # Special handling for videos with many small bookends
-                if len(current_bookends) == 1 and len(white_frames) > 10:
-                    logger.info("Only found one bookend, checking for clusters of white frames...")
-                    
-                    # Find all clusters of white frames with small gaps
-                    clusters = []
-                    if white_frames:
-                        current_cluster = [white_frames[0]]
-                        
-                        for i in range(1, len(white_frames)):
-                            if white_frames[i] - white_frames[i-1] <= 3:  # Allow gaps of up to 3 frames
-                                current_cluster.append(white_frames[i])
-                            else:
-                                if len(current_cluster) >= min_white_frames:
-                                    clusters.append(current_cluster)
-                                current_cluster = [white_frames[i]]
-                        
-                        # Add the last cluster if it exists
-                        if len(current_cluster) >= min_white_frames:
-                            clusters.append(current_cluster)
-                    
-                    logger.info(f"Found {len(clusters)} potential white frame clusters")
-                    
-                    # Convert clusters to bookends
-                    if len(clusters) >= 2:
-                        bookends = []
-                        for cluster in clusters:
-                            start_frame = cluster[0]
-                            end_frame = cluster[-1]
-                            bookend = {
-                                'start_frame': start_frame,
-                                'end_frame': end_frame,
-                                'start_time': start_frame / fps,
-                                'end_time': end_frame / fps,
-                                'frame_count': len(cluster),
-                                'brightness': 0,  # Can't determine easily here
-                                'std_dev': 0      # Can't determine easily here
-                            }
-                            bookends.append(bookend)
-                        
-                        logger.info(f"Created {len(bookends)} bookends from white frame clusters")
-                        break
+                    region_bookends.append(current_bookend)
+                    logger.info(f"Detected white bookend at region end: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s " +
+                            f"(brightness: {current_bookend.get('brightness', 0):.1f}, frames: {consecutive_white_frames})")
                 
-                # Special case: if we have a lot of brightness variance, try finding relative bookends
-                if len(current_bookends) == 0 and threshold_idx == len(thresholds) - 1:
-                    logger.info("No bookends found with absolute thresholds, trying relative brightness approach")
-                    
-                    # Sort all frames by brightness to find the brightest sections
-                    sorted_frames = sorted(all_frame_brightness, key=lambda x: x[1], reverse=True)
-                    top_n_percent = int(len(sorted_frames) * 0.05)  # Top 5% brightest frames
-                    if top_n_percent > 0:
-                        brightest_frames = sorted_frames[:top_n_percent]
-                        brightest_indices = [f[0] for f in brightest_frames]
-                        
-                        # Find clusters in the brightest frames
-                        brightest_indices.sort()  # Sort by frame index
-                        clusters = []
-                        if brightest_indices:
-                            current_cluster = [brightest_indices[0]]
-                            
-                            for i in range(1, len(brightest_indices)):
-                                if brightest_indices[i] - brightest_indices[i-1] <= 3:  # Allow gaps of up to 3 frames
-                                    current_cluster.append(brightest_indices[i])
-                                else:
-                                    if len(current_cluster) >= min_white_frames:
-                                        clusters.append(current_cluster)
-                                    current_cluster = [brightest_indices[i]]
-                            
-                            # Add the last cluster if it exists
-                            if len(current_cluster) >= min_white_frames:
-                                clusters.append(current_cluster)
-                        
-                        logger.info(f"Found {len(clusters)} clusters among the brightest frames")
-                        
-                        # Convert clusters to bookends, but only if we have at least 2
-                        if len(clusters) >= 2:
-                            bookends = []
-                            for cluster in clusters:
-                                start_frame = cluster[0]
-                                end_frame = cluster[-1]
-                                # Find the average brightness of this cluster
-                                cluster_brightness = np.mean([b for f, b, _ in all_frame_brightness if f in cluster])
-                                bookend = {
-                                    'start_frame': start_frame,
-                                    'end_frame': end_frame,
-                                    'start_time': start_frame / fps,
-                                    'end_time': end_frame / fps,
-                                    'frame_count': len(cluster),
-                                    'brightness': cluster_brightness,
-                                    'std_dev': 0
-                                }
-                                bookends.append(bookend)
-                            
-                            logger.info(f"Created {len(bookends)} bookends from brightest frame clusters")
+                # Add all bookends from this region
+                all_bookends.extend(region_bookends)
+            
+            # Remove duplicate bookends (can happen with overlapping regions)
+            if all_bookends:
+                unique_bookends = []
+                for bookend in all_bookends:
+                    # Check if this bookend overlaps with any existing ones
+                    is_duplicate = False
+                    for existing in unique_bookends:
+                        # If frames overlap significantly, consider it a duplicate
+                        if (bookend['start_frame'] <= existing['end_frame'] and 
+                            bookend['end_frame'] >= existing['start_frame']):
+                            # Keep the larger/brighter one
+                            if bookend['frame_count'] > existing['frame_count'] or bookend['brightness'] > existing['brightness']:
+                                # Replace existing with this one
+                                unique_bookends.remove(existing)
+                                unique_bookends.append(bookend)
+                            is_duplicate = True
                             break
+                    
+                    if not is_duplicate:
+                        unique_bookends.append(bookend)
                 
-                logger.warning(f"Found only {len(current_bookends)} white bookend sections with threshold {whiteness_threshold:.1f} (need at least 2)")
-
+                # Sort bookends by start time
+                bookends = sorted(unique_bookends, key=lambda x: x['start_frame'])
+                logger.info(f"Found {len(bookends)} unique bookends after deduplication")
+            
             cap.release()
-
+            
             # Final check and summary
             if len(bookends) < 2:
-                logger.warning(f"Failed to detect white bookends with any method.")
-                logger.warning("Make sure your video has clear white frames at the beginning and end of each loop")
+                logger.warning(f"Failed to detect at least two white bookends")
                 
-                # Last resort: just use the beginning and end of the video if we can't find bookends
+                # Last resort: use the beginning and end of the video
                 if hasattr(self, 'fallback_to_full_video') and self.fallback_to_full_video:
                     logger.warning("Falling back to using entire video as no bookends were detected")
-                    first_frame_time = 0
-                    last_frame_time = duration - (1/fps)  # Last frame time
-                    
                     bookends = [
                         {
                             'start_frame': 0,
-                            'end_frame': min(5, frame_count - 1),  # Use first few frames
+                            'end_frame': min(5, frame_count - 1),
                             'start_time': 0,
                             'end_time': min(5, frame_count - 1) / fps,
                             'frame_count': min(5, frame_count),
@@ -877,7 +866,7 @@ class BookendAligner(QObject):
                             'is_fallback': True
                         },
                         {
-                            'start_frame': max(0, frame_count - 5),  # Use last few frames
+                            'start_frame': max(0, frame_count - 5),
                             'end_frame': frame_count - 1,
                             'start_time': max(0, frame_count - 5) / fps,
                             'end_time': duration,
@@ -890,7 +879,7 @@ class BookendAligner(QObject):
                     logger.warning("Created fallback bookends at beginning and end of video")
             else:
                 logger.info(f"Successfully detected {len(bookends)} white bookend sections")
-
+                
             return bookends
 
         except Exception as e:
@@ -898,10 +887,6 @@ class BookendAligner(QObject):
             import traceback
             logger.error(traceback.format_exc())
             return None
-
-
-
-
 
 
 
