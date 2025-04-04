@@ -199,8 +199,16 @@ class OptionsManager(QObject):
             # Now safely check if the key exists in the category dictionary
             if isinstance(key, str) and key in self.default_settings[category]:
                 default_value = self.default_settings[category][key]
+            # If key is a dictionary, we need to handle it differently
+            elif not isinstance(key, str):
+                # Return the default value for non-string keys
+                return default_value
 
-        return self.settings[category].get(key, default_value)
+        # Check if the category is a dictionary before calling get()
+        if isinstance(self.settings[category], dict):
+            return self.settings[category].get(key, default_value)
+        else:
+            return default_value
 
     def update_setting(self, category, key, value):
         """Update a specific setting"""
