@@ -197,7 +197,7 @@ class OptionsManager(QObject):
         # Check if category exists in default settings and is a dictionary
         if category in self.default_settings and isinstance(self.default_settings[category], dict):
             # Now safely check if the key exists in the category dictionary
-            if key in self.default_settings[category]:
+            if isinstance(key, str) and key in self.default_settings[category]:
                 default_value = self.default_settings[category][key]
 
         return self.settings[category].get(key, default_value)
