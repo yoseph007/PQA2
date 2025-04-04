@@ -52,6 +52,12 @@ class SetupTab(QWidget):
         ref_file_layout.addWidget(self.btn_browse_reference)
         reference_layout.addLayout(ref_file_layout)
 
+        # Add reference directory path label
+        self.lbl_ref_dir_path = QLabel("Directory: None")
+        self.lbl_ref_dir_path.setStyleSheet("color: #666; font-size: 9pt;")
+        self.lbl_ref_dir_path.setWordWrap(True)
+        reference_layout.addWidget(self.lbl_ref_dir_path)
+
         # Information about using default output directory
         note_label = QLabel("Output files will be saved to the location specified in Options.")
         note_label.setStyleSheet("color: gray; font-style: italic;")
