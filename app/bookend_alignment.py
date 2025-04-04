@@ -5,6 +5,12 @@ import subprocess
 import subprocess
 import os
 import logging
+import cv2
+import numpy as np
+import time
+from datetime import datetime
+from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -115,12 +121,7 @@ def repair_video_file(file_path):
 # Define maximum repair attempts
 MAX_REPAIR_ATTEMPTS = 3
 
-import cv2
-import numpy as np
-import time
-from datetime import datetime
-from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
-import shutil
+
 
 def repair_video_file(video_path):
     """
@@ -560,9 +561,20 @@ class BookendAligner(QObject):
             logger.error(f"Error getting video info for {video_path}: {str(e)}")
             return None 
 
+
+
+
+
+
+
+
+
+
+
     def _detect_white_bookends(self, video_path):
         """
-        Enhanced white bookend detection with multiple thresholds and diagnostic output
+        White bookend detection optimized for videos with lower brightness levels
+        and very short bookends (≥ 3 frames)
         """
         try:
             bookends = []
@@ -579,12 +591,9 @@ class BookendAligner(QObject):
 
             logger.info(f"Video details: duration={duration:.2f}s, frames={frame_count}, fps={fps:.2f}")
 
-            # Try multiple thresholds - from strict to lenient
-            thresholds = [230, 200, 180, 160]
-
-            # Sample brightness values across the video
+            # Sample brightness values across the video more thoroughly
             brightness_samples = []
-            sample_points = 20
+            sample_points = 30  # Increased from 20 to get better sampling
             sample_interval = max(1, frame_count // sample_points)
 
             for i in range(0, min(frame_count, sample_points * sample_interval), sample_interval):
@@ -593,54 +602,75 @@ class BookendAligner(QObject):
                 if ret:
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                     brightness = np.mean(gray)
-                    brightness_samples.append((i, brightness))
-                    logger.info(f"Frame {i} (t={i/fps:.2f}s) brightness: {brightness:.1f}")
+                    std_dev = np.std(gray)
+                    brightness_samples.append((i, brightness, std_dev))
+                    logger.info(f"Frame {i} (t={i/fps:.2f}s) brightness: {brightness:.1f}, std_dev: {std_dev:.1f}")
 
             # Calculate stats
-            if brightness_samples:
-                all_brightness = [b for _, b in brightness_samples]
-                avg_brightness = np.mean(all_brightness)
-                std_brightness = np.std(all_brightness)
-                max_brightness = np.max(all_brightness)
+            if not brightness_samples:
+                logger.error("Could not sample brightness levels from video")
+                return None
+                
+            all_brightness = [b for _, b, _ in brightness_samples]
+            all_std_devs = [s for _, _, s in brightness_samples]
+            avg_brightness = np.mean(all_brightness)
+            std_brightness = np.std(all_brightness)
+            max_brightness = np.max(all_brightness)
+            avg_std_dev = np.mean(all_std_devs)
 
-                logger.info(f"Video brightness stats: avg={avg_brightness:.1f}, std={std_brightness:.1f}, max={max_brightness:.1f}")
+            logger.info(f"Video brightness stats: avg={avg_brightness:.1f}, std={std_brightness:.1f}, max={max_brightness:.1f}, avg_std_dev={avg_std_dev:.1f}")
 
-                # Adjust thresholds based on video statistics
-                if avg_brightness > 200:
-                    # Very bright video, increase thresholds
-                    thresholds = [240, 230, 220, 210]
-                elif avg_brightness > 150:
-                    # Bright video
-                    thresholds = [230, 210, 190, 170]
-                elif avg_brightness < 100:
-                    # Dark video, lower thresholds
-                    thresholds = [200, 180, 160, 140]
+            # Dynamic threshold calculation based on video statistics
+            # For videos with low brightness, use relative thresholds based on max/avg values
+            dynamic_threshold = max(
+                avg_brightness + 1.5 * std_brightness,  # Statistical approach
+                max_brightness * 0.9,                   # Percentage of max
+                120                                     # Absolute minimum for "white"
+            )
+            
+            # Create an adaptive threshold list
+            thresholds = [
+                dynamic_threshold,                     # Primary threshold
+                dynamic_threshold * 0.9,               # 10% more lenient
+                dynamic_threshold * 0.8,               # 20% more lenient
+                max(avg_brightness + 15, 110)          # Fallback threshold
+            ]
+            
+            logger.info(f"Using dynamic thresholds: {[round(t, 1) for t in thresholds]}")
 
             # Try each threshold
             for threshold_idx, whiteness_threshold in enumerate(thresholds):
-                logger.info(f"Trying whiteness threshold: {whiteness_threshold}")
+                logger.info(f"Trying whiteness threshold: {whiteness_threshold:.1f}")
 
                 # Reset video position
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-                # Get configurable frame sampling rate from options or use defaults
-                # Use lower sampling rates (check more frames) for stricter thresholds
-                if hasattr(self, 'frame_sampling_rate') and self.frame_sampling_rate is not None:
-                    # Use user-configured sampling rate (1-30)
-                    sample_rate = min(30, max(1, self.frame_sampling_rate))
-                    logger.info(f"Using configured frame sampling rate: {sample_rate}")
-                else:
-                    # Default behavior - check more frames for stricter thresholds
-                    sample_rate = 5 if threshold_idx < 2 else 3
-                    logger.info(f"Using default frame sampling rate: {sample_rate}")
+                # Always use sample rate of 1 for short bookends
+                sample_rate = 1
+                logger.info(f"Using frame-by-frame sampling to detect short bookends")
 
-                # Minimum frames to consider as bookend
-                min_white_frames = max(1, int(0.15 * fps / sample_rate))  # At least 0.15 seconds
+                # Minimum frames to consider as bookend - adapt based on frame rate
+                # For higher frame rates, require more frames
+                if fps > 25:
+                    min_white_frames = max(3, int(0.1 * fps))  # At least 0.1 seconds
+                else:
+                    min_white_frames = 3  # Absolute minimum
+                    
+                logger.info(f"Using minimum bookend size of {min_white_frames} frames ({min_white_frames/fps:.3f}s)")
+
+                # Std dev threshold based on video characteristics
+                std_dev_threshold = min(40, avg_std_dev * 1.5)
+                logger.info(f"Using standard deviation threshold of {std_dev_threshold:.1f}")
 
                 consecutive_white_frames = 0
                 current_bookend = None
                 current_bookends = []
+                white_frames = []  # Store frame indices that are white
+                
+                # Store brightness values of all frames for diagnostic purposes
+                all_frame_brightness = []
 
+                # Process each frame
                 for frame_idx in range(0, frame_count, sample_rate):
                     # Report progress
                     if frame_count > 1000 and frame_idx % 500 == 0:
@@ -657,17 +687,26 @@ class BookendAligner(QObject):
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                     avg_brightness = np.mean(gray)
                     std_dev = np.std(gray)
+                    
+                    all_frame_brightness.append((frame_idx, avg_brightness, std_dev))
 
-                    # More lenient white frame detection for lower thresholds
+                    # Adaptive white frame detection
                     is_white_frame = False
+                    
+                    # For stricter thresholds, just check brightness
                     if threshold_idx < 2:
-                        # Strict detection (high threshold)
                         is_white_frame = avg_brightness > whiteness_threshold
                     else:
-                        # Lenient detection (lower threshold but consider uniformity)
-                        is_white_frame = (avg_brightness > whiteness_threshold and std_dev < 40)
+                        # For more lenient thresholds, also consider uniformity
+                        is_white_frame = (avg_brightness > whiteness_threshold and std_dev < std_dev_threshold)
+
+                    # Log frames near the threshold for diagnostics
+                    brightness_diff = abs(avg_brightness - whiteness_threshold)
+                    if brightness_diff < 15 or (is_white_frame and frame_idx % 10 == 0):
+                        logger.debug(f"Frame {frame_idx}: brightness={avg_brightness:.1f}, std_dev={std_dev:.1f}, white={is_white_frame}, diff={brightness_diff:.1f}")
 
                     if is_white_frame:
+                        white_frames.append(frame_idx)
                         consecutive_white_frames += 1
 
                         # Start a new bookend if needed
@@ -680,8 +719,6 @@ class BookendAligner(QObject):
                                 'brightness': avg_brightness,
                                 'std_dev': std_dev
                             }
-
-                            # Skip saving frames for diagnostic purposes
                     else:
                         # Check if we just finished a bookend
                         if current_bookend is not None:
@@ -713,18 +750,144 @@ class BookendAligner(QObject):
 
                 # If we found at least 2 bookends, use these results
                 if len(current_bookends) >= 2:
-                    logger.info(f"Found {len(current_bookends)} white bookend sections with threshold {whiteness_threshold}")
+                    logger.info(f"Found {len(current_bookends)} white bookend sections with threshold {whiteness_threshold:.1f}")
                     bookends = current_bookends
                     break
 
-                logger.warning(f"Found only {len(current_bookends)} white bookend sections with threshold {whiteness_threshold} (need at least 2)")
+                # Special handling for videos with many small bookends
+                if len(current_bookends) == 1 and len(white_frames) > 10:
+                    logger.info("Only found one bookend, checking for clusters of white frames...")
+                    
+                    # Find all clusters of white frames with small gaps
+                    clusters = []
+                    if white_frames:
+                        current_cluster = [white_frames[0]]
+                        
+                        for i in range(1, len(white_frames)):
+                            if white_frames[i] - white_frames[i-1] <= 3:  # Allow gaps of up to 3 frames
+                                current_cluster.append(white_frames[i])
+                            else:
+                                if len(current_cluster) >= min_white_frames:
+                                    clusters.append(current_cluster)
+                                current_cluster = [white_frames[i]]
+                        
+                        # Add the last cluster if it exists
+                        if len(current_cluster) >= min_white_frames:
+                            clusters.append(current_cluster)
+                    
+                    logger.info(f"Found {len(clusters)} potential white frame clusters")
+                    
+                    # Convert clusters to bookends
+                    if len(clusters) >= 2:
+                        bookends = []
+                        for cluster in clusters:
+                            start_frame = cluster[0]
+                            end_frame = cluster[-1]
+                            bookend = {
+                                'start_frame': start_frame,
+                                'end_frame': end_frame,
+                                'start_time': start_frame / fps,
+                                'end_time': end_frame / fps,
+                                'frame_count': len(cluster),
+                                'brightness': 0,  # Can't determine easily here
+                                'std_dev': 0      # Can't determine easily here
+                            }
+                            bookends.append(bookend)
+                        
+                        logger.info(f"Created {len(bookends)} bookends from white frame clusters")
+                        break
+                
+                # Special case: if we have a lot of brightness variance, try finding relative bookends
+                if len(current_bookends) == 0 and threshold_idx == len(thresholds) - 1:
+                    logger.info("No bookends found with absolute thresholds, trying relative brightness approach")
+                    
+                    # Sort all frames by brightness to find the brightest sections
+                    sorted_frames = sorted(all_frame_brightness, key=lambda x: x[1], reverse=True)
+                    top_n_percent = int(len(sorted_frames) * 0.05)  # Top 5% brightest frames
+                    if top_n_percent > 0:
+                        brightest_frames = sorted_frames[:top_n_percent]
+                        brightest_indices = [f[0] for f in brightest_frames]
+                        
+                        # Find clusters in the brightest frames
+                        brightest_indices.sort()  # Sort by frame index
+                        clusters = []
+                        if brightest_indices:
+                            current_cluster = [brightest_indices[0]]
+                            
+                            for i in range(1, len(brightest_indices)):
+                                if brightest_indices[i] - brightest_indices[i-1] <= 3:  # Allow gaps of up to 3 frames
+                                    current_cluster.append(brightest_indices[i])
+                                else:
+                                    if len(current_cluster) >= min_white_frames:
+                                        clusters.append(current_cluster)
+                                    current_cluster = [brightest_indices[i]]
+                            
+                            # Add the last cluster if it exists
+                            if len(current_cluster) >= min_white_frames:
+                                clusters.append(current_cluster)
+                        
+                        logger.info(f"Found {len(clusters)} clusters among the brightest frames")
+                        
+                        # Convert clusters to bookends, but only if we have at least 2
+                        if len(clusters) >= 2:
+                            bookends = []
+                            for cluster in clusters:
+                                start_frame = cluster[0]
+                                end_frame = cluster[-1]
+                                # Find the average brightness of this cluster
+                                cluster_brightness = np.mean([b for f, b, _ in all_frame_brightness if f in cluster])
+                                bookend = {
+                                    'start_frame': start_frame,
+                                    'end_frame': end_frame,
+                                    'start_time': start_frame / fps,
+                                    'end_time': end_frame / fps,
+                                    'frame_count': len(cluster),
+                                    'brightness': cluster_brightness,
+                                    'std_dev': 0
+                                }
+                                bookends.append(bookend)
+                            
+                            logger.info(f"Created {len(bookends)} bookends from brightest frame clusters")
+                            break
+                
+                logger.warning(f"Found only {len(current_bookends)} white bookend sections with threshold {whiteness_threshold:.1f} (need at least 2)")
 
             cap.release()
 
             # Final check and summary
             if len(bookends) < 2:
-                logger.warning(f"Failed to detect white bookends with any threshold.")
+                logger.warning(f"Failed to detect white bookends with any method.")
                 logger.warning("Make sure your video has clear white frames at the beginning and end of each loop")
+                
+                # Last resort: just use the beginning and end of the video if we can't find bookends
+                if hasattr(self, 'fallback_to_full_video') and self.fallback_to_full_video:
+                    logger.warning("Falling back to using entire video as no bookends were detected")
+                    first_frame_time = 0
+                    last_frame_time = duration - (1/fps)  # Last frame time
+                    
+                    bookends = [
+                        {
+                            'start_frame': 0,
+                            'end_frame': min(5, frame_count - 1),  # Use first few frames
+                            'start_time': 0,
+                            'end_time': min(5, frame_count - 1) / fps,
+                            'frame_count': min(5, frame_count),
+                            'brightness': 0,
+                            'std_dev': 0,
+                            'is_fallback': True
+                        },
+                        {
+                            'start_frame': max(0, frame_count - 5),  # Use last few frames
+                            'end_frame': frame_count - 1,
+                            'start_time': max(0, frame_count - 5) / fps,
+                            'end_time': duration,
+                            'frame_count': min(5, frame_count),
+                            'brightness': 0,
+                            'std_dev': 0,
+                            'is_fallback': True
+                        }
+                    ]
+                    logger.warning("Created fallback bookends at beginning and end of video")
             else:
                 logger.info(f"Successfully detected {len(bookends)} white bookend sections")
 
@@ -735,6 +898,17 @@ class BookendAligner(QObject):
             import traceback
             logger.error(traceback.format_exc())
             return None
+
+
+
+
+
+
+
+
+
+
+
 
 
 class BookendAlignmentThread(QThread):
