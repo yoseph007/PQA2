@@ -1,9 +1,8 @@
 
-import os
-import logging
 import json
+import logging
+import os
 import subprocess
-import re
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -125,7 +124,6 @@ class VMAFEnhancer:
             logger.info(f"Distorted: {dist_meta['width']}x{dist_meta['height']} @ {dist_meta['frame_rate']}fps, {dist_meta['pix_fmt']}")
             
             # Check if preprocessing is needed
-            needs_processing = False
             
             # Check frame rate
             frame_rate_mismatch = abs(ref_meta['frame_rate'] - dist_meta['frame_rate']) > 0.01
@@ -250,7 +248,7 @@ class VMAFEnhancer:
             ffmpeg = ffmpeg_path or "ffmpeg"
             
             # Validate and locate model - but don't use model_path parameter which causes issues
-            model_path = self.validate_vmaf_model(model_name)
+            self.validate_vmaf_model(model_name)
             
             # Ensure paths use forward slashes
             reference_path_ffmpeg = reference_path.replace("\\", "/")
@@ -294,7 +292,6 @@ class VMAFEnhancer:
             from .utils import get_ffmpeg_path
             ffmpeg_exe, ffprobe_exe, ffplay_exe = get_ffmpeg_path()
             ffmpeg = ffmpeg_path or ffmpeg_exe
-            ffprobe = ffprobe_exe
             
             logger.info(f"Starting simplified VMAF analysis between {os.path.basename(reference_path)} and {os.path.basename(distorted_path)}")
             

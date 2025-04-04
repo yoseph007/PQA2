@@ -1,12 +1,12 @@
-import os
 import logging
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                            QLabel, QComboBox, QGroupBox, QFileDialog, QMessageBox,
-                            QLineEdit, QSplitter, QFrame, QTextEdit)
+import os
+from datetime import datetime
+
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
-import threading
-from datetime import datetime
+from PyQt5.QtWidgets import (QFileDialog, QFrame, QGroupBox, QHBoxLayout,
+                             QLabel, QLineEdit, QMessageBox, QPushButton,
+                             QTextEdit, QVBoxLayout, QWidget)
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +82,8 @@ class SetupTab(QWidget):
         self.txt_test_name.setPlaceholderText("Enter a test name (alpha-numeric, _ or - only)")
         self.txt_test_name.setToolTip("Use a descriptive name with letters, numbers, underscores, or hyphens")
         # Add validator to enforce proper naming
-        from PyQt5.QtGui import QRegExpValidator
         from PyQt5.QtCore import QRegExp
+        from PyQt5.QtGui import QRegExpValidator
         validator = QRegExpValidator(QRegExp(r'[A-Za-z0-9_\-]+'))
         self.txt_test_name.setValidator(validator)
         test_name_layout.addWidget(self.txt_test_name)

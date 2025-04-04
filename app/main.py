@@ -1,10 +1,13 @@
-import sys
 import logging
 import os
+import sys
+
 from PyQt5.QtWidgets import QApplication
+
 from app.capture import CaptureManager
-from app.utils import FileManager
 from app.ui import MainWindow
+from app.utils import FileManager
+
 
 def setup_logging():
     """Setup logging configuration with both file and console handlers"""

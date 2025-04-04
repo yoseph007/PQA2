@@ -1,14 +1,15 @@
 
-import os
 import logging
+import os
 from datetime import datetime
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                           QLabel, QComboBox, QProgressBar, QGroupBox, QMessageBox,
-                           QSplitter, QTextEdit, QFrame)
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap, QImage
+
 import cv2
 import numpy as np
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import (QComboBox, QFrame, QGroupBox, QHBoxLayout, QLabel,
+                             QMessageBox, QProgressBar, QPushButton, QSplitter,
+                             QTextEdit, QVBoxLayout, QWidget)
 
 logger = logging.getLogger(__name__)
 
@@ -615,7 +616,7 @@ class CaptureTab(QWidget):
                 if reference_path and os.path.exists(reference_path):
                     # Use the same preview loading code from SetupTab
                     import cv2
-                    
+
                     # Open the video file
                     cap = cv2.VideoCapture(reference_path)
                     if not cap.isOpened():

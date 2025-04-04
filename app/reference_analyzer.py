@@ -1,10 +1,10 @@
-import subprocess
 import json
-import re
-import os
 import logging
+import os
+import subprocess
+
 import cv2
-from PyQt5.QtCore import QObject, pyqtSignal, QThread
+from PyQt5.QtCore import QObject, QThread, pyqtSignal
 
 logger = logging.getLogger(__name__)
 

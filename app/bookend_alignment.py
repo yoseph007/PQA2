@@ -1,16 +1,11 @@
-import os
 import logging
+import os
 import subprocess
+from datetime import datetime
 
-import subprocess
-import os
-import logging
 import cv2
 import numpy as np
-import time
-from datetime import datetime
-from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
-import shutil
+from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal
 
 logger = logging.getLogger(__name__)
 
@@ -1054,6 +1049,8 @@ class Aligner(QObject):
 # ... rest of the file remains unchanged ...
 
 from enum import Enum
+
+
 class AlignmentState(Enum):
     COMPLETE = 0
     RUNNING = 1

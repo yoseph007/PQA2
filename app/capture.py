@@ -1,20 +1,19 @@
-import os
 import logging
-import subprocess
-import re
-import time
+import math
+import os
 import platform
+import re
+import subprocess
+import threading
+import time
 from datetime import datetime
+from enum import Enum
+
 import cv2
 import numpy as np
 import psutil
-import threading
-from PyQt5.QtCore import QObject, pyqtSignal, QThread, pyqtSlot, QTimer, QMutex
-from PyQt5.QtGui import QImage, QPixmap
-from enum import Enum
-import math
-import shutil
-import signal
+from PyQt5.QtCore import QMutex, QObject, QThread, QTimer, pyqtSignal
+from PyQt5.QtGui import QImage
 
 logger = logging.getLogger(__name__)
 
@@ -1028,9 +1027,9 @@ class BookendCaptureManager(QObject):
         bookend_settings = self.options_manager.get_setting("bookend")
 
         device = capture_settings.get("default_device", "Intensity Shuttle")
-        resolution = capture_settings.get("resolution", "1920x1080")
+        capture_settings.get("resolution", "1920x1080")
         frame_rate = capture_settings.get("frame_rate", 25)
-        pixel_format = capture_settings.get("pixel_format", "uyvy422")
+        capture_settings.get("pixel_format", "uyvy422")
         max_capture_time = bookend_settings.get("max_capture_time", 120)
 
         # Create output directory
@@ -1179,7 +1178,9 @@ class BookendCaptureManager(QObject):
                 return
 
             # Validate the captured file
-            from app.bookend_alignment import validate_video_file, repair_video_file, MAX_REPAIR_ATTEMPTS
+            from app.bookend_alignment import (MAX_REPAIR_ATTEMPTS,
+                                               repair_video_file,
+                                               validate_video_file)
 
             if not validate_video_file(captured_file):
                 logger.warning(f"Captured file is not valid, attempting repair: {captured_file}")

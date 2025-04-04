@@ -1,11 +1,10 @@
-import os
-import json
 import logging
+import os
+import platform
 import shutil
 import subprocess
 import tempfile
 from datetime import datetime
-import platform
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +15,8 @@ def get_ffmpeg_path():
     Returns:
         Tuple of (ffmpeg_exe, ffprobe_exe, ffplay_exe) paths
     """
-    import os
     import logging
+    import os
 
     logger = logging.getLogger(__name__)
 

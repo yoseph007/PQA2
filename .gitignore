@@ -41,6 +41,11 @@ nosetests.xml
 tests/
 tests_data/
 test_results/
+.vscode/settings.json
+.vscode/launch.json 
+.vscode/tasks.json
+.vscode/extensions.json 
+.vscode/
 
 # === Jupyter Notebook checkpoints ===
 .ipynb_checkpoints/
@@ -49,6 +54,7 @@ test_results/
 *.bak
 *.tmp
 *.mp4
+*.bat
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

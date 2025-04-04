@@ -1,12 +1,13 @@
-import os
-import logging
 import json
+import logging
+import os
+import platform  # Added for platform detection
 import subprocess
-import re
 import time
-import platform # Added for platform detection
 from datetime import datetime
-from PyQt5.QtCore import QObject, pyqtSignal, QThread, Qt
+
+from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal
+
 from .utils import normalize_path
 
 logger = logging.getLogger(__name__)
@@ -74,12 +75,10 @@ class VMAFAnalyzer(QObject):
             # Determine if we should use an existing directory
             # Check if reference or distorted paths are already in a test directory
             parent_dir = os.path.dirname(reference_path)
-            using_existing_dir = False
 
             if test_name and test_name in parent_dir:
                 # If reference path is already in a test directory, use that directory
                 test_dir = parent_dir
-                using_existing_dir = True
                 logger.info(f"Using existing test directory: {test_dir}")
             else:
                 # Create a test results directory with timestamp
@@ -249,9 +248,8 @@ class VMAFAnalyzer(QObject):
             distorted_path_ffmpeg = distorted_path.replace("\\", "/")
 
             # Duration parameter if needed
-            duration_cmd = []
             if duration and duration > 0:
-                duration_cmd = ["-t", str(duration)]
+                ["-t", str(duration)]
                 self.status_update.emit(f"Analyzing {duration}s of video")
 
 

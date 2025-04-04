@@ -1,12 +1,12 @@
 import logging
 import os
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, 
-    QLabel, QPushButton, QComboBox, QCheckBox,
-    QSpinBox, QDoubleSpinBox, QTabWidget, QLineEdit,
-    QFormLayout, QFileDialog, QMessageBox, QGridLayout, QSlider
-)
-from PyQt5.QtCore import Qt, pyqtSignal
+
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
+                             QFormLayout, QGridLayout, QGroupBox, QHBoxLayout,
+                             QLabel, QLineEdit, QMessageBox, QPushButton,
+                             QSlider, QSpinBox, QTabWidget, QVBoxLayout,
+                             QWidget)
 
 logger = logging.getLogger(__name__)
 
@@ -799,8 +799,8 @@ class OptionsTab(QWidget):
     def pick_color(self, text_field):
         """Open a color picker dialog and set the selected color"""
         try:
-            from PyQt5.QtWidgets import QColorDialog
             from PyQt5.QtGui import QColor
+            from PyQt5.QtWidgets import QColorDialog
 
             current_color = text_field.text()
             color = QColorDialog.getColor(QColor(current_color), self, "Select Color")
@@ -838,7 +838,7 @@ class OptionsTab(QWidget):
                 shutil.copy2(file_path, target_path)
 
                 # Store both the absolute path (for display) and relative path (for settings)
-                abs_path = os.path.abspath(target_path)
+                os.path.abspath(target_path)
                 rel_path = os.path.join("assets", f"company_logo{ext}")
 
                 self.logo_path = rel_path

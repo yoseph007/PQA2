@@ -1,11 +1,12 @@
-import logging
 import json
-from datetime import datetime
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                           QLabel, QComboBox, QProgressBar, QGroupBox, QMessageBox,
-                           QTextEdit, QStyle)
-from PyQt5.QtCore import Qt
+import logging
 import os  # Required for file path operations
+from datetime import datetime
+
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel,
+                             QMessageBox, QProgressBar, QPushButton, QStyle,
+                             QTextEdit, QVBoxLayout, QWidget)
 
 logger = logging.getLogger(__name__)
 
@@ -227,8 +228,8 @@ class AnalysisTab(QWidget):
     def handle_alignment_for_combined_workflow(self, results):
         """Handle completion of video alignment in combined workflow"""
         # Process alignment results
-        offset_frames = results['offset_frames']
-        offset_seconds = results['offset_seconds']
+        results['offset_frames']
+        results['offset_seconds']
         confidence = results['confidence']
 
         aligned_reference = results['aligned_reference']

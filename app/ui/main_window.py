@@ -1,17 +1,18 @@
-import os
 import logging
-from datetime import datetime
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter, QApplication, QStyle
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap, QIcon
+import os
 
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QStyle, QTabWidget,
+                             QVBoxLayout, QWidget)
+
+from .tabs.analysis_tab import AnalysisTab
+from .tabs.capture_tab import CaptureTab
+from .tabs.help_tab import HelpTab  # Added import for HelpTab
+from .tabs.options_tab import OptionsTab
+from .tabs.results_tab import ResultsTab
 # Import UI components
 from .tabs.setup_tab import SetupTab
-from .tabs.capture_tab import CaptureTab
-from .tabs.analysis_tab import AnalysisTab
-from .tabs.results_tab import ResultsTab
-from .tabs.options_tab import OptionsTab
-from .tabs.help_tab import HelpTab # Added import for HelpTab
 from .theme_manager import ThemeManager
 
 logger = logging.getLogger(__name__)
@@ -176,7 +177,7 @@ class MainWindow(QMainWindow):
             
             if os.path.exists(logo_path):
                 from PyQt5.QtGui import QIcon, QPixmap
-                
+
                 # Load the image
                 pixmap = QPixmap(logo_path)
                 

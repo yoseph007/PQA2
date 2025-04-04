@@ -1,22 +1,20 @@
 
-import os
-import json
 import logging
-import platform
-import subprocess
+import os
+
 import matplotlib
+
 matplotlib.use('Agg')  # Use non-interactive backend
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 from datetime import datetime
-from PyQt5.QtCore import QObject, pyqtSignal, QThread
+
+import matplotlib.pyplot as plt
+from PyQt5.QtCore import QObject, QThread, pyqtSignal
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from io import BytesIO
+from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer,
+                                Table, TableStyle)
 
 logger = logging.getLogger(__name__)
 

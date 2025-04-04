@@ -1,11 +1,12 @@
-import os
 import json
 import logging
-import re
-import time
+import os
 import platform
-from PyQt5.QtCore import QObject, pyqtSignal
+import re
 import subprocess
+import time
+
+from PyQt5.QtCore import QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
 

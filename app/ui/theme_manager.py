@@ -1,8 +1,8 @@
 
-import os
 import logging
+
+from PyQt5.QtGui import QColor, QPalette
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtGui import QPalette, QColor
 
 logger = logging.getLogger(__name__)
 

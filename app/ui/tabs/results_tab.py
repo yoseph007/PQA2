@@ -1,29 +1,26 @@
-import os
-import sys
-import cv2
-import time
 import json
-import shutil
 import logging
+import os
 import platform
+import shutil
 import subprocess
-import numpy as np
+import sys
+import time
 from datetime import datetime
-from pathlib import Path
 from enum import Enum, auto
 
+import cv2
+import numpy as np
+from PyQt5.QtCore import (QObject, Qt, QThread, QThreadPool, pyqtSignal,
+                          pyqtSlot)
+from PyQt5.QtGui import QImage, QPixmap, QTextCursor
 # PyQt5 imports
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QFileDialog, QComboBox, QProgressBar, QGroupBox,
-    QFormLayout, QLineEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QTextEdit,
-    QMessageBox, QSplitter, QFrame, QRadioButton, QButtonGroup,QListWidget,QTableWidget,QHeaderView,QListWidgetItem
-)
-from PyQt5.QtCore import (
-    Qt, QThread, QObject, pyqtSignal, pyqtSlot, QRunnable, QThreadPool, 
-    QMutex, QTimer, QSize, QDir
-)
-from PyQt5.QtGui import QImage, QPixmap, QIcon, QFont, QTextCursor
+from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
+                             QFormLayout, QFrame, QGroupBox, QHBoxLayout,
+                             QHeaderView, QLabel, QLineEdit, QListWidget,
+                             QListWidgetItem, QMainWindow, QMessageBox,
+                             QProgressBar, QPushButton, QSpinBox, QTableWidget,
+                             QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
 # Configure logging
 logging.basicConfig(
@@ -2187,7 +2184,7 @@ class AnalysisTab(QWidget):
         
         try:
             # Create output directory
-            test_name = self.parent.setup_tab.txt_test_name.text() or "Test"
+            self.parent.setup_tab.txt_test_name.text() or "Test"
             input_dir = os.path.dirname(self.distorted_path)
             output_dir = input_dir
             
@@ -2923,7 +2920,7 @@ class ResultsTab(QWidget):
         """Views a historical test result"""
         sender = self.sender()
         row = sender.property("row")
-        test_dir = sender.property("dir")
+        sender.property("dir")
         
         try:
             # Get test details
@@ -3058,7 +3055,8 @@ class ResultsTab(QWidget):
             return
         
         # Get export format
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QRadioButton, QButtonGroup, QLabel
+        from PyQt5.QtWidgets import (QButtonGroup, QDialog, QLabel,
+                                     QRadioButton, QVBoxLayout)
         
         dialog = QDialog(self)
         dialog.setWindowTitle("Export Format")
