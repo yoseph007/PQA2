@@ -4,6 +4,8 @@ import logging
 import os
 import subprocess
 from pathlib import Path
+import platform
+
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +239,21 @@ class VMAFEnhancer:
             
         logger.warning(f"VMAF model '{model_name}' not found, will use default")
         return None
+ 
+ 
+    def normalize_path_for_ffmpeg(path):
+        """Normalize path for FFmpeg use, properly escaping special characters"""
+        # Convert to Path object and resolve
+        path_obj = Path(path).resolve()
+        
+        if platform.system() == 'Windows':
+            # For Windows, escape colons with backslash and use forward slashes
+            return str(path_obj).replace('\\', '/').replace(':', '\\:')
+        else:
+            # For Unix systems, just use forward slashes
+            return str(path_obj)
+ 
+ 
     
     def get_optimal_command(self, reference_path, distorted_path, model_name="vmaf_v0.6.1", output_path=None, ffmpeg_path=None):
         """
@@ -269,7 +286,7 @@ class VMAFEnhancer:
                 "-hide_banner",
                 "-i", distorted_path_ffmpeg,
                 "-i", reference_path_ffmpeg,
-                "-lavfi", f"libvmaf=log_path={output_path_ffmpeg}:log_fmt=json",
+                "-lavfi", f"libvmaf=log_path={output_path_ffmpeg.replace(':', '\\:')}:log_fmt=json",
                 "-f", "null", "-"
             ]
             

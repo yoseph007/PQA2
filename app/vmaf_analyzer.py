@@ -24,6 +24,21 @@ class VMAFAnalyzer(QObject):
         self.output_directory = None
         self.test_name = None
 
+
+
+    def _prepare_ffmpeg_path(path):
+        """Format a path for FFmpeg use in Windows"""
+        # First normalize to forward slashes
+        norm_path = path.replace('\\', '/')
+        
+        # For lavfi filters, escape colons with backslash
+        if ':' in norm_path:
+            # Only for filter parameters, not input file paths
+            return norm_path.replace(':', '\\:')
+        
+        return norm_path
+
+
     def set_output_directory(self, output_dir):
         """Set output directory for results"""
         self.output_directory = normalize_path(output_dir)
@@ -422,6 +437,22 @@ class VMAFAnalyzer(QObject):
             except:
                 pass
             return None
+
+
+    def normalize_path_for_ffmpeg(path):
+        """Normalize path for FFmpeg use, properly escaping special characters"""
+        # Convert to Path object and resolve
+        path_obj = Path(path).resolve()
+        
+        if platform.system() == 'Windows':
+            # For Windows, escape colons with backslash and use forward slashes
+            return str(path_obj).replace('\\', '/').replace(':', '\\:')
+        else:
+            # For Unix systems, just use forward slashes
+            return str(path_obj)
+
+
+
 
     def _run_psnr_ssim_analysis(self, ffmpeg_exe, distorted_path, reference_path, psnr_filename, ssim_filename):
         """Run PSNR and SSIM analysis separately using relative paths"""
