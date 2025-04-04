@@ -303,7 +303,12 @@ class CaptureTab(QWidget):
             # Grey for initialization not complete
             self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
             self.device_status_indicator.setToolTip("Capture manager not initialized")
-        
+  
+  
+  
+  
+
+
     def start_capture(self):
         """Start the bookend capture process"""
         if not self.parent.reference_info:
@@ -325,21 +330,34 @@ class CaptureTab(QWidget):
         self.txt_capture_log.clear()
         self.log_to_capture("Starting bookend capture process...")
 
-        # Get output directory and test name
-        output_dir = self.parent.setup_tab.txt_output_dir.text()
-        if not output_dir or output_dir == "Default output directory":
-            if hasattr(self.parent, 'file_manager'):
-                output_dir = self.parent.file_manager.get_default_base_dir()
-            else:
-                script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-                output_dir = os.path.join(script_dir, "tests", "test_results")
-                os.makedirs(output_dir, exist_ok=True)
+        # Get output directory using FileManager
+        # Use FileManager's get_default_base_dir instead of trying to access setup_tab attributes
+        if hasattr(self.parent, 'file_manager') and self.parent.file_manager:
+            output_dir = self.parent.file_manager.get_default_base_dir()
+        else:
+            # Create a temporary FileManager to get the default directory
+            from app.utils import FileManager
+            temp_file_manager = FileManager()
+            output_dir = temp_file_manager.get_default_base_dir()
 
-        # Add timestamp prefix to test name to prevent overwriting
-        base_test_name = self.parent.setup_tab.txt_test_name.text()
-        test_name = f"{base_test_name}"
+        # Get test name - use a timestamp if not available
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        test_name = f"test_{timestamp}"
+        
+        # Try to get test name from setup_tab if it exists
+        if hasattr(self.parent, 'setup_tab'):
+            # Look for common test name field naming patterns
+            for attr_name in ['test_name', 'txt_test_name', 'test_name_field']:
+                if hasattr(self.parent.setup_tab, attr_name):
+                    field = getattr(self.parent.setup_tab, attr_name)
+                    if hasattr(field, 'text'):
+                        test_name_value = field.text()
+                        if test_name_value:
+                            test_name = test_name_value
+                            break
 
         self.log_to_capture(f"Using test name: {test_name}")
+        self.log_to_capture(f"Output directory: {output_dir}")
 
         # Set output information in capture manager
         if hasattr(self.parent, 'capture_mgr'):
@@ -352,7 +370,12 @@ class CaptureTab(QWidget):
         else:
             self.log_to_capture("Error: Capture manager not initialized")
             self.btn_start_capture.setEnabled(True)
-            self.btn_stop_capture.setEnabled(False)
+            self.btn_stop_capture.setEnabled(False)     
+           
+           
+           
+           
+           
             
     def stop_capture(self):
         """Stop the capture process"""
