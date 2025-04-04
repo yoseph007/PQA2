@@ -8,6 +8,28 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+
+
+def get_project_paths():
+    """Get absolute paths to key project directories"""
+    # Get the current script's directory
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Navigate up to project root if we're in app folder
+    if os.path.basename(current_dir) == 'app':
+        root_dir = os.path.dirname(current_dir)
+    else:
+        root_dir = current_dir
+        
+    # Build absolute paths
+    return {
+        'root': root_dir,
+        'ffmpeg_bin': os.path.join(root_dir, 'ffmpeg_bin'),
+        'models': os.path.join(root_dir, 'models'),
+        'temp': os.path.join(root_dir, 'temp')
+    }
+
+
 def get_ffmpeg_path():
     """
     Get path to ffmpeg executables
@@ -446,7 +468,7 @@ def timestamp_string():
     Returns:
         Formatted timestamp string
     """
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
+    return datetime.now().strftime("%y%m%d_%H%M%S")
 
 
 def normalize_path(path, for_ffmpeg=False):

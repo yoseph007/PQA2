@@ -1063,7 +1063,7 @@ class BookendCaptureManager(QObject):
                 # Output format settings
                 "-c:v", "libx264",
                 "-preset", "fast",
-                "-crf", "0",  # Good quality
+                "-crf", "18",  # Good quality
                 "-pix_fmt", "yuv420p",
                 "-r", str(frame_rate),
                 "-t", str(max_capture_time),  # Maximum capture duration
@@ -1767,7 +1767,7 @@ class CaptureManager(QObject):
                 "-i", device_name,        # Input device
                 "-c:v", "libx264",        # Video codec
                 "-preset", "superfast",   # Faster preset to reduce processing lag
-                "-crf", "23",             # Slightly lower quality for better performance
+                "-crf", "18",             # Slightly lower quality for better performance
                 "-g", str(int(frame_rate)),    # Fix keyframe interval to match frame rate
                 "-keyint_min", str(int(frame_rate)), # Minimum keyframe interval
                 "-movflags", "+faststart", # Optimize for web streaming

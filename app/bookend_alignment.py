@@ -94,7 +94,7 @@ def repair_video_file(file_path):
             "-i", file_path,
             "-c:v", "libx264",  # Re-encode video
             "-preset", "ultrafast",
-            "-crf", "23",
+            "-crf", "18",
             "-y",
             temp_path
         ]

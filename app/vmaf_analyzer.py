@@ -158,11 +158,11 @@ class VMAFAnalyzer(QObject):
                         "-hide_banner",
                         "-i", distorted_path_ffmpeg,
                         "-i", reference_path_ffmpeg,
-                        "-lavfi", f"libvmaf=log_path={json_path}:log_fmt=json:n_threads={thread_count}",
+                        "-lavfi", f"libvmaf=log_path={rel_output_path}:log_fmt=json:n_threads={thread_count}",
                         "-f", "null", "-"
                     ]
 
-                    output_json = json_path
+                    rel_output_path = os.path.basename(json_path)
 
                     self.status_update.emit("Running VMAF analysis...")
                     self.analysis_progress.emit(30)
@@ -386,7 +386,7 @@ class VMAFAnalyzer(QObject):
                         "-hide_banner",
                         "-i", distorted_path_ffmpeg,
                         "-i", reference_path_ffmpeg,
-                        "-lavfi", f"libvmaf=log_path={rel_vmaf_json}:log_fmt=json",
+                        "-lavfi", f"libvmaf=log_path={rel_output_path}:log_fmt=json",
                         "-f", "null", "-"
                     ]
 
