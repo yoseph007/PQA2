@@ -705,8 +705,11 @@ class ResultsTab(QWidget):
             self.results_table.setRowCount(0)
 
             # Get output directory
-            output_dir = self.parent.setup_tab.txt_output_dir.text()
-            if not output_dir or output_dir == "Default output directory":
+            output_dir = ""
+            # Check if output_dir exists in options manager
+            if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                paths = self.parent.options_manager.get_setting('paths', {})
+                output_dir = paths.get('default_output_dir', '')
                 if hasattr(self.parent, 'file_mgr') and hasattr(self.parent.file_mgr, 'get_default_base_dir'):
                     output_dir = self.parent.file_mgr.get_default_base_dir()
                 elif hasattr(self.parent, 'options_manager'):
