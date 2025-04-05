@@ -1,14 +1,15 @@
 
-import os
 import logging
+import os
 from datetime import datetime
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                           QLabel, QComboBox, QProgressBar, QGroupBox, QMessageBox,
-                           QSplitter, QTextEdit, QFrame)
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap, QImage
+
 import cv2
 import numpy as np
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import (QComboBox, QFrame, QGroupBox, QHBoxLayout, QLabel,
+                             QMessageBox, QProgressBar, QPushButton, QSplitter,
+                             QTextEdit, QVBoxLayout, QWidget)
 
 logger = logging.getLogger(__name__)
 
@@ -330,23 +331,15 @@ class CaptureTab(QWidget):
         self.txt_capture_log.clear()
         self.log_to_capture("Starting bookend capture process...")
 
-        # Get output directory - first from setup_tab if available
-        output_dir = None
-        if hasattr(self.parent, 'setup_tab') and hasattr(self.parent.setup_tab, 'txt_output_dir'):
-            output_dir = self.parent.setup_tab.txt_output_dir.text()
-            self.log_to_capture(f"Using output directory from setup tab: {output_dir}")
-        
-        # Fallback to file_manager if setup_tab not available
-        if not output_dir and hasattr(self.parent, 'file_manager') and self.parent.file_manager:
+        # Get output directory using FileManager
+        # Use FileManager's get_default_base_dir instead of trying to access setup_tab attributes
+        if hasattr(self.parent, 'file_manager') and self.parent.file_manager:
             output_dir = self.parent.file_manager.get_default_base_dir()
-            self.log_to_capture(f"Using output directory from file manager: {output_dir}")
         else:
-            # Create default directory as last resort
-            import os
-            script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            output_dir = os.path.join(script_dir, "tests", "test_results")
-            os.makedirs(output_dir, exist_ok=True)
-            self.log_to_capture(f"Using default output directory: {output_dir}")
+            # Create a temporary FileManager to get the default directory
+            from app.utils import FileManager
+            temp_file_manager = FileManager()
+            output_dir = temp_file_manager.get_default_base_dir()
 
         # Get test name - use a timestamp if not available
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -490,7 +483,7 @@ class CaptureTab(QWidget):
                     self.lbl_preview.setPixmap(scaled_pixmap)
 
                     # Update status
-                    self.lbl_preview_status.setText(f"Status: Live preview ({width}x{height})")
+                    self.lbl_preview_status.setText(f"Status: Capture in progress")
 
                     # Update frame counter
                     frame_count = getattr(self, '_frame_count', 0) + 1
@@ -623,7 +616,7 @@ class CaptureTab(QWidget):
                 if reference_path and os.path.exists(reference_path):
                     # Use the same preview loading code from SetupTab
                     import cv2
-                    
+
                     # Open the video file
                     cap = cv2.VideoCapture(reference_path)
                     if not cap.isOpened():
