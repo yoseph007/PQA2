@@ -1,12 +1,31 @@
 run = "python main.py"
 modules = ["python-3.10:v18-20230807-322e88b"]
 
+hidden = [".pythonlibs"]
+
+[interpreter]
+  output = "disabled"
+
 [nix]
-channel = "stable-22_11"
+channel = "stable-22_11"  # Keep the stable channel that's working
+
+[unitTest]
+language = "python3"
 
 [env]
-PYTHONPATH = "${PYTHONPATH}:${REPL_HOME}"
+PYTHONPATH="${PYTHONPATH}:${REPL_HOME}"
 PYTHONUNBUFFERED = "1"
 
 [languages.python3]
 pattern = "**/*.py"
+
+[languages.python3.languageServer]
+start = "pylsp"
+
+[packager]
+language = "python3"
+ignoredPackages = ["unit_tests"]
+
+[packager.features]
+packageSearch = true
+guessImports = true
