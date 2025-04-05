@@ -1,94 +1,12 @@
 run = "python main.py"
 modules = ["python-3.10:v18-20230807-322e88b"]
 
-hidden = [".pythonlibs"]
-
-[interpreter]
-  output = "disabled"
-  
 [nix]
-channel = "stable-23_05"
-
-[unitTest]
-language = "python3"
-
-[deployment]
-run = "python main.py"
-deploymentTarget = "cloudrun"
-
-[hints]
-regex = "NameError: name" 
-message = "Did you forget to define or import a variable?"
+channel = "stable-22_11"
 
 [env]
-PYTHONPATH="${PYTHONPATH}:${REPL_HOME}"
+PYTHONPATH = "${PYTHONPATH}:${REPL_HOME}"
 PYTHONUNBUFFERED = "1"
-
-# Removed QT_QPA_PLATFORM = "offscreen" since you're not running the app on Replit
-
-[[ports]]
-localPort = 5000
-externalPort = 80
-
-[auth]
-pageEnabled = false
-buttonEnabled = false
-
-[languages]
 
 [languages.python3]
 pattern = "**/*.py"
-
-[languages.python3.languageServer]
-start = "pylsp"
-
-[packager]
-language = "python3"
-ignoredPackages = ["unit_tests"]
-
-[packager.features]
-packageSearch = true
-guessImports = true
-enabledForHosting = false
-
-[debugger]
-support = true
-
-# Simplified debugger configuration
-[debugger.interactive]
-transport = "localhost:0"
-startCommand = ["dap-python", "main.py"]
-
-[debugger.interactive.integratedAdapter]
-dapTcpAddress = "localhost:0"
-
-# Minimal initialization message
-[debugger.interactive.initializeMessage]
-command = "initialize"
-type = "request"
-
-[debugger.interactive.initializeMessage.arguments]
-adapterID = "debugpy"
-clientID = "replit"
-clientName = "replit.com"
-columnsStartAt1 = true
-linesStartAt1 = true
-locale = "en-us"
-pathFormat = "path"
-
-[debugger.interactive.launchMessage]
-command = "launch"
-type = "request"
-
-[debugger.interactive.launchMessage.arguments]
-cwd = "."
-program = "main.py"
-request = "launch"
-type = "python"
-
-[experimental]
-disableInternalPyPIFetch = false
-
-# Simplified workflows
-[workflows]
-runButton = "Code Editor"
