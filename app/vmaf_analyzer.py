@@ -8,10 +8,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal
 
 # Now using the improved utility functions
-from .utils import normalize_path, get_ffmpeg_path, get_project_paths
+from .utils import get_ffmpeg_path
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,14 @@ class VMAFAnalyzer(QObject):
         self._process_lock = threading.Lock()
         self._current_process = None
         self._terminate_requested = False
+        
+        # Default values for advanced options
+        self.pool_method = "mean"  # Options: mean, min, harmonic_mean
+        self.enable_motion_score = False
+        self.enable_temporal_features = False
+        self.feature_subsample = 1
+        self.psnr_enabled = True
+        self.ssim_enabled = True
 
     def set_output_directory(self, output_dir):
         """Set output directory for results"""
@@ -39,6 +47,24 @@ class VMAFAnalyzer(QObject):
         """Set test name for organizing results"""
         self.test_name = test_name
         logger.info(f"Set test name to: {test_name}")
+        
+    def set_advanced_options(self, pool_method="mean", enable_motion_score=False, 
+                            enable_temporal_features=False, feature_subsample=1,
+                            psnr_enabled=True, ssim_enabled=True):
+        """Set advanced VMAF analysis options for fine-tuning"""
+        self.pool_method = pool_method
+        self.enable_motion_score = enable_motion_score
+        self.enable_temporal_features = enable_temporal_features
+        self.feature_subsample = feature_subsample
+        self.psnr_enabled = psnr_enabled
+        self.ssim_enabled = ssim_enabled
+        
+        logger.info(f"Set advanced VMAF options: pool={pool_method}, "
+                    f"motion_score={enable_motion_score}, "
+                    f"temporal={enable_temporal_features}, "
+                    f"feature_subsample={feature_subsample}, "
+                    f"psnr_enabled={psnr_enabled}, "
+                    f"ssim_enabled={ssim_enabled}")
 
     def terminate_analysis(self):
         """Terminate running analysis"""
@@ -61,16 +87,6 @@ class VMAFAnalyzer(QObject):
             
         # First normalize to use forward slashes
         norm_path = str(Path(path).resolve()).replace('\\', '/')
-        return norm_path
-
-    def _prepare_ffmpeg_filter_path(self, path):
-        """Format a path specifically for use in FFmpeg filters (like libvmaf)"""
-        norm_path = self._prepare_ffmpeg_path(path)
-        
-        # For Windows filter parameters, escape colons with backslash
-        if platform.system() == 'Windows' and ':' in norm_path:
-            return norm_path.replace(':', '\\:')
-        
         return norm_path
 
     def get_video_metadata(self, video_path, ffprobe_exe=None):
@@ -153,19 +169,6 @@ class VMAFAnalyzer(QObject):
             logger.error(traceback.format_exc())
             return None
 
-
-
-
-
-
-
-
-
-
-
-
-
-
     def analyze_videos(self, reference_path, distorted_path, model="vmaf_v0.6.1", duration=None):
         """Run VMAF analysis with the correct command format and properly escaped paths"""
         
@@ -238,7 +241,7 @@ class VMAFAnalyzer(QObject):
                 ssim_path = os.path.join(test_dir, ssim_filename)
 
                 # Get video metadata to estimate progress
-                ref_meta = self.get_video_metadata(reference_path, ffprobe_exe)
+                self.get_video_metadata(reference_path, ffprobe_exe)
                 dist_meta = self.get_video_metadata(distorted_path, ffprobe_exe)
                 
                 # Estimate total frames for progress tracking
@@ -267,7 +270,7 @@ class VMAFAnalyzer(QObject):
                 logger.info(f"Using model parameter: {model_name}")
 
                 # Use current directory as a base for relative paths
-                current_dir = os.getcwd()
+                os.getcwd()
                 
                 # Check if we need to change directory
                 if platform.system() == 'Windows':
@@ -295,14 +298,31 @@ class VMAFAnalyzer(QObject):
                     dist_rel_path = distorted_path
                     json_rel_path = json_path
                 
-                # Set up VMAF options - using 'model' instead of 'model_path'
+                # Set up VMAF options with advanced parameters
                 vmaf_options = [
                     f"log_path={json_rel_path}",
                     "log_fmt=json",
-                    f"model={model_name}",  # Use the model parameter
-                    "n_threads=4",          # Use 4 threads
-                    "n_subsample=1"         # Analyze every frame by default
+                    f"model={model_name}",
+                    f"n_threads=4",
+                    f"n_subsample={self.feature_subsample}"
                 ]
+                
+                # Add pool method if not using default
+                if self.pool_method != "mean":
+                    vmaf_options.append(f"pool={self.pool_method}")
+                
+                # Enable motion score if requested
+                if self.enable_motion_score:
+                    vmaf_options.append("feature=name=motion:enable=1")
+                
+                # Enable temporal features if requested
+                if self.enable_temporal_features:
+                    vmaf_options.append("feature=name=vif_scale0:enable=1")
+                    vmaf_options.append("feature=name=vif_scale1:enable=1")
+                    vmaf_options.append("feature=name=vif_scale2:enable=1")
+                    vmaf_options.append("feature=name=vif_scale3:enable=1")
+                    vmaf_options.append("feature=name=adm2:enable=1")
+                    vmaf_options.append("feature=name=motion:enable=1")
                 
                 # Build the filter option
                 vmaf_filter = f"libvmaf={':'.join(vmaf_options)}"
@@ -466,29 +486,39 @@ class VMAFAnalyzer(QObject):
                             pass
                         self._current_process = None
 
-                # Now run PSNR and SSIM analyses
-                self.status_update.emit("VMAF completed, running PSNR/SSIM analysis...")
-                
-                # Use the same relative path approach for PSNR/SSIM
-                psnr_rel_path = os.path.relpath(psnr_path, base_dir).replace('\\', '/')
-                ssim_rel_path = os.path.relpath(ssim_path, base_dir).replace('\\', '/')
-                
-                psnr_ssim_success = self._run_psnr_ssim_analysis(
-                    ffmpeg_exe, 
-                    dist_rel_path, 
-                    ref_rel_path, 
-                    psnr_rel_path, 
-                    ssim_rel_path
-                )
-                
-                if not psnr_ssim_success:
-                    logger.warning("PSNR/SSIM analysis failed, but continuing with VMAF results")
+                # Now run PSNR and SSIM analyses if enabled
+                if self.psnr_enabled or self.ssim_enabled:
+                    self.status_update.emit("VMAF completed, running PSNR/SSIM analysis...")
+                    
+                    # Use the same relative path approach for PSNR/SSIM
+                    if platform.system() == 'Windows':
+                        psnr_rel_path = os.path.relpath(psnr_path, base_dir).replace('\\', '/')
+                        ssim_rel_path = os.path.relpath(ssim_path, base_dir).replace('\\', '/')
+                    else:
+                        psnr_rel_path = psnr_path
+                        ssim_rel_path = ssim_path
+                    
+                    psnr_ssim_success = self._run_psnr_ssim_analysis(
+                        ffmpeg_exe, 
+                        dist_rel_path, 
+                        ref_rel_path, 
+                        psnr_rel_path if self.psnr_enabled else None, 
+                        ssim_rel_path if self.ssim_enabled else None
+                    )
+                    
+                    if not psnr_ssim_success:
+                        logger.warning("PSNR/SSIM analysis failed, but continuing with VMAF results")
+                else:
+                    logger.info("Skipping PSNR/SSIM analysis as they are disabled")
 
                 # Return to original directory before parsing results
                 os.chdir(original_dir)
                 
                 # Parse the VMAF results
-                return self._parse_vmaf_results(json_path, psnr_path, ssim_path, distorted_path, reference_path)
+                return self._parse_vmaf_results(json_path, 
+                                               psnr_path if self.psnr_enabled else None, 
+                                               ssim_path if self.ssim_enabled else None, 
+                                               distorted_path, reference_path)
 
             except Exception as e:
                 error_msg = f"Error in VMAF analysis: {str(e)}"
@@ -514,103 +544,6 @@ class VMAFAnalyzer(QObject):
 
 
 
-
-
-
-
-
-
-    def _run_psnr_ssim_analysis(self, ffmpeg_exe, distorted_path, reference_path, psnr_path, ssim_path):
-        """Run PSNR and SSIM analysis separately using absolute paths"""
-        try:
-            # Set up startupinfo to suppress dialog windows
-            startupinfo = None
-            creationflags = 0
-            env = os.environ.copy()
-
-            # Add environment variables to suppress FFmpeg dialogs
-            env.update({
-                "FFMPEG_HIDE_BANNER": "1",
-                "AV_LOG_FORCE_NOCOLOR": "1",
-                "SDL_VIDEODRIVER": "dummy",
-                "SDL_AUDIODRIVER": "dummy"
-            })
-
-            if platform.system() == 'Windows':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = 0  # SW_HIDE
-                creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0x08000000
-            
-            # For filter paths, we need special escaping
-            psnr_path_ffmpeg = self._prepare_ffmpeg_filter_path(psnr_path)
-            ssim_path_ffmpeg = self._prepare_ffmpeg_filter_path(ssim_path)
-            
-            # Run PSNR analysis with absolute paths
-            logger.info("Running PSNR analysis...")
-            self.status_update.emit("Running PSNR analysis...")
-            psnr_cmd = [
-                ffmpeg_exe,
-                "-hide_banner",
-                "-i", distorted_path,
-                "-i", reference_path,
-                "-lavfi", f"psnr=stats_file={psnr_path_ffmpeg}",
-                "-f", "null", "-"
-            ]
-
-            logger.info(f"PSNR command: {' '.join(psnr_cmd)}")
-            psnr_result = subprocess.run(
-                psnr_cmd,
-                check=False, 
-                capture_output=True, 
-                startupinfo=startupinfo,
-                creationflags=creationflags,
-                env=env,
-                timeout=120  # 2 minute timeout
-            )
-            
-            if psnr_result.returncode != 0:
-                logger.warning(f"PSNR analysis failed: {psnr_result.stderr}")
-            else:
-                logger.info("PSNR analysis completed successfully")
-
-            # Run SSIM analysis with absolute paths
-            logger.info("Running SSIM analysis...")
-            self.status_update.emit("Running SSIM analysis...")
-            ssim_cmd = [
-                ffmpeg_exe,
-                "-hide_banner",
-                "-i", distorted_path,
-                "-i", reference_path,
-                "-lavfi", f"ssim=stats_file={ssim_path_ffmpeg}",
-                "-f", "null", "-"
-            ]
-
-            logger.info(f"SSIM command: {' '.join(ssim_cmd)}")
-            ssim_result = subprocess.run(
-                ssim_cmd,
-                check=False, 
-                capture_output=True,
-                startupinfo=startupinfo,
-                creationflags=creationflags,
-                env=env,
-                timeout=120  # 2 minute timeout
-            )
-            
-            if ssim_result.returncode != 0:
-                logger.warning(f"SSIM analysis failed: {ssim_result.stderr}")
-            else:
-                logger.info("SSIM analysis completed successfully")
-
-            # As long as either PSNR or SSIM completed, consider it successful
-            return psnr_result.returncode == 0 or ssim_result.returncode == 0
-            
-        except subprocess.TimeoutExpired:
-            logger.warning(f"PSNR/SSIM analysis timed out")
-            return False
-        except Exception as e:
-            logger.warning(f"Error running PSNR/SSIM analysis: {str(e)}")
-            return False
 
     def _parse_vmaf_results(self, json_path, psnr_path, ssim_path, distorted_path, reference_path):
         """Parse VMAF results from the output files"""
@@ -786,3 +719,145 @@ class VMAFAnalyzer(QObject):
             import traceback
             logger.error(traceback.format_exc())
             return None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def _run_psnr_ssim_analysis(self, ffmpeg_exe, distorted_path, reference_path, psnr_path, ssim_path):
+        """Run PSNR and SSIM analysis separately using absolute paths"""
+        try:
+            # Set up startupinfo to suppress dialog windows
+            startupinfo = None
+            creationflags = 0
+            env = os.environ.copy()
+
+            # Add environment variables to suppress FFmpeg dialogs
+            env.update({
+                "FFMPEG_HIDE_BANNER": "1",
+                "AV_LOG_FORCE_NOCOLOR": "1",
+                "SDL_VIDEODRIVER": "dummy",
+                "SDL_AUDIODRIVER": "dummy"
+            })
+
+            if platform.system() == 'Windows':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0  # SW_HIDE
+                creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0x08000000
+            
+            # Calculate feature subsample parameter for PSNR/SSIM
+            subsample_param = f":max_samples={self.feature_subsample}" if self.feature_subsample > 1 else ""
+            
+            results_ok = [False, False]  # [psnr_ok, ssim_ok]
+            
+            # Run PSNR analysis if path is provided
+            if psnr_path:
+                logger.info("Running PSNR analysis...")
+                self.status_update.emit("Running PSNR analysis...")
+                psnr_cmd = [
+                    ffmpeg_exe,
+                    "-hide_banner",
+                    "-i", distorted_path,
+                    "-i", reference_path,
+                    "-lavfi", f"psnr=stats_file={psnr_path}{subsample_param}",
+                    "-f", "null", "-"
+                ]
+
+                logger.info(f"PSNR command: {' '.join(psnr_cmd)}")
+                psnr_result = subprocess.run(
+                    psnr_cmd,
+                    check=False, 
+                    capture_output=True, 
+                    startupinfo=startupinfo,
+                    creationflags=creationflags,
+                    env=env,
+                    timeout=120  # 2 minute timeout
+                )
+                
+                if psnr_result.returncode != 0:
+                    logger.warning(f"PSNR analysis failed: {psnr_result.stderr}")
+                else:
+                    logger.info("PSNR analysis completed successfully")
+                    results_ok[0] = True
+
+            # Run SSIM analysis if path is provided
+            if ssim_path:
+                logger.info("Running SSIM analysis...")
+                self.status_update.emit("Running SSIM analysis...")
+                ssim_cmd = [
+                    ffmpeg_exe,
+                    "-hide_banner",
+                    "-i", distorted_path,
+                    "-i", reference_path,
+                    "-lavfi", f"ssim=stats_file={ssim_path}{subsample_param}",
+                    "-f", "null", "-"
+                ]
+
+                logger.info(f"SSIM command: {' '.join(ssim_cmd)}")
+                ssim_result = subprocess.run(
+                    ssim_cmd,
+                    check=False, 
+                    capture_output=True,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags,
+                    env=env,
+                    timeout=120  # 2 minute timeout
+                )
+                
+                if ssim_result.returncode != 0:
+                    logger.warning(f"SSIM analysis failed: {ssim_result.stderr}")
+                else:
+                    logger.info("SSIM analysis completed successfully")
+                    results_ok[1] = True
+
+            # Consider the operation successful if at least one metric was calculated
+            # or if neither was requested
+            return (results_ok[0] or not psnr_path) and (results_ok[1] or not ssim_path)
+            
+        except subprocess.TimeoutExpired:
+            logger.warning(f"PSNR/SSIM analysis timed out")
+            return False
+        except Exception as e:
+            logger.warning(f"Error running PSNR/SSIM analysis: {str(e)}")
+            return False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

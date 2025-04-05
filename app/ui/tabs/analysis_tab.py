@@ -305,8 +305,8 @@ class AnalysisTab(QWidget):
         self._alignment_handled = True
         
         # Process alignment results
-        offset_frames = results.get('offset_frames', 0)
-        offset_seconds = results.get('offset_seconds', 0)
+        results.get('offset_frames', 0)
+        results.get('offset_seconds', 0)
         confidence = results.get('confidence', 0)
 
         aligned_reference = results['aligned_reference']
@@ -374,7 +374,6 @@ class AnalysisTab(QWidget):
         try:
             # Define a temporary class if needed
             if not 'VMAFAnalysisThread' in globals():
-                from app.vmaf_analyzer import VMAFAnalyzer
                 from PyQt5.QtCore import QThread
                 
                 global VMAFAnalysisThread

@@ -54,70 +54,6 @@ def validate_video_file(file_path):
 
     return True
 
-def repair_video_file(file_path):
-    """Attempt to repair a corrupted MP4 file"""
-    try:
-        logger.info(f"Attempting to repair video file: {file_path}")
-
-        # Create temporary output path
-        output_dir = os.path.dirname(file_path)
-        temp_path = os.path.join(output_dir, f"temp_fixed_{os.path.basename(file_path)}")
-
-        # Run FFmpeg to copy and potentially fix the file
-        cmd = [
-            "ffmpeg",
-            "-v", "warning",
-            "-i", file_path,
-            "-c", "copy",
-            "-movflags", "faststart",  # This helps with fixing moov atom issues
-            "-y",  # Overwrite if file exists
-            temp_path
-        ]
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-
-        if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
-            # Replace original with fixed version
-            import shutil
-            shutil.move(temp_path, file_path)
-            logger.info(f"Successfully repaired video file: {file_path}")
-
-            # Validate the repaired file
-            if validate_video_file(file_path):
-                return True
-
-        # If the standard repair didn't work, try a more aggressive approach
-        cmd = [
-            "ffmpeg",
-            "-v", "warning",
-            "-err_detect", "ignore_err",  # More tolerant of errors
-            "-i", file_path,
-            "-c:v", "libx264",  # Re-encode video
-            "-preset", "ultrafast",
-            "-crf", "18",
-            "-y",
-            temp_path
-        ]
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-
-        if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
-            # Replace original with fixed version
-            import shutil
-            shutil.move(temp_path, file_path)
-            logger.info(f"Successfully repaired video file using re-encoding: {file_path}")
-            return validate_video_file(file_path)
-
-    except Exception as e:
-        logger.error(f"Error repairing video file: {e}")
-
-    return False
-
-# Define maximum repair attempts
-MAX_REPAIR_ATTEMPTS = 3
-
-
-
 def repair_video_file(video_path):
     """
     Repair a video file with missing moov atom by remuxing it with FFmpeg
@@ -167,46 +103,6 @@ def repair_video_file(video_path):
         logger.error(f"Error during video repair: {e}")
         return False
 
-def validate_video_file(video_path):
-    """
-    Validate that a video file is readable and has proper format
-
-    Args:
-        video_path: Path to the video file to validate
-
-    Returns:
-        bool: True if file is valid, False otherwise
-    """
-    if not os.path.exists(video_path):
-        logger.error(f"Cannot validate nonexistent file: {video_path}")
-        return False
-
-    try:
-        # Use FFmpeg to probe the file
-        cmd = [
-            "ffmpeg", "-hide_banner", "-loglevel", "error",
-            "-i", video_path,
-            "-f", "null", "-"  # Output to null
-        ]
-
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            logger.warning(f"Video file validation failed: {video_path}")
-            logger.warning(f"FFmpeg error: {result.stderr}")
-            return False
-
-        return True
-    except Exception as e:
-        logger.error(f"Error validating video: {e}")
-        return False
-
-
-logger = logging.getLogger(__name__)
-
-# Maximum retries for processing video files
-MAX_REPAIR_ATTEMPTS = 3
-
 class BookendAligner(QObject):
     """
     Class for aligning captured video with reference video using white frame bookends
@@ -219,6 +115,25 @@ class BookendAligner(QObject):
     def __init__(self):
         super().__init__()
         self._ffmpeg_path = "ffmpeg"  # Assume ffmpeg is in PATH
+        
+        # Default values for advanced options
+        self.frame_sampling_rate = 5  # Frames to sample per second during detection
+        self.adaptive_brightness = True  # Use adaptive brightness threshold
+        self.motion_compensation = True  # Apply motion compensation
+        self.fallback_to_full_video = True  # Use full video if no bookends detected
+
+    def set_advanced_options(self, frame_sampling_rate=5, adaptive_brightness=True, 
+                           motion_compensation=True, fallback_to_full_video=True):
+        """Set advanced options for bookend alignment"""
+        self.frame_sampling_rate = frame_sampling_rate
+        self.adaptive_brightness = adaptive_brightness
+        self.motion_compensation = motion_compensation
+        self.fallback_to_full_video = fallback_to_full_video
+        
+        logger.info(f"Set advanced bookend options: sampling_rate={frame_sampling_rate}, "
+                   f"adaptive_brightness={adaptive_brightness}, "
+                   f"motion_compensation={motion_compensation}, "
+                   f"fallback_to_full_video={fallback_to_full_video}")
 
     def align_bookend_videos(self, reference_path, captured_path):
         """
@@ -276,7 +191,36 @@ class BookendAligner(QObject):
                 error_msg = "Failed to detect at least two white bookend sections"
                 logger.error(error_msg)
                 self.error_occurred.emit(error_msg)
-                return None
+                
+                # If fallback is enabled, use the entire video
+                if self.fallback_to_full_video:
+                    logger.info("Falling back to using entire captured video as content")
+                    self.status_update.emit("No bookends detected. Using entire video instead...")
+                    
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    # Create fallback bookends
+                    content_start_time = 0.2  # Skip first 0.2 sec to avoid any initial issues
+                    content_duration = cap_info.get('duration', 0) - 0.4  # Leave 0.2 sec at the end
+                    
+                    if content_duration <= 0:
+                        error_msg = "Video duration too short for proper alignment"
+                        logger.error(error_msg)
+                        self.error_occurred.emit(error_msg)
+                        return None
+                else:
+                    return None
 
             # We need at least 2 bookends
             first_bookend = bookend_frames[0]
@@ -346,10 +290,34 @@ class BookendAligner(QObject):
             self.alignment_progress.emit(50)
             self.status_update.emit("Creating aligned videos...")
 
+            # Apply motion compensation if enabled
+            if self.motion_compensation:
+                self.status_update.emit("Applying motion compensation for fast-moving content...")
+                motion_compensated_path = self._apply_motion_compensation(
+                    captured_path, 
+                    content_start_time, 
+                    content_duration
+                )
+                
+                if motion_compensated_path:
+                    logger.info(f"Motion compensation applied, using: {motion_compensated_path}")
+                    
+                    # Update captured path to use the motion-compensated version
+                    processed_captured_path = motion_compensated_path
+                    # Since we've already extracted the content portion with motion compensation,
+                    # we need to adjust the start time and duration for alignment
+                    content_start_time = 0
+                    content_duration = self._get_video_info(motion_compensated_path).get('duration', content_duration)
+                else:
+                    logger.warning("Motion compensation failed, proceeding with original footage")
+                    processed_captured_path = captured_path
+            else:
+                processed_captured_path = captured_path
+
             # Create aligned videos by trimming the content between bookends
             aligned_reference, aligned_captured = self._create_aligned_videos_by_bookends(
                 reference_path,
-                captured_path,
+                processed_captured_path,
                 content_start_time,
                 content_duration
             )
@@ -374,7 +342,8 @@ class BookendAligner(QObject):
                 'bookend_info': {
                     'first_bookend': first_bookend,
                     'last_bookend': last_bookend,
-                    'content_duration': content_duration
+                    'content_duration': content_duration,
+                    'motion_compensated': self.motion_compensation
                 }
             }
 
@@ -387,6 +356,57 @@ class BookendAligner(QObject):
             import traceback
             logger.error(traceback.format_exc())
             self.error_occurred.emit(error_msg)
+            return None
+            
+    def _apply_motion_compensation(self, video_path, start_time, duration):
+        """
+        Apply motion compensation to the video to improve alignment for fast-moving content
+        
+        Args:
+            video_path: Path to the input video
+            start_time: Start time for content section
+            duration: Duration of content
+            
+        Returns:
+            Path to motion-compensated video or None if failed
+        """
+        try:
+            # Create output filename with _motion_comp suffix
+            output_dir = os.path.dirname(video_path)
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            output_path = os.path.join(output_dir, f"{base_name}_motion_comp.mp4")
+            
+            logger.info(f"Applying motion compensation from {start_time:.3f}s for {duration:.3f}s")
+            
+            # Create FFmpeg command for motion compensation
+            # First extract the section we want to process
+            cmd = [
+                "ffmpeg", "-hide_banner", "-y",
+                "-i", video_path,
+                "-ss", str(start_time),
+                "-t", str(duration),
+                "-vf", "minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
+                "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                output_path
+            ]
+            
+            # Run the command
+            logger.info(f"Running motion compensation: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                logger.error(f"Motion compensation failed: {result.stderr}")
+                return None
+                
+            # Verify the output file exists and is valid
+            if not os.path.exists(output_path) or not validate_video_file(output_path):
+                logger.error("Motion compensation output file is invalid")
+                return None
+                
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"Error applying motion compensation: {e}")
             return None
 
     def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration):
@@ -430,12 +450,16 @@ class BookendAligner(QObject):
             # Get base name parts
             ref_base = os.path.splitext(os.path.basename(reference_path))[0]
             cap_base = os.path.splitext(os.path.basename(captured_path))[0]
+            
+            # Remove any existing "_motion_comp" suffix from captured file base name
+            if "_motion_comp" in cap_base:
+                cap_base = cap_base.replace("_motion_comp", "")
 
             # Create output paths
             aligned_reference = os.path.join(output_dir, f"{ref_base}_{timestamp}_aligned.mp4")
             aligned_captured = os.path.join(output_dir, f"{cap_base}_{timestamp}_aligned.mp4")
 
-            # Trim reference video - use the whole reference
+            # Trim reference video - use the whole reference with high quality settings
             ref_cmd = [
                 "ffmpeg", "-y", "-i", reference_path,
                 "-c:v", "libx264", "-crf", "18", 
@@ -447,16 +471,28 @@ class BookendAligner(QObject):
             subprocess.run(ref_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
             # Trim captured video - extract just the content between bookends
-            cap_cmd = [
-                "ffmpeg", "-y", "-i", captured_path,
-                "-ss", str(content_start_time),
-                "-t", str(content_duration),
-                "-c:v", "libx264", "-crf", "18",
-                "-preset", "fast", "-c:a", "copy",
-                aligned_captured
-            ]
-
-            logger.info(f"Creating aligned captured video from {content_start_time:.3f}s to {content_start_time + content_duration:.3f}s")
+            # If we're processing motion-compensated video, start_time might be 0
+            if content_start_time > 0 or "motion_comp" not in captured_path:
+                cap_cmd = [
+                    "ffmpeg", "-y", "-i", captured_path,
+                    "-ss", str(content_start_time),
+                    "-t", str(content_duration),
+                    "-c:v", "libx264", "-crf", "18",
+                    "-preset", "fast", "-c:a", "copy",
+                    aligned_captured
+                ]
+                log_msg = f"Creating aligned captured video from {content_start_time:.3f}s to {content_start_time + content_duration:.3f}s"
+            else:
+                # If we're already using a motion-compensated clip, just copy it
+                cap_cmd = [
+                    "ffmpeg", "-y", "-i", captured_path,
+                    "-c:v", "libx264", "-crf", "18",
+                    "-preset", "fast", "-c:a", "copy",
+                    aligned_captured
+                ]
+                log_msg = "Using pre-processed motion-compensated clip for aligned output"
+                
+            logger.info(log_msg)
             subprocess.run(cap_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
             # Verify the files were created
@@ -472,6 +508,14 @@ class BookendAligner(QObject):
                 logger.info(f"Created aligned videos: {ref_aligned_info.get('duration'):.2f}s / {cap_aligned_info.get('duration'):.2f}s")
             else:
                 logger.warning("Could not verify aligned video info")
+
+            # Delete temporary motion-compensated file if it exists
+            if "_motion_comp.mp4" in captured_path and os.path.exists(captured_path):
+                try:
+                    os.remove(captured_path)
+                    logger.info(f"Deleted temporary motion-compensated file: {captured_path}")
+                except Exception as e:
+                    logger.warning(f"Could not delete temporary file: {e}")
 
             return aligned_reference, aligned_captured
 
@@ -556,13 +600,6 @@ class BookendAligner(QObject):
             logger.error(f"Error getting video info for {video_path}: {str(e)}")
             return None 
 
-
-
-
-
-
-
-
     def _detect_white_bookends(self, video_path):
         """
         Performance-optimized white bookend detection that maintains accuracy
@@ -585,24 +622,36 @@ class BookendAligner(QObject):
 
             # Sample brightness values across the video
             brightness_samples = []
-            sample_points = 30
-            sample_interval = max(1, frame_count // sample_points)
-
-            for i in range(0, min(frame_count, sample_points * sample_interval), sample_interval):
+            
+            # Use frame_sampling_rate to determine sample interval
+            # Higher frame_sampling_rate = more precise detection
+            sample_interval = int(fps / self.frame_sampling_rate)
+            if sample_interval < 1:
+                sample_interval = 1
+                
+            logger.info(f"Using frame sampling interval of {sample_interval} frames " +
+                    f"({self.frame_sampling_rate} samples per second)")
+            
+            # Sample frames throughout the video for brightness analysis
+            sample_frames = []
+            for i in range(0, frame_count, sample_interval):
                 cap.set(cv2.CAP_PROP_POS_FRAMES, i)
                 ret, frame = cap.read()
                 if ret:
-                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    brightness = np.mean(gray)
-                    std_dev = np.std(gray)
-                    brightness_samples.append((i, brightness, std_dev))
-                    logger.info(f"Frame {i} (t={i/fps:.2f}s) brightness: {brightness:.1f}, std_dev: {std_dev:.1f}")
-
-            # Calculate stats
+                    sample_frames.append((i, frame))
+            
+            # Calculate brightness statistics
+            for i, frame in sample_frames:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                brightness = np.mean(gray)
+                std_dev = np.std(gray)
+                brightness_samples.append((i, brightness, std_dev))
+                
             if not brightness_samples:
                 logger.error("Could not sample brightness levels from video")
                 return None
                 
+            # Calculate stats for adaptive thresholds
             all_brightness = [b for _, b, _ in brightness_samples]
             all_std_devs = [s for _, _, s in brightness_samples]
             avg_brightness = np.mean(all_brightness)
@@ -610,45 +659,52 @@ class BookendAligner(QObject):
             max_brightness = np.max(all_brightness)
             avg_std_dev = np.mean(all_std_devs)
 
-            logger.info(f"Video brightness stats: avg={avg_brightness:.1f}, std={std_brightness:.1f}, max={max_brightness:.1f}, avg_std_dev={avg_std_dev:.1f}")
+            logger.info(f"Video brightness stats: avg={avg_brightness:.1f}, std={std_brightness:.1f}, " +
+                    f"max={max_brightness:.1f}, avg_std_dev={avg_std_dev:.1f}")
 
-            # Dynamic threshold calculation
-            dynamic_threshold = max(
-                avg_brightness + 1.5 * std_brightness,
-                max_brightness * 0.9,
-                120
-            )
+            # Dynamic threshold calculation based on adaptive brightness
+            if self.adaptive_brightness:
+                # Smarter threshold calculation for varying lighting conditions
+                dynamic_threshold = max(
+                    avg_brightness + 2.0 * std_brightness,  # Statistical outlier detection
+                    max_brightness * 0.85,  # Percentage of maximum
+                    180  # Minimum acceptable value for white
+                )
+                
+                # Adjust for very bright or dim videos
+                if max_brightness > 240:  # Very bright video
+                    dynamic_threshold = max(dynamic_threshold, 220)
+                elif max_brightness < 200:  # Dim video
+                    dynamic_threshold = max(avg_brightness + 1.5 * std_brightness, 160)
+                    
+                thresholds = [
+                    dynamic_threshold,
+                    dynamic_threshold * 0.9,  # First fallback
+                    max(avg_brightness + 20, 160)  # Second fallback
+                ]
+            else:
+                # Use fixed threshold from settings
+                fixed_threshold = 230  # Default, should be overridden from options
+                thresholds = [fixed_threshold, fixed_threshold * 0.9, fixed_threshold * 0.8]
             
-            # Create adaptive thresholds
-            thresholds = [
-                dynamic_threshold,
-                dynamic_threshold * 0.9,
-                max(avg_brightness + 15, 110)
-            ]
+            logger.info(f"Using brightness thresholds: {[round(t, 1) for t in thresholds]}")
             
-            logger.info(f"Using dynamic thresholds: {[round(t, 1) for t in thresholds]}")
-
-            # PERFORMANCE OPTIMIZATION 1: Use two-pass approach
-            # First pass: Sample frames at higher intervals to quickly find candidate regions
-            # Second pass: Only analyze the candidate regions in detail
-            
-            # Define regions of interest to examine in detail
+            # Quick scan to identify potential bookend regions
             regions_of_interest = []
             
-            # Set minimum frame sequence length based on frame rate
+            # Define minimum white frame sequence based on frame rate
             if fps > 25:
                 min_white_frames = max(3, int(0.1 * fps))
             else:
                 min_white_frames = 3
-            
+                
             logger.info(f"Using minimum bookend size of {min_white_frames} frames ({min_white_frames/fps:.3f}s)")
             
-            # PERFORMANCE OPTIMIZATION 2: Use a larger sampling interval for initial scan
-            initial_sample_rate = max(3, int(fps // 8))  # 8 samples per second
-            logger.info(f"Using initial sampling rate of {initial_sample_rate} (about {fps/initial_sample_rate:.1f} samples/second)")
+            # Use a larger sampling interval for initial scan
+            initial_sample_rate = max(3, int(fps // 8))
             
             # Std dev threshold based on video characteristics
-            std_dev_threshold = min(40, avg_std_dev * 1.5)
+            std_dev_threshold = min(45, avg_std_dev * 1.8)
             
             # First pass: Quick scan to find potential bookend regions
             for threshold_idx, whiteness_threshold in enumerate(thresholds):
@@ -675,6 +731,8 @@ class BookendAligner(QObject):
                     
                     # Determine if this is a candidate white frame
                     is_white_frame = False
+                    
+                    # Adaptive criteria for white frame detection
                     if threshold_idx < 2:
                         is_white_frame = avg_brightness > whiteness_threshold
                     else:
@@ -683,12 +741,12 @@ class BookendAligner(QObject):
                     if is_white_frame:
                         if current_region is None:
                             current_region = {
-                                'start_frame': max(0, frame_idx - initial_sample_rate),  # Look a bit before
+                                'start_frame': max(0, frame_idx - initial_sample_rate),
                                 'brightness': avg_brightness
                             }
                     else:
                         if current_region is not None:
-                            current_region['end_frame'] = min(frame_count - 1, frame_idx + initial_sample_rate)  # Look a bit after
+                            current_region['end_frame'] = min(frame_count - 1, frame_idx + initial_sample_rate)
                             potential_regions.append(current_region)
                             current_region = None
                 
@@ -707,12 +765,12 @@ class BookendAligner(QObject):
                         end = min(frame_count - 1, region['end_frame'] + padding)
                         regions_of_interest.append((start, end, whiteness_threshold))
             
-            # If we didn't find any regions with quick scan, scan the entire video with the most lenient threshold
+            # If no regions found, scan the entire video with the most lenient threshold
             if not regions_of_interest:
                 logger.info("No potential regions found in quick scan, will scan entire video")
                 regions_of_interest = [(0, frame_count - 1, thresholds[-1])]
             
-            # PERFORMANCE OPTIMIZATION 3: Merge overlapping regions to avoid duplicate processing
+            # Merge overlapping regions to avoid duplicate processing
             if len(regions_of_interest) > 1:
                 regions_of_interest.sort()  # Sort by start frame
                 merged_regions = []
@@ -739,9 +797,6 @@ class BookendAligner(QObject):
             for region_idx, (start_frame, end_frame, threshold) in enumerate(regions_of_interest):
                 logger.info(f"Analyzing region {region_idx+1}/{len(regions_of_interest)}: frames {start_frame}-{end_frame}")
                 
-                # Use standard detection for detailed pass
-                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-                
                 # Skip too small regions
                 if end_frame - start_frame < min_white_frames:
                     logger.info(f"Region too small, skipping")
@@ -752,12 +807,15 @@ class BookendAligner(QObject):
                 region_bookends = []
                 
                 # Process each frame in this region
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                
                 for frame_idx in range(start_frame, end_frame + 1):
-                    # Skip setting position if we're already there (big performance gain)
                     if frame_idx > start_frame:
                         ret, frame = cap.read()
                     else:
-                        ret, frame = cap.isOpened(), cap.read()[1] if cap.isOpened() else (False, None)
+                        ret = cap.isOpened()
+                        if ret:
+                            ret, frame = cap.read()
                     
                     if not ret:
                         break
@@ -767,10 +825,25 @@ class BookendAligner(QObject):
                     avg_brightness = np.mean(gray)
                     std_dev = np.std(gray)
                     
-                    # Determine if white frame
+                    # Enhanced white frame detection logic for fast-moving content
                     is_white_frame = False
-                    if avg_brightness > threshold:
-                        is_white_frame = True
+                    
+                    # For high-speed content, we need to be more flexible with white detection
+                    if std_dev < std_dev_threshold * 1.2:
+                        # Low std dev means more uniform frame - good for white detection
+                        if avg_brightness > threshold * 0.95:
+                            is_white_frame = True
+                    else:
+                        # Higher std dev might mean partial white frame or motion blur
+                        # Check if a significant portion is white
+                        if avg_brightness > threshold:
+                            is_white_frame = True
+                        elif avg_brightness > threshold * 0.9:
+                            # Check for large white areas (could be partial white frame)
+                            white_pixels = np.sum(gray > threshold)
+                            white_ratio = white_pixels / gray.size
+                            if white_ratio > 0.7:  # If >70% of pixels are above threshold
+                                is_white_frame = True
                     
                     if is_white_frame:
                         consecutive_white_frames += 1
@@ -818,7 +891,10 @@ class BookendAligner(QObject):
             # Remove duplicate bookends (can happen with overlapping regions)
             if all_bookends:
                 unique_bookends = []
-                for bookend in all_bookends:
+                for bookend in all_bookends:                            
+                    
+                    
+                    
                     # Check if this bookend overlaps with any existing ones
                     is_duplicate = False
                     for existing in unique_bookends:
@@ -847,7 +923,7 @@ class BookendAligner(QObject):
                 logger.warning(f"Failed to detect at least two white bookends")
                 
                 # Last resort: use the beginning and end of the video
-                if hasattr(self, 'fallback_to_full_video') and self.fallback_to_full_video:
+                if self.fallback_to_full_video:
                     logger.warning("Falling back to using entire video as no bookends were detected")
                     bookends = [
                         {
@@ -884,13 +960,6 @@ class BookendAligner(QObject):
             return None
 
 
-
-
-
-
-
-
-
 class BookendAlignmentThread(QThread):
     """Thread for bookend video alignment with reliable progress reporting"""
     alignment_progress = pyqtSignal(int)
@@ -899,13 +968,36 @@ class BookendAlignmentThread(QThread):
     status_update = pyqtSignal(str)
     delete_capture_file = pyqtSignal(bool)  # Signal to indicate if primary capture file should be deleted
 
-    def __init__(self, reference_path, captured_path, delete_primary=False):
+    def __init__(self, reference_path, captured_path, delete_primary=False, options_manager=None):
         super().__init__()
         self.reference_path = reference_path
         self.captured_path = captured_path
         self.delete_primary = delete_primary
+        self.options_manager = options_manager
         self.aligner = BookendAligner()
         self._running = True
+
+        # Initialize advanced options from options_manager if provided
+        if options_manager:
+            try:
+                bookend_settings = options_manager.get_setting('bookend')
+                if isinstance(bookend_settings, dict):
+                    # Set advanced options
+                    frame_sampling_rate = bookend_settings.get('frame_sampling_rate', 5)
+                    adaptive_brightness = bookend_settings.get('adaptive_brightness', True)
+                    motion_compensation = bookend_settings.get('motion_compensation', True)
+                    
+                    self.aligner.set_advanced_options(
+                        frame_sampling_rate=frame_sampling_rate,
+                        adaptive_brightness=adaptive_brightness,
+                        motion_compensation=motion_compensation
+                    )
+                    logger.info(f"Applied bookend settings from options_manager: " +
+                              f"frame_sampling_rate={frame_sampling_rate}, " +
+                              f"adaptive_brightness={adaptive_brightness}, " +
+                              f"motion_compensation={motion_compensation}")
+            except Exception as e:
+                logger.error(f"Error loading bookend options: {e}")
 
         # Connect signals with direct connections for responsive UI updates
         self.aligner.alignment_progress.connect(self.alignment_progress, Qt.DirectConnection)
@@ -916,17 +1008,6 @@ class BookendAlignmentThread(QThread):
     def __del__(self):
         """Clean up resources when thread is destroyed"""
         self.wait()  # Wait for thread to finish before destroying
-
-
-
-
-
-
-
-
-
-
-
 
     def run(self):
         """Run alignment in thread"""
@@ -971,9 +1052,6 @@ class BookendAlignmentThread(QThread):
                 # Ensure progress is set to 100% at completion
                 self.alignment_progress.emit(100)
                 
-                # IMPORTANT: Remove this line to prevent duplicate signal emission
-                # self.alignment_complete.emit(result)
-                
                 self.status_update.emit("Bookend alignment complete!")
             else:
                 self.error_occurred.emit("Bookend alignment failed")
@@ -984,22 +1062,6 @@ class BookendAlignmentThread(QThread):
                 logger.error(error_msg)
                 import traceback
                 logger.error(traceback.format_exc())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def quit(self):
         """Override quit to properly clean up resources"""
@@ -1030,26 +1092,8 @@ class Aligner(QObject):
         self.alignment_state = AlignmentState.RUNNING
         self.alignment_state_changed.emit(self.alignment_state)
 
-        # Create bookend aligner
-        aligner = BookendAligner()
-
-        # Pass frame sampling rate from options if available
-        if hasattr(self, 'options_manager') and self.options_manager:
-            try:
-                bookend_settings = self.options_manager.get_setting('bookend')
-                if isinstance(bookend_settings, dict) and 'frame_sampling_rate' in bookend_settings:
-                    frame_sampling_rate = int(bookend_settings.get('frame_sampling_rate', 5))
-                    # Ensure value is in valid range
-                    frame_sampling_rate = min(30, max(1, frame_sampling_rate))
-                    logger.info(f"Using frame sampling rate from options: {frame_sampling_rate}")
-                    aligner.frame_sampling_rate = frame_sampling_rate
-                else:
-                    logger.warning("Frame sampling rate not found in bookend settings, using default (5)")
-            except Exception as e:
-                logger.error(f"Error getting frame sampling rate from options: {e}")
-
-        # Start alignment thread
-        thread = BookendAlignmentThread(reference_path, captured_path)
+        # Start alignment thread with options manager
+        thread = BookendAlignmentThread(reference_path, captured_path, options_manager=self.options_manager)
         thread.alignment_progress.connect(self.alignment_progress)
         thread.alignment_complete.connect(lambda result: self._on_alignment_complete(result))
         thread.error_occurred.connect(self.alignment_error)
@@ -1075,10 +1119,7 @@ class Aligner(QObject):
                 logger.error(f"Error deleting capture file: {e}")
 
 
-# ... rest of the file remains unchanged ...
-
 from enum import Enum
-
 
 class AlignmentState(Enum):
     COMPLETE = 0
