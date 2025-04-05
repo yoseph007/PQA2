@@ -1,18 +1,9 @@
-{pkgs}: {
+{ pkgs }: {
   deps = [
-    pkgs.tesseract
-    pkgs.tk
-    pkgs.tcl
-    pkgs.qhull
-    pkgs.pkg-config
-    pkgs.gtk3
-    pkgs.gobject-introspection
-    pkgs.ghostscript
-    pkgs.ffmpeg-full
-    pkgs.cairo
-    pkgs.freetype
-    pkgs.glibcLocales
-    pkgs.libGLU
-    pkgs.libGL
+    pkgs.python311
+    pkgs.python311Packages.pyqt5
+    pkgs.python311Packages.opencv4
+    pkgs.python311Packages.numpy
+    pkgs.ffmpeg
   ];
 }

@@ -4,6 +4,9 @@ modules = ["python-3.10:v18-20230807-322e88b"]
 
 hidden = [".pythonlibs"]
 
+[interpreter]
+  output = "disabled"
+  
 [nix]
 channel = "stable-23_05"
 
@@ -20,6 +23,8 @@ message = "Did you forget to define or import a variable?"
 
 [env]
 PYTHONPATH="${PYTHONPATH}:${REPL_HOME}"
+PYTHONUNBUFFERED = "1"
+QT_QPA_PLATFORM = "offscreen"
 
 [[ports]]
 localPort = 5000
