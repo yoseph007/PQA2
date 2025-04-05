@@ -31,9 +31,18 @@ class OptionsTab(QWidget):
 
 
     def _setup_ui(self):
-        """Set up the Options tab UI"""
-        layout = QVBoxLayout(self)
-
+        """Set up the Options tab UI with scrolling support"""
+        main_layout = QVBoxLayout(self)
+        
+        # Create a scroll area to make the content scrollable
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.NoFrame)
+        
+        # Create a widget to hold all the content
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
+        
         # Create tabbed interface for different settings categories
         options_tabs = QTabWidget()
 
@@ -60,6 +69,10 @@ class OptionsTab(QWidget):
         button_layout.addWidget(self.btn_save_settings)
         button_layout.addWidget(self.btn_reset_settings)
         layout.addLayout(button_layout)
+        
+        # Set up scroll area with the content
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
 
         # Load current settings into UI elements
         self.load_settings()
@@ -316,64 +329,7 @@ class OptionsTab(QWidget):
         device_group.setLayout(device_layout)
         capture_layout.addWidget(device_group)
 
-        # Bookend settings group with advanced parameters
-        bookend_group = QGroupBox("Bookend Detection Settings")
-        bookend_layout = QFormLayout()
-
-        # Add helper info icon and label
-        bookend_help_label = QLabel("These settings control how white bookend frames are detected and processed for alignment:")
-        bookend_help_label.setStyleSheet("font-style: italic; color: #666;")
-        bookend_layout.addRow(bookend_help_label)
-
-        # Bookend duration with tooltip
-        self.spin_bookend_duration = QDoubleSpinBox()
-        self.spin_bookend_duration.setRange(0.1, 5.0)
-        self.spin_bookend_duration.setValue(0.5)
-        self.spin_bookend_duration.setDecimals(2)
-        self.spin_bookend_duration.setToolTip("Duration of white bookend sections in seconds. For fast-moving content, shorter values (0.2-0.3s) may work better.")
-        bookend_label = QLabel("Bookend Duration (seconds):")
-        bookend_label.setToolTip("Duration of white bookend sections in seconds. For fast-moving content, shorter values (0.2-0.3s) may work better.")
-        bookend_layout.addRow(bookend_label, self.spin_bookend_duration)
-
-        # Min loops with tooltip 
-        self.spin_min_loops = QSpinBox()
-        self.spin_min_loops.setRange(1, 10)
-        self.spin_min_loops.setValue(3)
-        self.spin_min_loops.setToolTip("Minimum number of content loops to capture. Higher values produce more reliable results but take longer.")
-        min_loops_label = QLabel("Minimum Loops:")
-        min_loops_label.setToolTip("Minimum number of content loops to capture. Higher values produce more reliable results but take longer.")
-        bookend_layout.addRow(min_loops_label, self.spin_min_loops)
-
-        # White threshold with tooltip
-        self.spin_bookend_threshold = QSpinBox()
-        self.spin_bookend_threshold.setRange(100, 255)
-        self.spin_bookend_threshold.setValue(230)
-        self.spin_bookend_threshold.setToolTip("Brightness threshold (0-255) for detecting white frames. Lower values (200-220) may help with dim displays.")
-        threshold_label = QLabel("Brightness Threshold:")
-        threshold_label.setToolTip("Brightness threshold (0-255) for detecting white frames. Lower values (200-220) may help with dim displays.")
-        bookend_layout.addRow(threshold_label, self.spin_bookend_threshold)
-
-        # Add frame sampling controls with tooltip
-        self.frame_sampling_slider = QSlider(Qt.Horizontal)
-        self.frame_sampling_slider.setRange(1, 30)
-        self.frame_sampling_slider.setValue(5)  # Default value
-        self.frame_sampling_slider.setTickPosition(QSlider.TicksBelow)
-        self.frame_sampling_slider.setTickInterval(1)
-        self.frame_sampling_slider.setToolTip("How many frames to sample per second during bookend detection. Higher values provide more precise detection but use more CPU.")
-
-        sampling_layout = QHBoxLayout()
-        sampling_label = QLabel("Frame Sampling Rate:")
-        sampling_label.setToolTip("How many frames to sample per second during bookend detection. Higher values provide more precise detection but use more CPU.")
-        sampling_layout.addWidget(sampling_label)
-        sampling_layout.addWidget(self.frame_sampling_slider)
-
-        self.frame_sampling_label = QLabel("5 frames")
-        sampling_layout.addWidget(self.frame_sampling_label)
-        self.frame_sampling_slider.valueChanged.connect(self._update_frame_sampling_label)
-        bookend_layout.addRow(sampling_layout)
-
-        bookend_group.setLayout(bookend_layout)
-        capture_layout.addWidget(bookend_group)
+        # Bookend settings moved to Analysis Tab
 
         # Add help text
         help_text = QLabel(
@@ -543,7 +499,8 @@ class OptionsTab(QWidget):
                     self._update_format_details()
 
                     logger.info(f"Successfully detected {len(formats)} formats")
-                    QMessageBox.information(self, "Format Detection", f"Successfully detected {len(formats)} formats.")
+                    # Remove the popup message
+                    # QMessageBox.information(self, "Format Detection", f"Successfully detected {len(formats)} formats.")
                 else:
                     # Handle no formats detected - manually add formats from the FFmpeg output
                     logger.warning("No formats detected using regex - manually adding formats from sample output")
@@ -608,8 +565,10 @@ class OptionsTab(QWidget):
                             self.combo_format_code.setCurrentIndex(i)
                             break
 
-                    QMessageBox.information(self, "Format Detection", 
-                                        "Added standard formats for Intensity Shuttle device.")
+                    # Remove the popup message
+                    # QMessageBox.information(self, "Format Detection", 
+                    #                     "Added standard formats for Intensity Shuttle device.")
+                    logger.info("Added standard formats for Intensity Shuttle device.")
 
             except subprocess.TimeoutExpired:
                 process.kill()
@@ -829,13 +788,7 @@ class OptionsTab(QWidget):
                         'default_preset': self.spin_default_preset.currentText(),
                     },
 
-                    # Bookend settings - preserve existing settings, only update sliders
-                    'bookend': {
-                        'bookend_duration': self.spin_bookend_duration.value(),
-                        'min_loops': self.spin_min_loops.value(),
-                        'white_threshold': self.spin_bookend_threshold.value(),
-                        'frame_sampling_rate': self.frame_sampling_slider.value()
-                    },
+                    # Bookend settings now stored via analysis tab
 
                     # Analysis settings with advanced VMAF options
                     'vmaf': {
@@ -1005,10 +958,7 @@ class OptionsTab(QWidget):
 
         return analysis_tab
 
-    def _update_frame_sampling_label(self):
-        """Updates the label displaying the current frame sampling rate."""
-        if hasattr(self, 'frame_sampling_label') and hasattr(self, 'frame_sampling_slider'):
-            self.frame_sampling_label.setText(f"{self.frame_sampling_slider.value()} frames")
+    # Method moved to analysis_tab.py
 
     def _populate_vmaf_models(self):
             """Populate VMAF models dropdown in options tab"""
@@ -1209,12 +1159,6 @@ class OptionsTab(QWidget):
     def _load_general_settings(self, settings):
         """Load settings for the general tab"""
         try:
-            # Load bookend slider
-            bookend_settings = settings.get('bookend', {})
-            frame_sampling_rate = bookend_settings.get('frame_sampling_rate', 5)
-            self.frame_sampling_slider.setValue(frame_sampling_rate)
-            self._update_frame_sampling_label()
-
             # Populate directories
             paths = settings.get('paths', {})
             self.txt_ref_dir.setText(paths.get('reference_video_dir', ''))
@@ -1227,11 +1171,6 @@ class OptionsTab(QWidget):
             self.combo_default_encoder.setCurrentText(encoder.get('default_encoder', 'libx264'))
             self.spin_default_crf.setValue(int(encoder.get('default_crf', 23)))
             self.spin_default_preset.setCurrentText(encoder.get('default_preset', 'medium'))
-
-            # Populate bookend settings
-            self.spin_bookend_duration.setValue(float(bookend_settings.get('bookend_duration', 0.5)))
-            self.spin_min_loops.setValue(int(bookend_settings.get('min_loops', 3)))
-            self.spin_bookend_threshold.setValue(int(bookend_settings.get('white_threshold', 230)))
         except Exception as e:
             logger.error(f"Error loading general settings: {e}")
 
