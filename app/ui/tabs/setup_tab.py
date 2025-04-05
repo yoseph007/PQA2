@@ -1,12 +1,12 @@
-import logging
 import os
-from datetime import datetime
-
+import logging
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
+                            QLabel, QComboBox, QGroupBox, QFileDialog, QMessageBox,
+                            QLineEdit, QSplitter, QFrame, QTextEdit)
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import (QFileDialog, QFrame, QGroupBox, QHBoxLayout,
-                             QLabel, QLineEdit, QMessageBox, QPushButton,
-                             QTextEdit, QVBoxLayout, QWidget)
+import threading
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +18,7 @@ class SetupTab(QWidget):
         self.parent = parent
         self.reference_thread = None
         self.reference_video_path = None #Added to store full path
-        self.output_dir = None #Added to store output directory
-        self.setObjectName("setup_tab")
-        self._setup_ui()    
+        self._setup_ui()
 
     def _setup_ui(self):
         """Set up the Setup tab UI with improved two-column layout"""
@@ -82,12 +80,31 @@ class SetupTab(QWidget):
         self.txt_test_name.setPlaceholderText("Enter a test name (alpha-numeric, _ or - only)")
         self.txt_test_name.setToolTip("Use a descriptive name with letters, numbers, underscores, or hyphens")
         # Add validator to enforce proper naming
-        from PyQt5.QtCore import QRegExp
         from PyQt5.QtGui import QRegExpValidator
+        from PyQt5.QtCore import QRegExp
         validator = QRegExpValidator(QRegExp(r'[A-Za-z0-9_\-]+'))
         self.txt_test_name.setValidator(validator)
         test_name_layout.addWidget(self.txt_test_name)
         left_column.addLayout(test_name_layout)
+        
+        # Output directory selection
+        output_dir_layout = QHBoxLayout()
+        output_dir_layout.addWidget(QLabel("Output Directory:"))
+        self.txt_output_dir = QLineEdit()
+        self.txt_output_dir.setPlaceholderText("Default output directory")
+        self.txt_output_dir.setReadOnly(True)
+        
+        # Set default output directory
+        import os
+        default_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tests", "test_results")
+        self.txt_output_dir.setText(default_dir)
+        
+        self.btn_browse_output = QPushButton("Browse...")
+        self.btn_browse_output.clicked.connect(self.browse_output_dir)
+        
+        output_dir_layout.addWidget(self.txt_output_dir)
+        output_dir_layout.addWidget(self.btn_browse_output)
+        left_column.addLayout(output_dir_layout)
 
         # Tester name field
         tester_name_layout = QHBoxLayout()
@@ -254,35 +271,6 @@ class SetupTab(QWidget):
             self.reference_video_path = file_path #Store full path
 
 
-
-
-    # Add this method to set the output directory
-    def set_output_dir(self, directory):
-        """Set the output directory for analysis results"""
-        self.output_dir = directory
-        
-    # Add a getter method for the output directory
-    def get_output_dir(self):
-        """Get the current output directory for analysis results"""
-        # If output_dir is not set directly, try to get it from options
-        if not self.output_dir and hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-            paths = self.parent.options_manager.get_setting('paths')
-            if isinstance(paths, dict) and 'output_dir' in paths:
-                self.output_dir = paths['output_dir']
-                
-        # If still not set, use a default directory
-        if not self.output_dir:
-            self.output_dir = os.path.join(os.path.expanduser("~"), "vmaf_results")
-            # Ensure the directory exists
-            os.makedirs(self.output_dir, exist_ok=True)
-            
-        return self.output_dir
-
-
-
-
-
-
     def analyze_reference(self, file_path):
         """Analyze reference video to extract metadata"""
         self.log_to_setup(f"Analyzing reference video: {os.path.basename(file_path)}")
@@ -335,6 +323,33 @@ class SetupTab(QWidget):
         # Share reference info with capture manager
         if hasattr(self.parent, 'capture_mgr') and self.parent.capture_mgr:
             self.parent.capture_mgr.set_reference_video(info)
+
+    def browse_output_dir(self):
+        """Browse for output directory"""
+        # Get current directory from field
+        current_dir = self.txt_output_dir.text()
+        if not current_dir or not os.path.exists(current_dir):
+            current_dir = os.path.expanduser("~")
+            
+        # Show directory dialog
+        dir_path = QFileDialog.getExistingDirectory(
+            self,
+            "Select Output Directory",
+            current_dir
+        )
+        
+        if dir_path:
+            self.txt_output_dir.setText(dir_path)
+            self.log_to_setup(f"Output directory set to: {dir_path}")
+            
+            # Save the directory to options if available
+            if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                paths = self.parent.options_manager.get_setting('paths')
+                if not isinstance(paths, dict):
+                    paths = {}
+                paths['output_dir'] = dir_path
+                self.parent.options_manager.update_category('paths', paths)
+
 
         # Populate the duration combo box with 1-second increments
         # up to the reference video duration

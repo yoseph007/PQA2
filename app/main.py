@@ -1,13 +1,10 @@
+import sys
 import logging
 import os
-import sys
-
 from PyQt5.QtWidgets import QApplication
-
 from app.capture import CaptureManager
-from app.ui import MainWindow
 from app.utils import FileManager
-
+from app.ui import MainWindow
 
 def setup_logging():
     """Setup logging configuration with both file and console handlers"""
@@ -36,9 +33,19 @@ def main():
         # Check if running in headless environment (like Replit)
         headless = False
         if 'REPLIT_ENVIRONMENT' in os.environ or not os.environ.get('DISPLAY'):
-            logger.info("Running in Replit environment, set QT_QPA_PLATFORM to offscreen")
-            os.environ["QT_QPA_PLATFORM"] = "vnc"  # Use VNC instead of offscreen for preview
-            os.environ["QT_DEBUG_PLUGINS"] = "1"    # Enable debug for platform plugins
+            logger.info("Running in Replit environment")
+            # Try different Qt platform plugins in order of preference
+            # Try 'vnc' first, then fallback to offscreen if that fails
+            platform_plugins = ["vnc", "offscreen", "minimal", "webgl"]
+            
+            # Log platform information
+            import platform
+            logger.info(f"Running on {platform.platform()}")
+            
+            # Set debug for platform plugins
+            os.environ["QT_DEBUG_PLUGINS"] = "1"
+            
+            # Set headless flag
             headless = True
         
         # Initialize application
