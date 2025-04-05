@@ -637,6 +637,176 @@ class OptionsTab(QWidget):
                 self.parent.options_manager.update_setting("capture", "scan_type", capture_settings["scan_type"])
                 self.parent.options_manager.update_setting("capture", "is_interlaced", capture_settings["is_interlaced"])
 
+
+
+
+    def _load_bookend_settings(self, settings):
+        """Load bookend settings from options manager"""
+        try:
+            # Get bookend settings
+            bookend = settings.get('bookend', {})
+            
+            # Load basic settings
+            self.spin_min_loops.setValue(bookend.get('min_loops', 3))
+            self.spin_max_loops.setValue(bookend.get('max_loops', 10))
+            self.spin_min_capture_time.setValue(bookend.get('min_capture_time', 5))
+            self.spin_max_capture_time.setValue(bookend.get('max_capture_time', 120))
+            self.spin_bookend_duration.setValue(bookend.get('bookend_duration', 0.2))
+            self.spin_white_threshold.setValue(bookend.get('white_threshold', 200))
+            self.slider_white_threshold.setValue(bookend.get('white_threshold', 200))
+            self.spin_frame_sampling.setValue(bookend.get('frame_sampling_rate', 5))
+            self.spin_frame_offset.setValue(bookend.get('frame_offset', 6))
+            
+            # Load boolean settings
+            self.check_adaptive_brightness.setChecked(bookend.get('adaptive_brightness', True))
+            self.check_motion_compensation.setChecked(bookend.get('motion_compensation', False))
+            self.check_fallback_full_video.setChecked(bookend.get('fallback_to_full_video', True))
+            
+            logger.info("Bookend settings loaded successfully")
+        except Exception as e:
+            logger.error(f"Error loading bookend settings: {e}")
+
+    def save_bookend_settings(self):
+        """Save bookend-specific settings to options manager"""
+        if not hasattr(self.parent, 'options_manager') or not self.parent.options_manager:
+            logger.warning("Options manager not available, cannot save bookend settings")
+            return False
+
+        try:
+            # Build bookend settings dictionary
+            bookend_settings = {
+                "min_loops": self.spin_min_loops.value(),
+                "max_loops": self.spin_max_loops.value(),
+                "min_capture_time": self.spin_min_capture_time.value(),
+                "max_capture_time": self.spin_max_capture_time.value(),
+                "bookend_duration": self.spin_bookend_duration.value(),
+                "white_threshold": self.spin_white_threshold.value(),
+                "frame_sampling_rate": self.spin_frame_sampling.value(),
+                "frame_offset": self.spin_frame_offset.value(),
+                "adaptive_brightness": self.check_adaptive_brightness.isChecked(),
+                "motion_compensation": self.check_motion_compensation.isChecked(),
+                "fallback_to_full_video": self.check_fallback_full_video.isChecked()
+            }
+
+            # Update bookend settings
+            self.parent.options_manager.update_category("bookend", bookend_settings)
+            logger.info("Bookend settings saved successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving bookend settings: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+
+
+
+
+
+    def _load_bookend_settings(self, settings):
+        """Load bookend settings from options manager"""
+        try:
+            # Get bookend settings
+            bookend = settings.get('bookend', {})
+            
+            # Load basic settings
+            if hasattr(self, 'spin_min_loops'):
+                self.spin_min_loops.setValue(bookend.get('min_loops', 3))
+            if hasattr(self, 'spin_max_loops'):
+                self.spin_max_loops.setValue(bookend.get('max_loops', 10))
+            if hasattr(self, 'spin_min_capture_time'):
+                self.spin_min_capture_time.setValue(bookend.get('min_capture_time', 5))
+            if hasattr(self, 'spin_max_capture_time'):
+                self.spin_max_capture_time.setValue(bookend.get('max_capture_time', 120))
+            if hasattr(self, 'spin_bookend_duration'):
+                self.spin_bookend_duration.setValue(bookend.get('bookend_duration', 0.2))
+            
+            # White threshold controls
+            if hasattr(self, 'spin_white_threshold'):
+                self.spin_white_threshold.setValue(bookend.get('white_threshold', 200))
+            if hasattr(self, 'slider_white_threshold'):
+                self.slider_white_threshold.setValue(bookend.get('white_threshold', 200))
+                
+            # Frame settings
+            if hasattr(self, 'spin_frame_sampling'):
+                self.spin_frame_sampling.setValue(bookend.get('frame_sampling_rate', 5))
+            if hasattr(self, 'spin_frame_offset'):
+                self.spin_frame_offset.setValue(bookend.get('frame_offset', 6))
+            
+            # Boolean settings
+            if hasattr(self, 'check_adaptive_brightness'):
+                self.check_adaptive_brightness.setChecked(bookend.get('adaptive_brightness', True))
+            if hasattr(self, 'check_motion_compensation'):
+                self.check_motion_compensation.setChecked(bookend.get('motion_compensation', False))
+            if hasattr(self, 'check_fallback_full_video'):
+                self.check_fallback_full_video.setChecked(bookend.get('fallback_to_full_video', True))
+            
+            logger.info("Bookend settings loaded successfully")
+        except Exception as e:
+            logger.error(f"Error loading bookend settings: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+    def save_bookend_settings(self):
+        """Save bookend-specific settings to options manager"""
+        if not hasattr(self.parent, 'options_manager') or not self.parent.options_manager:
+            logger.warning("Options manager not available, cannot save bookend settings")
+            return False
+
+        try:
+            # Build bookend settings dictionary with checks to ensure widgets exist
+            bookend_settings = {}
+            
+            # Core timing settings
+            if hasattr(self, 'spin_min_loops'):
+                bookend_settings["min_loops"] = self.spin_min_loops.value()
+            if hasattr(self, 'spin_max_loops'):
+                bookend_settings["max_loops"] = self.spin_max_loops.value()  
+            if hasattr(self, 'spin_min_capture_time'):
+                bookend_settings["min_capture_time"] = self.spin_min_capture_time.value()
+            if hasattr(self, 'spin_max_capture_time'):
+                bookend_settings["max_capture_time"] = self.spin_max_capture_time.value()
+            if hasattr(self, 'spin_bookend_duration'):
+                bookend_settings["bookend_duration"] = self.spin_bookend_duration.value()
+                
+            # Detection settings
+            if hasattr(self, 'spin_white_threshold'):
+                bookend_settings["white_threshold"] = self.spin_white_threshold.value()
+            if hasattr(self, 'spin_frame_sampling'):
+                bookend_settings["frame_sampling_rate"] = self.spin_frame_sampling.value()
+            if hasattr(self, 'spin_frame_offset'):
+                bookend_settings["frame_offset"] = self.spin_frame_offset.value()
+                
+            # Boolean options
+            if hasattr(self, 'check_adaptive_brightness'):
+                bookend_settings["adaptive_brightness"] = self.check_adaptive_brightness.isChecked()
+            if hasattr(self, 'check_motion_compensation'):
+                bookend_settings["motion_compensation"] = self.check_motion_compensation.isChecked()
+            if hasattr(self, 'check_fallback_full_video'):
+                bookend_settings["fallback_to_full_video"] = self.check_fallback_full_video.isChecked()
+
+            # Update bookend settings if we have at least some valid settings
+            if bookend_settings:
+                self.parent.options_manager.update_category("bookend", bookend_settings)
+                logger.info("Bookend settings saved successfully")
+                return True
+            else:
+                logger.warning("No bookend settings to save - UI controls not initialized")
+                return False
+        except Exception as e:
+            logger.error(f"Error saving bookend settings: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+
+
+
+
+
+
+
+
     def load_capture_settings(self):
         """Load capture-specific settings from options manager"""
         if not hasattr(self.parent, 'options_manager') or not self.parent.options_manager:
@@ -767,6 +937,7 @@ class OptionsTab(QWidget):
             logger.error(traceback.format_exc())
             return False
 
+
     def save_settings(self):
         """Save current settings to options manager"""
         if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
@@ -774,6 +945,10 @@ class OptionsTab(QWidget):
                 # First save capture-specific settings
                 if hasattr(self, 'save_capture_settings'):
                     self.save_capture_settings()
+                    
+                # Save bookend-specific settings
+                if hasattr(self, 'save_bookend_settings'):
+                    self.save_bookend_settings()
 
                 # Create settings dictionary for other tabs
                 settings = {
@@ -791,8 +966,6 @@ class OptionsTab(QWidget):
                         'default_crf': self.spin_default_crf.value(),
                         'default_preset': self.spin_default_preset.currentText(),
                     },
-
-                    # Bookend settings now stored via analysis tab
 
                     # Analysis settings with advanced VMAF options
                     'vmaf': {
@@ -817,12 +990,7 @@ class OptionsTab(QWidget):
                         'alignment_method': self.combo_alignment_method.currentText(),
                     },
 
-                    # Debug settings
-                    'debug': {
-                        'log_level': self.combo_log_level.currentText(),
-                        'save_logs': self.check_save_logs.isChecked(),
-                        'show_commands': self.check_show_commands.isChecked(),
-                    }
+                  
                 }
 
                 # Update settings
@@ -835,6 +1003,8 @@ class OptionsTab(QWidget):
                 # Print traceback for debugging
                 import traceback
                 logger.error(traceback.format_exc())
+
+
 
     def _setup_analysis_tab(self):
         """Set up the Analysis tab UI"""
@@ -962,8 +1132,6 @@ class OptionsTab(QWidget):
 
         return analysis_tab
 
-    # Method moved to analysis_tab.py
-
     def _populate_vmaf_models(self):
             """Populate VMAF models dropdown in options tab"""
             try:
@@ -1021,8 +1189,6 @@ class OptionsTab(QWidget):
                 # Add defaults as fallback
                 self.combo_default_vmaf_model.clear()
                 self.combo_default_vmaf_model.addItems(["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"])
-
-    # Add these methods to the OptionsTab class
 
     def browse_ref_directory(self):
         """Browse for reference videos directory"""
@@ -1102,27 +1268,138 @@ class OptionsTab(QWidget):
         """Set up the Advanced tab UI"""
         advanced_tab = QWidget()
         advanced_layout = QVBoxLayout(advanced_tab)
+        
+        # Bookend Settings group
+        bookend_group = QGroupBox("Bookend Detection Settings")
+        bookend_layout = QFormLayout()
 
-        # Debugging options
-        debug_group = QGroupBox("Debugging")
-        debug_layout = QFormLayout()
+        # Add helper info
+        bookend_help_label = QLabel("These settings control the white frame bookend detection and alignment:")
+        bookend_help_label.setStyleSheet("font-style: italic; color: #666;")
+        bookend_help_label.setWordWrap(True)
+        bookend_layout.addRow(bookend_help_label)
 
-        self.combo_log_level = QComboBox()
-        self.combo_log_level.addItems(["INFO", "DEBUG", "WARNING", "ERROR", "CRITICAL"])
-        debug_layout.addRow("Log Level:", self.combo_log_level)
+        # Loops settings with tooltips
+        self.spin_min_loops = QSpinBox()
+        self.spin_min_loops.setRange(1, 20)
+        self.spin_min_loops.setValue(3)
+        self.spin_min_loops.setToolTip("Minimum number of content loops to capture")
+        min_loops_label = QLabel("Minimum Loops:")
+        min_loops_label.setToolTip("Minimum number of content loops to capture")
+        bookend_layout.addRow(min_loops_label, self.spin_min_loops)
 
-        self.check_save_logs = QCheckBox()
-        self.check_save_logs.setChecked(True)
-        debug_layout.addRow("Save Logs:", self.check_save_logs)
+        self.spin_max_loops = QSpinBox()
+        self.spin_max_loops.setRange(1, 50)
+        self.spin_max_loops.setValue(10)
+        self.spin_max_loops.setToolTip("Maximum number of content loops to capture")
+        max_loops_label = QLabel("Maximum Loops:")
+        max_loops_label.setToolTip("Maximum number of content loops to capture")
+        bookend_layout.addRow(max_loops_label, self.spin_max_loops)
 
-        self.check_show_commands = QCheckBox()
-        self.check_show_commands.setChecked(True)
-        debug_layout.addRow("Show FFmpeg Commands:", self.check_show_commands)
+        # Capture time settings
+        self.spin_min_capture_time = QSpinBox()
+        self.spin_min_capture_time.setRange(1, 300)
+        self.spin_min_capture_time.setValue(5)
+        self.spin_min_capture_time.setSuffix(" sec")
+        self.spin_min_capture_time.setToolTip("Minimum recording time in seconds")
+        min_time_label = QLabel("Minimum Capture Time:")
+        min_time_label.setToolTip("Minimum recording time in seconds")
+        bookend_layout.addRow(min_time_label, self.spin_min_capture_time)
 
-        debug_group.setLayout(debug_layout)
-        advanced_layout.addWidget(debug_group)
+        self.spin_max_capture_time = QSpinBox()
+        self.spin_max_capture_time.setRange(5, 600)
+        self.spin_max_capture_time.setValue(120)
+        self.spin_max_capture_time.setSuffix(" sec")
+        self.spin_max_capture_time.setToolTip("Maximum recording time in seconds")
+        max_time_label = QLabel("Maximum Capture Time:")
+        max_time_label.setToolTip("Maximum recording time in seconds")
+        bookend_layout.addRow(max_time_label, self.spin_max_capture_time)
+
+        # Bookend duration with tooltip
+        self.spin_bookend_duration = QDoubleSpinBox()
+        self.spin_bookend_duration.setRange(0.1, 2.0)
+        self.spin_bookend_duration.setValue(0.2)
+        self.spin_bookend_duration.setSingleStep(0.1)
+        self.spin_bookend_duration.setDecimals(1)
+        self.spin_bookend_duration.setSuffix(" sec")
+        self.spin_bookend_duration.setToolTip("Duration of white bookend frames in seconds")
+        bookend_duration_label = QLabel("Bookend Duration:")
+        bookend_duration_label.setToolTip("Duration of white bookend frames in seconds")
+        bookend_layout.addRow(bookend_duration_label, self.spin_bookend_duration)
+
+        # White threshold setting with slider
+        threshold_widget = QWidget()
+        threshold_layout = QHBoxLayout(threshold_widget)
+        threshold_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.slider_white_threshold = QSlider(Qt.Horizontal)
+        self.slider_white_threshold.setRange(160, 250)
+        self.slider_white_threshold.setValue(200)
+        self.slider_white_threshold.setTickPosition(QSlider.TicksBelow)
+        self.slider_white_threshold.setTickInterval(10)
+
+        self.spin_white_threshold = QSpinBox()
+        self.spin_white_threshold.setRange(160, 250)
+        self.spin_white_threshold.setValue(200)
+        self.spin_white_threshold.setToolTip("Brightness threshold for white frame detection (0-255)")
+
+        # Connect slider and spinbox
+        self.slider_white_threshold.valueChanged.connect(self.spin_white_threshold.setValue)
+        self.spin_white_threshold.valueChanged.connect(self.slider_white_threshold.setValue)
+
+        threshold_layout.addWidget(self.slider_white_threshold)
+        threshold_layout.addWidget(self.spin_white_threshold)
+
+        white_threshold_label = QLabel("White Threshold:")
+        white_threshold_label.setToolTip("Brightness threshold for white frame detection (0-255)")
+        bookend_layout.addRow(white_threshold_label, threshold_widget)
+
+        # Frame sampling rate with tooltip
+        self.spin_frame_sampling = QSpinBox()
+        self.spin_frame_sampling.setRange(1, 30)
+        self.spin_frame_sampling.setValue(5)
+        self.spin_frame_sampling.setToolTip("Sample every Nth frame when detecting bookends. Higher values are faster but less precise.")
+        sampling_label = QLabel("Frame Sampling Rate:")
+        sampling_label.setToolTip("Sample every Nth frame when detecting bookends. Higher values are faster but less precise.")
+        bookend_layout.addRow(sampling_label, self.spin_frame_sampling)
+
+        # Frame offset with tooltip
+        self.spin_frame_offset = QSpinBox()
+        self.spin_frame_offset.setRange(-10, 10)
+        self.spin_frame_offset.setValue(6)
+        self.spin_frame_offset.setToolTip("Frame offset adjustment for alignment. Negative values start earlier.")
+        offset_label = QLabel("Frame Offset:")
+        offset_label.setToolTip("Frame offset adjustment for alignment. Negative values start earlier.")
+        bookend_layout.addRow(offset_label, self.spin_frame_offset)
+
+        # Option checkboxes for bookend settings
+        self.check_adaptive_brightness = QCheckBox()
+        self.check_adaptive_brightness.setChecked(True)
+        self.check_adaptive_brightness.setToolTip("Auto-adjust white detection threshold based on content brightness")
+        adaptive_label = QLabel("Use Adaptive Brightness:")
+        adaptive_label.setToolTip("Auto-adjust white detection threshold based on content brightness")
+        bookend_layout.addRow(adaptive_label, self.check_adaptive_brightness)
+
+        self.check_motion_compensation = QCheckBox()
+        self.check_motion_compensation.setChecked(False)
+        self.check_motion_compensation.setToolTip("Use motion compensation when aligning distorted content (experimental)")
+        motion_label = QLabel("Use Motion Compensation:")
+        motion_label.setToolTip("Use motion compensation when aligning distorted content (experimental)")
+        bookend_layout.addRow(motion_label, self.check_motion_compensation)
+
+        self.check_fallback_full_video = QCheckBox()
+        self.check_fallback_full_video.setChecked(True)
+        self.check_fallback_full_video.setToolTip("Use full video if bookend detection fails")
+        fallback_label = QLabel("Fallback to Full Video:")
+        fallback_label.setToolTip("Use full video if bookend detection fails")
+        bookend_layout.addRow(fallback_label, self.check_fallback_full_video)
+
+        bookend_group.setLayout(bookend_layout)
+        advanced_layout.addWidget(bookend_group)
+        
 
         return advanced_tab
+
 
     def load_settings(self):
         """Load settings from options manager"""
@@ -1152,6 +1429,9 @@ class OptionsTab(QWidget):
 
             # Load advanced tab settings
             self._load_advanced_settings(settings)
+            
+            # Load bookend settings
+            self._load_bookend_settings(settings)
 
             logger.info("Settings loaded successfully")
         except Exception as e:
@@ -1159,6 +1439,9 @@ class OptionsTab(QWidget):
             # Print traceback for debugging
             import traceback
             logger.error(traceback.format_exc())
+
+
+
 
     def _load_general_settings(self, settings):
         """Load settings for the general tab"""
@@ -1177,6 +1460,26 @@ class OptionsTab(QWidget):
             self.spin_default_preset.setCurrentText(encoder.get('default_preset', 'medium'))
         except Exception as e:
             logger.error(f"Error loading general settings: {e}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def _load_analysis_settings(self, settings):
         """Load settings for the analysis tab"""

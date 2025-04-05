@@ -38,13 +38,15 @@ class OptionsManager(QObject):
         self.default_settings = {
             "bookend": {
                 "min_loops": 3,
-                "max_capture_time": 120,  # seconds
-                "bookend_duration": 0.5,  # seconds
-                "white_threshold": 240,    # 0-255 for white detection
-                "frame_sampling_rate": 5, #Added frame sampling rate
-                "min_frame_sampling_rate": 1, #Added minimum frame sampling rate
-                "max_frame_sampling_rate": 30 #Added maximum frame sampling rate
-
+                "max_loops": 10,
+                "min_capture_time": 5,  # seconds
+                "max_capture_time": 30,  # seconds
+                "bookend_duration": 0.2,  # seconds
+                "white_threshold": 200,  # 0-255 for white detection
+                "frame_sampling_rate": 5,  # Added frame sampling rate
+                "min_frame_sampling_rate": 1,  # Added minimum frame sampling rate
+                "max_frame_sampling_rate": 30,  # Added maximum frame sampling rate
+                "frame_offset": 3,  # Default frame offset (negative means go back)
             },
             # VMAF settings
             "vmaf": {
@@ -180,6 +182,18 @@ class OptionsManager(QObject):
             default_value = self.default_settings[category][key]
 
         return self.settings[category].get(key, default_value)
+
+
+
+
+    def get_all_settings(self):
+        """Get all settings (alias for get_settings)"""
+        return self.get_settings()
+
+
+
+
+
 
     def get_settings(self):
         """Get all settings"""

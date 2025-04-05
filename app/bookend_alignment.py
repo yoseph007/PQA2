@@ -464,14 +464,6 @@ class BookendAligner(QObject):
 
 
 
-
-
-
-
-
-
-
-
     def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration):
         """Create aligned videos based on bookend content timing with improved naming"""
         try:
@@ -553,6 +545,21 @@ class BookendAligner(QObject):
             # Calculate exact duration for frame matching
             frame_duration = exact_ref_frames / ref_fps if ref_fps > 0 else content_duration
             
+            # Get frame offset from options manager
+            frame_offset = 6  # Default value if not configured
+            
+            # Check if options_manager is directly available
+            if hasattr(self, 'options_manager') and self.options_manager:
+                try:
+                    frame_offset = self.options_manager.get_setting("bookend", "frame_offset")
+                    logger.info(f"Using frame offset from options_manager: {frame_offset}")
+                except Exception as e:
+                    logger.warning(f"Error getting frame_offset from options_manager: {e}")
+            
+            # Calculate the offset time based on frame rate
+            offset_time = frame_offset / cap_fps
+            logger.info(f"Applied frame offset: {frame_offset} frames ({offset_time:.6f}s) at {cap_fps} fps")
+            
             # Adjust start time to skip white frames at the beginning
             # The 0.2 second adjustment is to ensure we start after any white frames
             adjusted_start = content_start_time + 0.2
@@ -564,7 +571,8 @@ class BookendAligner(QObject):
             # Trim captured video with precise frame count control
             if adjusted_start > 0 or "motion_comp" not in captured_path:
                 cap_cmd = [
-                    "ffmpeg", "-y", 
+                    "ffmpeg", "-y",
+                    "-itsoffset", str(offset_time),  # Offset to align with reference
                     "-i", captured_path,
                     "-ss", str(adjusted_start),
                     "-c:v", "libx264", "-crf", "18",
@@ -652,7 +660,6 @@ class BookendAligner(QObject):
             import traceback
             logger.error(traceback.format_exc())
             return None, None
-
 
 
 
@@ -806,6 +813,7 @@ class BookendAligner(QObject):
             logger.info(f"Video brightness stats: avg={avg_brightness:.1f}, std={std_brightness:.1f}, " +
                     f"max={max_brightness:.1f}, avg_std_dev={avg_std_dev:.1f}")
 
+    
             # Dynamic threshold calculation based on adaptive brightness
             if self.adaptive_brightness:
                 # Smarter threshold calculation for varying lighting conditions
@@ -827,9 +835,30 @@ class BookendAligner(QObject):
                     max(avg_brightness + 20, 160)  # Second fallback
                 ]
             else:
-                # Use fixed threshold from settings
-                fixed_threshold = 230  # Default, should be overridden from options
+                # Use white threshold value from settings
+                white_threshold = 230  # Default value if not set
+                
+                # If options_manager is available, get the configured white threshold
+                if hasattr(self, 'options_manager') and self.options_manager:
+                    try:
+                        white_threshold = self.options_manager.get_setting("bookend", "white_threshold")
+                        logger.info(f"Using configured white threshold: {white_threshold}")
+                    except Exception as e:
+                        logger.warning(f"Error getting white threshold from options: {e}")
+                
+                # Use the white threshold as fixed threshold with fallbacks
+                fixed_threshold = white_threshold
                 thresholds = [fixed_threshold, fixed_threshold * 0.9, fixed_threshold * 0.8]
+
+
+
+
+
+
+
+
+
+
             
             logger.info(f"Using brightness thresholds: {[round(t, 1) for t in thresholds]}")
             
@@ -1125,7 +1154,7 @@ class BookendAlignmentThread(QThread):
         if options_manager:
             try:
                 # DEBUGGING: Add logging of the entire options dictionary
-                all_settings = options_manager.get_all_settings()
+                all_settings = options_manager.get_settings()
                 logger.info(f"All settings from options_manager: {all_settings}")
                 
                 # Get the specific bookend settings

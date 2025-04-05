@@ -1626,6 +1626,12 @@ class CaptureManager(QObject):
         self.status_update.emit("Capture stopped by user")
         self.capture_finished.emit(False, "Capture cancelled by user")
 
+
+
+
+
+
+
     def start_bookend_capture(self, device_name):
         """
         Start capture of a looped video with white frame bookends
@@ -1658,10 +1664,6 @@ class CaptureManager(QObject):
             self.capture_start_time = time.time()
             self.last_frame_count = 0
             
-            # Create a QTimer for updating the preview if not running in a QApplication
-            if hasattr(self, '_update_preview_timer'):
-                self._update_preview_timer.stop()
-            
             # Use regular timer as fallback
             def update_preview():
                 if self.state == CaptureState.CAPTURING:
@@ -1683,67 +1685,59 @@ class CaptureManager(QObject):
         # Prepare output path
         self._prepare_output_path()
 
-        # Get settings from options manager if available through main app
-        settings = None
-        if hasattr(self, 'options_manager') and self.options_manager:
-            settings = self.options_manager.settings
-
         # Calculate capture duration based on reference and settings
         ref_duration = self.reference_info['duration']
         frame_rate = self.reference_info.get('frame_rate', 30)  # Default to 30fps if unknown
 
-        # Get bookend settings from options or use defaults
-        bookend_duration = 0.5  # Default white frame duration in seconds
+        # Default values for bookend parameters
+        bookend_duration = 0.2  # Default white frame duration in seconds
         min_loops = 3           # Default minimum loops
-        max_capture_time = 30  # Default maximum capture time in seconds
-
-        # Make sure we use the proper instance of options_manager
+        max_loops = 10          # Default maximum loops
+        min_capture_time = 5    # Default minimum capture time in seconds
+        max_capture_time = 20   # Default maximum capture time in seconds
+        
+        # Get bookend settings from options_manager
         options_manager = getattr(self, 'options_manager', None)
         
         if options_manager:
-            # Directly use options_manager to ensure we're getting current settings
+            # Get all bookend parameters from options manager
             try:
                 bookend_settings = options_manager.get_setting("bookend")
-                bookend_duration = bookend_settings.get('bookend_duration', 0.5)
-                min_loops = bookend_settings.get('min_loops', 3)
-                max_capture_time = bookend_settings.get('max_capture_time', 30)
-                logger.info(f"Using options_manager settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
+                if isinstance(bookend_settings, dict):
+                    bookend_duration = bookend_settings.get('bookend_duration', 0.2)
+                    min_loops = bookend_settings.get('min_loops', 3)
+                    max_loops = bookend_settings.get('max_loops', 10)
+                    min_capture_time = bookend_settings.get('min_capture_time', 5)
+                    max_capture_time = bookend_settings.get('max_capture_time', 20)
+                    
+                    logger.info(f"Using options_manager settings: bookend_duration={bookend_duration}s, "
+                            f"min_loops={min_loops}, max_loops={max_loops}, "
+                            f"min_time={min_capture_time}s, max_time={max_capture_time}s")
             except Exception as e:
                 logger.error(f"Error getting settings from options_manager: {e}")
-                # Fall back to settings from parameters
-                if settings and 'bookend' in settings:
-                    bookend_settings = settings.get('bookend', {})
-                    bookend_duration = bookend_settings.get('bookend_duration', 0.5)
-                    min_loops = bookend_settings.get('min_loops', 3)
-                    max_capture_time = bookend_settings.get('max_capture_time', 30)
-                    logger.info(f"Using fallback settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
-        elif settings and 'bookend' in settings:
-            # Use settings passed to the method if options_manager not available
-            bookend_settings = settings.get('bookend', {})
-            bookend_duration = bookend_settings.get('bookend_duration', 0.5)
-            min_loops = bookend_settings.get('min_loops', 3)
-            max_capture_time = bookend_settings.get('max_capture_time', 30)
-            logger.info(f"Using provided settings: duration={bookend_duration}s, min_loops={min_loops}, max_time={max_capture_time}s")
 
+        # Calculate base loop duration including bookends
         loop_duration = ref_duration + (2 * bookend_duration)  # Account for start and end bookends
 
-        # Capture for a much longer time to ensure at least the configured number of loops
-        min_duration = max(20, ref_duration * min_loops)  # At least 20 seconds or min_loops * reference
-        # Apply max capture time from settings
-        max_duration = max_capture_time
-
-        # Calculate capture duration with extra margin
-        capture_duration = min(max((loop_duration * min_loops * 1.5), min_duration), max_duration)
-
-        # Round up to nearest 10 seconds for good measure
-        capture_duration = math.ceil(capture_duration / 10) * 10
+        # Calculate min and max durations based on loops
+        min_loop_duration = max(loop_duration * min_loops, min_capture_time)
+        max_loop_duration = min(loop_duration * max_loops, max_capture_time)
         
-        logger.info(f"Final capture duration: {capture_duration}s (max allowed: {max_duration}s)")
+        # Calculate final capture duration with extra margin for reliability
+        # Use 1.2x multiplier to ensure we capture at least the minimum number of loops
+        capture_duration = min(min_loop_duration * 1.2, max_loop_duration)
 
-        logger.info(f"Capture duration set to {capture_duration}s (loop={loop_duration:.2f}s, min_loops={min_loops})")
+        # Round up to nearest second for clean timing
+        capture_duration = math.ceil(capture_duration)
+        
+        logger.info(f"Reference duration: {ref_duration:.2f}s")
+        logger.info(f"Single loop duration (with bookends): {loop_duration:.2f}s")
+        logger.info(f"Minimum required duration: {min_loop_duration:.2f}s ({min_loops} loops)")
+        logger.info(f"Maximum allowed duration: {max_loop_duration:.2f}s ({max_loops} loops)")
+        logger.info(f"Final capture duration: {capture_duration:.2f}s")
 
         # Inform the user
-        self.status_update.emit(f"Capturing video with bookend frames for approximately {capture_duration:.0f} seconds...\n")
+        self.status_update.emit(f"Capturing video with bookend frames for approximately {capture_duration:.1f} seconds...\n")
         self.status_update.emit("Please ensure the video plays in a loop with white frames between repetitions")
 
         # Kill any lingering FFmpeg processes
@@ -1773,7 +1767,7 @@ class CaptureManager(QObject):
                 "-movflags", "+faststart", # Optimize for web streaming
                 "-fflags", "+genpts+igndts", # More resilient timestamp handling
                 "-avoid_negative_ts", "1", # Handle negative timestamps
-                "-t", str(max_capture_time) # Use exact setting from options, not calculated duration
+                "-t", str(capture_duration) # Use calculated capture duration
             ]
 
             # Use forward slashes for FFmpeg
@@ -1816,12 +1810,10 @@ class CaptureManager(QObject):
                     universal_newlines=True
                 )
 
-            # Create a more reliable monitor with proper frame estimation based on max_capture_time
-            frame_rate = self.reference_info.get('frame_rate', 30)  # Default to 30fps if unknown
-            # Use exact max_capture_time for frame count calculation
-            total_frames = int(max_capture_time * frame_rate)
-            logger.info(f"Estimated total frames: {total_frames} based on max_capture_time={max_capture_time}s and fps={frame_rate}")
-            self.capture_monitor = CaptureMonitor(self.ffmpeg_process, max_capture_time, total_frames)
+            # Create a more reliable monitor with proper frame estimation based on capture_duration
+            total_frames = int(capture_duration * frame_rate)
+            logger.info(f"Estimated total frames: {total_frames} based on capture_duration={capture_duration}s and fps={frame_rate}")
+            self.capture_monitor = CaptureMonitor(self.ffmpeg_process, capture_duration, total_frames)
 
             # Connect all required signals properly with error checking
             try:
@@ -1876,6 +1868,12 @@ class CaptureManager(QObject):
             self.state_changed.emit(self.state)
             self.capture_finished.emit(False, error_msg)
             return False
+
+
+
+
+
+
 
     def _update_preview_during_capture(self):
         """Update UI with frame info and status during capture"""

@@ -65,58 +65,6 @@ class AnalysisTab(QWidget):
         settings_layout.addLayout(settings_row)
 
 
-        # Bookend Detection Settings
-        bookend_group = QGroupBox("Bookend Detection Settings")
-        bookend_layout = QVBoxLayout()
-
-        # Bookend Duration
-        bookend_duration_layout = QHBoxLayout()
-        bookend_duration_layout.addWidget(QLabel("Bookend Duration (seconds):"))
-        self.spin_bookend_duration = QDoubleSpinBox()
-        self.spin_bookend_duration.setRange(0.1, 10.0)
-        self.spin_bookend_duration.setSingleStep(0.1)
-        self.spin_bookend_duration.setValue(0.5)
-        self.spin_bookend_duration.setDecimals(2)
-        bookend_duration_layout.addWidget(self.spin_bookend_duration)
-        bookend_layout.addLayout(bookend_duration_layout)
-
-
-        # Minimum Loops
-        min_loops_layout = QHBoxLayout()
-        min_loops_layout.addWidget(QLabel("Minimum Loops:"))
-        self.spin_min_loops = QSpinBox()
-        self.spin_min_loops.setRange(1, 10)
-        self.spin_min_loops.setValue(3)
-        min_loops_layout.addWidget(self.spin_min_loops)
-        bookend_layout.addLayout(min_loops_layout)
-
-
-        # White Threshold
-        white_threshold_layout = QHBoxLayout()
-        white_threshold_layout.addWidget(QLabel("White Threshold:"))
-        self.spin_bookend_threshold = QSpinBox()
-        self.spin_bookend_threshold.setRange(0, 255)
-        self.spin_bookend_threshold.setValue(230)
-        white_threshold_layout.addWidget(self.spin_bookend_threshold)
-        bookend_layout.addLayout(white_threshold_layout)
-
-
-        # Frame Sampling Rate
-        frame_sampling_layout = QHBoxLayout()
-        frame_sampling_layout.addWidget(QLabel("Frame Sampling Rate:"))
-        self.frame_sampling_slider = QSlider(Qt.Horizontal)
-        self.frame_sampling_slider.setRange(1, 10)
-        self.frame_sampling_slider.setValue(5)
-        self.frame_sampling_slider.setTickInterval(1)
-        self.frame_sampling_slider.setTickPosition(QSlider.TicksBelow)
-        frame_sampling_layout.addWidget(self.frame_sampling_slider)
-        self.lbl_frame_sampling_rate = QLabel("5")
-        frame_sampling_layout.addWidget(self.lbl_frame_sampling_rate)
-        bookend_layout.addLayout(frame_sampling_layout)
-        self.frame_sampling_slider.valueChanged.connect(self._update_frame_sampling_label)
-
-        bookend_group.setLayout(bookend_layout)
-        settings_layout.addWidget(bookend_group)
 
 
         # Combined analysis controls
@@ -184,8 +132,8 @@ class AnalysisTab(QWidget):
         self.txt_analysis_log = QTextEdit()
         self.txt_analysis_log.setReadOnly(True)
         self.txt_analysis_log.setLineWrapMode(QTextEdit.WidgetWidth)
-        self.txt_analysis_log.setMinimumHeight(150)
-        self.txt_analysis_log.setMaximumHeight(200)
+        self.txt_analysis_log.setMinimumHeight(200)
+        self.txt_analysis_log.setMaximumHeight(400)
         left_log_layout.addWidget(self.txt_analysis_log)
         logs_layout.addLayout(left_log_layout)
 
@@ -198,8 +146,8 @@ class AnalysisTab(QWidget):
         self.txt_alignment_log = QTextEdit()
         self.txt_alignment_log.setReadOnly(True)
         self.txt_alignment_log.setLineWrapMode(QTextEdit.WidgetWidth)
-        self.txt_alignment_log.setMinimumHeight(150)
-        self.txt_alignment_log.setMaximumHeight(200)
+        self.txt_alignment_log.setMinimumHeight(200)
+        self.txt_alignment_log.setMaximumHeight(400)
         right_log_layout.addWidget(self.txt_alignment_log)
         logs_layout.addLayout(right_log_layout)
 
@@ -260,16 +208,51 @@ class AnalysisTab(QWidget):
         self.log_to_analysis(f"Using VMAF model: {self.selected_model}")
         self.log_to_analysis(f"Duration: {self.selected_duration if self.selected_duration else 'Full video'}")
 
-        # Get bookend settings
-        bookend_duration = self.spin_bookend_duration.value()
-        min_loops = self.spin_min_loops.value()
-        white_threshold = self.spin_bookend_threshold.value()
-        frame_sampling_rate = self.frame_sampling_slider.value()
 
-        self.log_to_analysis(f"Bookend Duration: {bookend_duration}")
-        self.log_to_analysis(f"Minimum Loops: {min_loops}")
-        self.log_to_analysis(f"White Threshold: {white_threshold}")
-        self.log_to_analysis(f"Frame Sampling Rate: {frame_sampling_rate}")
+
+        # Get bookend settings from options_manager instead of UI controls
+        try:
+            # Access the options_manager to get bookend settings
+            if hasattr(self, 'options_manager') and self.options_manager:
+                bookend_settings = self.options_manager.get_setting("bookend")
+                
+                # Extract individual settings with fallbacks
+                bookend_duration = bookend_settings.get('bookend_duration', 0.2)
+                min_loops = bookend_settings.get('min_loops', 3)
+                white_threshold = bookend_settings.get('white_threshold', 200)
+                frame_sampling_rate = bookend_settings.get('frame_sampling_rate', 5)
+            else:
+                # Fallback to defaults if options_manager is not available
+                bookend_duration = 0.2
+                min_loops = 3
+                white_threshold = 200
+                frame_sampling_rate = 5
+                logger.warning("Options manager not available, using default bookend settings")
+            
+            self.log_to_analysis(f"Bookend Duration: {bookend_duration}")
+            self.log_to_analysis(f"Minimum Loops: {min_loops}")
+            self.log_to_analysis(f"White Threshold: {white_threshold}")
+            self.log_to_analysis(f"Frame Sampling Rate: {frame_sampling_rate}")
+        except Exception as e:
+            logger.error(f"Error getting bookend settings: {e}")
+            # Fallback to defaults if there's an error
+            bookend_duration = 0.2
+            min_loops = 3
+            white_threshold = 200
+            frame_sampling_rate = 5
+            self.log_to_analysis("Error getting bookend settings, using defaults")
+
+
+
+
+
+
+
+
+
+
+
+
 
         # Disable all analysis buttons during process
         self.btn_run_combined_analysis.setEnabled(False)
