@@ -72,10 +72,11 @@ class AnalysisTab(QWidget):
         # Bookend Duration
         bookend_duration_layout = QHBoxLayout()
         bookend_duration_layout.addWidget(QLabel("Bookend Duration (seconds):"))
-        self.spin_bookend_duration = QSpinBox()
-        self.spin_bookend_duration.setRange(0, 10)
+        self.spin_bookend_duration = QDoubleSpinBox()
+        self.spin_bookend_duration.setRange(0.1, 10.0)
         self.spin_bookend_duration.setSingleStep(0.1)
         self.spin_bookend_duration.setValue(0.5)
+        self.spin_bookend_duration.setDecimals(2)
         bookend_duration_layout.addWidget(self.spin_bookend_duration)
         bookend_layout.addLayout(bookend_duration_layout)
 

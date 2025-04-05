@@ -113,6 +113,9 @@ class MainWindow(QMainWindow):
         """Connect signals to handlers"""
         # Connect capture manager signals
         if hasattr(self, 'capture_mgr') and self.capture_mgr:
+            # Suppress format detection popup when initializing
+            self.capture_mgr.suppress_format_detection_popup = True
+            
             self.capture_mgr.status_update.connect(self.capture_tab.update_capture_status)
             self.capture_mgr.progress_update.connect(self.capture_tab.update_capture_progress) 
             self.capture_mgr.state_changed.connect(self.capture_tab.handle_capture_state_change)

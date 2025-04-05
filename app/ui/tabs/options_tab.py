@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
                              QFormLayout, QGridLayout, QGroupBox, QHBoxLayout,
                              QLabel, QLineEdit, QMessageBox, QPushButton,
                              QSlider, QSpinBox, QTabWidget, QVBoxLayout,
-                             QWidget, QApplication)
+                             QWidget, QApplication, QScrollArea)
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +32,26 @@ class OptionsTab(QWidget):
 
     def _setup_ui(self):
         """Set up the Options tab UI with scrolling support"""
-        main_layout = QVBoxLayout(self)
-        
-        # Create a scroll area to make the content scrollable
+        # Create main layout with scroll area
+        from PyQt5.QtWidgets import QScrollArea
+
+        # Create a scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QScrollArea.NoFrame)
-        
-        # Create a widget to hold all the content
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        # Create a widget to hold all content
         scroll_content = QWidget()
+        scroll_area.setWidget(scroll_content)
+
+        # Create main layout for the content
         layout = QVBoxLayout(scroll_content)
-        
+
+        # Set the scroll area as the main widget
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(scroll_area)
+
         # Create tabbed interface for different settings categories
         options_tabs = QTabWidget()
 
@@ -69,10 +78,7 @@ class OptionsTab(QWidget):
         button_layout.addWidget(self.btn_save_settings)
         button_layout.addWidget(self.btn_reset_settings)
         layout.addLayout(button_layout)
-        
-        # Set up scroll area with the content
-        scroll_area.setWidget(scroll_content)
-        main_layout.addWidget(scroll_area)
+
 
         # Load current settings into UI elements
         self.load_settings()
@@ -328,8 +334,6 @@ class OptionsTab(QWidget):
         device_layout.addWidget(format_group)
         device_group.setLayout(device_layout)
         capture_layout.addWidget(device_group)
-
-        # Bookend settings moved to Analysis Tab
 
         # Add help text
         help_text = QLabel(

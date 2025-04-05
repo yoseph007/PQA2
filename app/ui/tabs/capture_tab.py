@@ -1,4 +1,3 @@
-
 import logging
 import os
 from datetime import datetime
@@ -9,22 +8,35 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (QComboBox, QFrame, QGroupBox, QHBoxLayout, QLabel,
                              QMessageBox, QProgressBar, QPushButton, QSplitter,
-                             QTextEdit, QVBoxLayout, QWidget)
+                             QTextEdit, QVBoxLayout, QWidget, QScrollArea)
 
 logger = logging.getLogger(__name__)
 
 class CaptureTab(QWidget):
     """Capture tab for video capture operations"""
-    
+
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
         self._frame_count = 0
         self._setup_ui()
-        
+
     def _setup_ui(self):
-        """Set up the Capture tab UI"""
-        layout = QVBoxLayout(self)
+        """Set up the Capture tab UI with scroll area"""
+        from PyQt5.QtWidgets import QScrollArea
+
+        # Create a scroll area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        # Create a widget to hold all content
+        scroll_content = QWidget()
+        scroll_area.setWidget(scroll_content)
+
+        # Create main layout for the content
+        layout = QVBoxLayout(scroll_content)
 
         # Summary of setup with improved styling
         self.lbl_capture_summary = QLabel("No reference video selected")
@@ -104,7 +116,7 @@ class CaptureTab(QWidget):
         self.pb_capture_progress.setAlignment(Qt.AlignCenter)
         self.pb_capture_progress.setMinimumWidth(300)
         progress_layout.addWidget(self.pb_capture_progress)
-        
+
         # Keep frame counter for internal use, but don't display it
         self.lbl_capture_frame_counter = QLabel("")
         self.lbl_capture_frame_counter.setVisible(False)
@@ -199,7 +211,7 @@ class CaptureTab(QWidget):
         splitter.addWidget(left_widget)
         splitter.addWidget(right_widget)
         splitter.setSizes([500, 500])  # 50/50 split
-        
+
         # Set a minimum width for both panes to prevent unwanted resizing
         left_widget.setMinimumWidth(400)
         right_widget.setMinimumWidth(400)
@@ -219,10 +231,14 @@ class CaptureTab(QWidget):
         nav_layout.addWidget(self.btn_next_to_analysis)
 
         layout.addLayout(nav_layout)
-        
+
+        # Set the scroll area as the main widget
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(scroll_area)
+
         # Initialize device status
         self.populate_devices_and_check_status()
-        
+
     def refresh_devices(self):
         """Refresh list of capture devices and update status indicator"""
         self.device_combo.clear()
@@ -232,7 +248,7 @@ class CaptureTab(QWidget):
 
         # Use options manager to get devices
         QTimer.singleShot(500, self.populate_devices_and_check_status)
-        
+
     def populate_devices_and_check_status(self):
         """Populate device dropdown with devices and check their status"""
         # Get devices from options manager
@@ -304,10 +320,10 @@ class CaptureTab(QWidget):
             # Grey for initialization not complete
             self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
             self.device_status_indicator.setToolTip("Capture manager not initialized")
-  
-  
-  
-  
+
+
+
+
 
 
     def start_capture(self):
@@ -344,7 +360,7 @@ class CaptureTab(QWidget):
         # Get test name - use a timestamp if not available
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         test_name = f"test_{timestamp}"
-        
+
         # Try to get test name from setup_tab if it exists
         if hasattr(self.parent, 'setup_tab'):
             # Look for common test name field naming patterns
@@ -372,12 +388,12 @@ class CaptureTab(QWidget):
             self.log_to_capture("Error: Capture manager not initialized")
             self.btn_start_capture.setEnabled(True)
             self.btn_stop_capture.setEnabled(False)     
-           
-           
-           
-           
-           
-            
+
+
+
+
+
+
     def stop_capture(self):
         """Stop the capture process"""
         self.log_to_capture("Stopping capture...")
@@ -392,7 +408,7 @@ class CaptureTab(QWidget):
         # Update UI
         self.btn_start_capture.setEnabled(True)
         self.btn_stop_capture.setEnabled(False)
-        
+
     def update_capture_status(self, status_text):
         """Update capture status label"""
         self.lbl_capture_status.setText(status_text)
@@ -417,7 +433,7 @@ class CaptureTab(QWidget):
         """Handle capture start"""
         self.btn_start_capture.setEnabled(False)
         self.btn_stop_capture.setEnabled(True)
-            
+
     def update_preview(self, frame):
         """Update the preview with a video frame"""
         try:
@@ -496,37 +512,37 @@ class CaptureTab(QWidget):
         except Exception as e:
             logger.error(f"Error updating preview: {str(e)}")
             self._show_placeholder_image(f"Preview error: {str(e)}")
-            
+
     def _show_placeholder_image(self, message="No video feed"):
         """Show an enhanced status display with text when no video is available"""
         try:
             # Create a blank image with better styling
             placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
             placeholder[:] = (240, 240, 240)  # Lighter gray background
-            
+
             # Add a header bar
             cv2.rectangle(placeholder, (0, 0), (480, 40), (70, 130, 180), -1)  # Blue header
-            
+
             # Add header text
             font = cv2.FONT_HERSHEY_SIMPLEX
             cv2.putText(placeholder, "STATUS MONITOR", (160, 27), font, 0.7, (255, 255, 255), 2)
-            
+
             # Split message into multiple lines if needed
             max_line_length = 40
             words = message.split()
             lines = []
             current_line = ""
-            
+
             for word in words:
                 if len(current_line + " " + word) <= max_line_length:
                     current_line += " " + word if current_line else word
                 else:
                     lines.append(current_line)
                     current_line = word
-            
+
             if current_line:
                 lines.append(current_line)
-            
+
             # Add each line of text
             y_position = 80
             for line in lines:
@@ -534,22 +550,22 @@ class CaptureTab(QWidget):
                 x_position = (placeholder.shape[1] - text_size[0]) // 2
                 cv2.putText(placeholder, line, (x_position, y_position), font, 0.6, (0, 0, 0), 1)
                 y_position += 30
-            
+
             # Add a footer with timestamp
             timestamp = datetime.now().strftime("%H:%M:%S")
             footer_text = f"Updated: {timestamp}"
             cv2.putText(placeholder, footer_text, (10, 250), font, 0.5, (100, 100, 100), 1)
-            
+
             # Add a border around the image
             cv2.rectangle(placeholder, (0, 0), (479, 269), (200, 200, 200), 1)
-            
+
             # Convert to QImage and display
             rgb_image = cv2.cvtColor(placeholder, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
             q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
             self.lbl_preview.setPixmap(QPixmap.fromImage(q_img))
-            
+
             # Also update status text
             if hasattr(self, 'lbl_preview_status'):
                 self.lbl_preview_status.setText(f"Status: {message.split('.')[0]}")
@@ -559,7 +575,7 @@ class CaptureTab(QWidget):
             # Fallback to text-only label
             self.lbl_preview.setText(message)
             self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black; padding: 10px;")
-            
+
     def update_frame_counter(self, current_frame, total_frames):
         """Update frame counter display during capture"""
         if hasattr(self, 'lbl_capture_frame_counter'):
@@ -568,7 +584,7 @@ class CaptureTab(QWidget):
                 self.lbl_capture_frame_counter.setText(f"Frames: {current_frame:,} / {total_frames:,}")
             else:
                 self.lbl_capture_frame_counter.setText(f"Frames: {current_frame:,}")
-                
+
     def log_to_capture(self, message):
         """Add message to capture log with smart formatting for errors and warnings"""
         # Apply HTML formatting for different message types
@@ -622,28 +638,28 @@ class CaptureTab(QWidget):
                     if not cap.isOpened():
                         logger.error(f"Could not open reference video: {reference_path}")
                         return
-                    
+
                     # Get the middle frame for preview
                     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                     if total_frames > 10:
                         # Seek to middle frame
                         cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
-                    
+
                     # Read the frame
                     ret, frame = cap.read()
                     if not ret:
                         logger.error("Could not read reference video frame")
                         cap.release()
                         return
-                    
+
                     # Convert frame to RGB format (OpenCV uses BGR)
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    
+
                     # Calculate scaled dimensions to fit the preview area
                     h, w, ch = frame_rgb.shape
                     preview_w = self.lbl_preview.width()
                     preview_h = self.lbl_preview.height()
-                    
+
                     # Calculate aspect ratio-preserving dimensions
                     if w/h > preview_w/preview_h:  # Width-limited
                         new_w = preview_w
@@ -651,33 +667,33 @@ class CaptureTab(QWidget):
                     else:  # Height-limited
                         new_h = preview_h
                         new_w = int(w * (preview_h / h))
-                    
+
                     # Resize the frame
                     resized = cv2.resize(frame_rgb, (new_w, new_h))
-                    
+
                     # Convert to QImage and QPixmap
                     from PyQt5.QtGui import QImage, QPixmap
                     bytes_per_line = ch * new_w
                     q_img = QImage(resized.data, new_w, new_h, bytes_per_line, QImage.Format_RGB888)
                     pixmap = QPixmap.fromImage(q_img)
-                    
+
                     # Set the pixmap to the QLabel
                     self.lbl_preview.setPixmap(pixmap)
                     self.lbl_preview.setAlignment(Qt.AlignCenter)
-                    
+
                     # Update status text
                     ref_name = os.path.basename(reference_path)
                     self.lbl_preview_status.setText(f"Reference preview: {ref_name}")
-                    
+
                     # Release the video capture
                     cap.release()
                     return
-            
+
             # Fall back to text message if couldn't load reference
             self.lbl_preview.setText("Reference video preview not available")
             self.lbl_preview.setStyleSheet("background-color: #f0f0f0; color: #666; padding: 10px;")
             self.lbl_preview_status.setText("Status: No reference video loaded")
-            
+
         except Exception as e:
             logger.error(f"Error showing reference preview: {e}")
             self.lbl_preview.setText("Error loading reference preview")
