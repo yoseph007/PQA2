@@ -254,3 +254,32 @@ class MainWindow(QMainWindow):
         for tab in [self.setup_tab, self.capture_tab, self.analysis_tab, self.results_tab, self.help_tab]: #Added help_tab
             if hasattr(tab, 'ensure_threads_finished'):
                 tab.ensure_threads_finished()
+                
+    def start_new_test(self):
+        """Resets the application state for a new test"""
+        logger.info("Starting new test - resetting application state")
+        
+        # Reset state variables
+        self.capture_path = None
+        self.aligned_paths = None
+        self.vmaf_results = None
+        self.vmaf_running = False
+        
+        # Reset tabs
+        if hasattr(self.setup_tab, 'reset'):
+            self.setup_tab.reset()
+        
+        if hasattr(self.capture_tab, 'reset'):
+            self.capture_tab.reset()
+            
+        if hasattr(self.analysis_tab, 'reset'):
+            self.analysis_tab.reset()
+            
+        if hasattr(self.results_tab, 'reset'):
+            self.results_tab.reset()
+        
+        # Go back to setup tab
+        self.tabs.setCurrentIndex(0)
+        
+        # Update status bar
+        self.statusBar().showMessage("Ready for new test")
