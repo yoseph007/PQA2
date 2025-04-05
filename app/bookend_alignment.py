@@ -119,21 +119,121 @@ class BookendAligner(QObject):
         # Default values for advanced options
         self.frame_sampling_rate = 5  # Frames to sample per second during detection
         self.adaptive_brightness = True  # Use adaptive brightness threshold
-        self.motion_compensation = True  # Apply motion compensation
+        self.motion_compensation = False  # Apply motion compensation
         self.fallback_to_full_video = True  # Use full video if no bookends detected
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def set_advanced_options(self, frame_sampling_rate=5, adaptive_brightness=True, 
-                           motion_compensation=True, fallback_to_full_video=True):
+                        motion_compensation=True, fallback_to_full_video=True):
         """Set advanced options for bookend alignment"""
+        # Store the previous settings for logging
+        prev_motion_comp = self.motion_compensation
+        
+        # Update the settings
         self.frame_sampling_rate = frame_sampling_rate
         self.adaptive_brightness = adaptive_brightness
         self.motion_compensation = motion_compensation
         self.fallback_to_full_video = fallback_to_full_video
         
+        # Log the change in motion compensation setting
+        if prev_motion_comp != motion_compensation:
+            logger.info(f"Motion compensation setting changed: {prev_motion_comp} -> {motion_compensation}")
+        
         logger.info(f"Set advanced bookend options: sampling_rate={frame_sampling_rate}, "
-                   f"adaptive_brightness={adaptive_brightness}, "
-                   f"motion_compensation={motion_compensation}, "
-                   f"fallback_to_full_video={fallback_to_full_video}")
+                f"adaptive_brightness={adaptive_brightness}, "
+                f"motion_compensation={motion_compensation}, "
+                f"fallback_to_full_video={fallback_to_full_video}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def _apply_motion_compensation(self, video_path, start_time, duration):
+        """
+        Apply motion compensation to the video to improve alignment for fast-moving content
+        
+        Args:
+            video_path: Path to the input video
+            start_time: Start time for content section
+            duration: Duration of content
+            
+        Returns:
+            Path to motion-compensated video or None if failed
+        """
+        try:
+            # Create output filename with _motion_comp suffix
+            output_dir = os.path.dirname(video_path)
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            output_path = os.path.join(output_dir, f"{base_name}_motion_comp.mp4")
+            
+            # Get input video frame rate
+            video_info = self._get_video_info(video_path)
+            original_fps = video_info.get('frame_rate', 30)
+            
+            logger.info(f"Applying motion compensation from {start_time:.3f}s for {duration:.3f}s with fps={original_fps}")
+            
+            # Create FFmpeg command for motion compensation
+            # First extract the section we want to process
+            cmd = [
+                "ffmpeg", "-hide_banner", "-y",
+                "-i", video_path,
+                "-ss", str(start_time),
+                "-t", str(duration),
+                "-vf", f"minterpolate=fps={original_fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
+                "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                "-r", str(original_fps),  # Ensure output frame rate matches source
+                output_path
+            ]
+            
+            # Run the command
+            logger.info(f"Running motion compensation: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                logger.error(f"Motion compensation failed: {result.stderr}")
+                return None
+                
+            # Verify the output file exists and is valid
+            if not os.path.exists(output_path) or not validate_video_file(output_path):
+                logger.error("Motion compensation output file is invalid")
+                return None
+                
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"Error applying motion compensation: {e}")
+            return None
+
+
+
+
+
+
 
     def align_bookend_videos(self, reference_path, captured_path):
         """
@@ -144,6 +244,18 @@ class BookendAligner(QObject):
         - aligned_captured: Path to trimmed captured video
         """
         try:
+            # Log the current setting of motion_compensation at the start
+            logger.info(f"Starting alignment with motion_compensation={self.motion_compensation}")
+            
+            self.status_update.emit("Starting white bookend alignment process...")
+            logger.info("Starting white bookend alignment process")           
+            
+            
+            
+            
+            
+            
+            
             self.status_update.emit("Starting white bookend alignment process...")
             logger.info("Starting white bookend alignment process")
 
@@ -197,19 +309,6 @@ class BookendAligner(QObject):
                     logger.info("Falling back to using entire captured video as content")
                     self.status_update.emit("No bookends detected. Using entire video instead...")
                     
-
-
-
-
-
-
-
-
-
-
-
-
-
                     # Create fallback bookends
                     content_start_time = 0.2  # Skip first 0.2 sec to avoid any initial issues
                     content_duration = cap_info.get('duration', 0) - 0.4  # Leave 0.2 sec at the end
@@ -230,8 +329,10 @@ class BookendAligner(QObject):
             logger.info(f"Detected last white bookend at: {last_bookend['start_time']:.3f}s - {last_bookend['end_time']:.3f}s")
 
             # The content is between the end of the first bookend and the start of the last bookend
-            content_start_time = first_bookend['end_time'] + 0.033  # Add one frame buffer (30fps)
-            content_end_time = last_bookend['start_time'] - 0.033  # Subtract one frame buffer
+            # Calculate frame buffer time based on actual frame rate
+            frame_buffer_time = 1.5 / cap_info.get('frame_rate', 30)  # Buffer of 1.5 frames
+            content_start_time = first_bookend['end_time'] + frame_buffer_time
+            content_end_time = last_bookend['start_time'] - frame_buffer_time
 
             # Make sure we have valid timing
             if content_end_time <= content_start_time:
@@ -261,8 +362,8 @@ class BookendAligner(QObject):
                         start_bookend = bookend_frames[i]
                         end_bookend = bookend_frames[i + 1]
 
-                        loop_start = start_bookend['end_time'] + 0.033
-                        loop_end = end_bookend['start_time'] - 0.033
+                        loop_start = start_bookend['end_time'] + frame_buffer_time
+                        loop_end = end_bookend['start_time'] - frame_buffer_time
                         loop_duration = loop_end - loop_start
 
                         duration_diff = abs(loop_duration - ref_duration)
@@ -277,8 +378,8 @@ class BookendAligner(QObject):
                     start_bookend = bookend_frames[best_start_idx]
                     end_bookend = bookend_frames[best_start_idx + 1]
 
-                    content_start_time = start_bookend['end_time'] + 0.033
-                    content_end_time = end_bookend['start_time'] - 0.033
+                    content_start_time = start_bookend['end_time'] + frame_buffer_time
+                    content_end_time = end_bookend['start_time'] - frame_buffer_time
                     content_duration = content_end_time - content_start_time
 
                     logger.info(f"Selected loop {best_start_idx+1}: {content_start_time:.3f}s - {content_end_time:.3f}s = {content_duration:.3f}s")
@@ -290,9 +391,12 @@ class BookendAligner(QObject):
             self.alignment_progress.emit(50)
             self.status_update.emit("Creating aligned videos...")
 
-            # Apply motion compensation if enabled
+            # KEY FIX: Only apply motion compensation if explicitly enabled
+            processed_captured_path = captured_path
             if self.motion_compensation:
+                logger.info("Motion compensation is ENABLED in settings, applying it...")
                 self.status_update.emit("Applying motion compensation for fast-moving content...")
+                
                 motion_compensated_path = self._apply_motion_compensation(
                     captured_path, 
                     content_start_time, 
@@ -301,20 +405,16 @@ class BookendAligner(QObject):
                 
                 if motion_compensated_path:
                     logger.info(f"Motion compensation applied, using: {motion_compensated_path}")
-                    
-                    # Update captured path to use the motion-compensated version
                     processed_captured_path = motion_compensated_path
-                    # Since we've already extracted the content portion with motion compensation,
-                    # we need to adjust the start time and duration for alignment
                     content_start_time = 0
                     content_duration = self._get_video_info(motion_compensated_path).get('duration', content_duration)
                 else:
                     logger.warning("Motion compensation failed, proceeding with original footage")
-                    processed_captured_path = captured_path
             else:
-                processed_captured_path = captured_path
-
-            # Create aligned videos by trimming the content between bookends
+                # Explicitly log that we're skipping motion compensation
+                logger.info("Motion compensation is DISABLED in settings, skipping...")
+            
+            # Create aligned videos without motion compensation
             aligned_reference, aligned_captured = self._create_aligned_videos_by_bookends(
                 reference_path,
                 processed_captured_path,
@@ -343,7 +443,7 @@ class BookendAligner(QObject):
                     'first_bookend': first_bookend,
                     'last_bookend': last_bookend,
                     'content_duration': content_duration,
-                    'motion_compensated': self.motion_compensation
+                    'motion_compensated': self.motion_compensation  # Record whether we actually used motion compensation
                 }
             }
 
@@ -357,61 +457,35 @@ class BookendAligner(QObject):
             logger.error(traceback.format_exc())
             self.error_occurred.emit(error_msg)
             return None
-            
-    def _apply_motion_compensation(self, video_path, start_time, duration):
-        """
-        Apply motion compensation to the video to improve alignment for fast-moving content
-        
-        Args:
-            video_path: Path to the input video
-            start_time: Start time for content section
-            duration: Duration of content
-            
-        Returns:
-            Path to motion-compensated video or None if failed
-        """
-        try:
-            # Create output filename with _motion_comp suffix
-            output_dir = os.path.dirname(video_path)
-            base_name = os.path.splitext(os.path.basename(video_path))[0]
-            output_path = os.path.join(output_dir, f"{base_name}_motion_comp.mp4")
-            
-            logger.info(f"Applying motion compensation from {start_time:.3f}s for {duration:.3f}s")
-            
-            # Create FFmpeg command for motion compensation
-            # First extract the section we want to process
-            cmd = [
-                "ffmpeg", "-hide_banner", "-y",
-                "-i", video_path,
-                "-ss", str(start_time),
-                "-t", str(duration),
-                "-vf", "minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
-                "-c:v", "libx264", "-crf", "18", "-preset", "fast",
-                output_path
-            ]
-            
-            # Run the command
-            logger.info(f"Running motion compensation: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode != 0:
-                logger.error(f"Motion compensation failed: {result.stderr}")
-                return None
-                
-            # Verify the output file exists and is valid
-            if not os.path.exists(output_path) or not validate_video_file(output_path):
-                logger.error("Motion compensation output file is invalid")
-                return None
-                
-            return output_path
-            
-        except Exception as e:
-            logger.error(f"Error applying motion compensation: {e}")
-            return None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration):
         """Create aligned videos based on bookend content timing with improved naming"""
         try:
+            # Get frame rates and counts to ensure we preserve them
+            ref_info = self._get_video_info(reference_path)
+            cap_info = self._get_video_info(captured_path)
+            ref_fps = ref_info.get('frame_rate', 30)
+            cap_fps = cap_info.get('frame_rate', 30)
+            ref_frame_count = ref_info.get('frame_count', 0)
+            
+            logger.info(f"Preserving original frame rates: reference={ref_fps}fps, captured={cap_fps}fps")
+            logger.info(f"Reference frame count: {ref_frame_count}")
+            
+            # IMPORTANT: Include directory handling code
             # First try to get output directory from parent of reference path
             # This ensures results go in test_results, not test_references
             ref_parent_dir = os.path.dirname(os.path.dirname(reference_path))
@@ -446,7 +520,7 @@ class BookendAligner(QObject):
             else:
                 # Use current timestamp if there's no underscore
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
+            
             # Get base name parts
             ref_base = os.path.splitext(os.path.basename(reference_path))[0]
             cap_base = os.path.splitext(os.path.basename(captured_path))[0]
@@ -462,6 +536,7 @@ class BookendAligner(QObject):
             # Trim reference video - use the whole reference with high quality settings
             ref_cmd = [
                 "ffmpeg", "-y", "-i", reference_path,
+                "-r", str(ref_fps),  # Preserve original frame rate
                 "-c:v", "libx264", "-crf", "18", 
                 "-preset", "fast", "-c:a", "copy",
                 aligned_reference
@@ -470,42 +545,95 @@ class BookendAligner(QObject):
             logger.info(f"Creating aligned reference video: {aligned_reference}")
             subprocess.run(ref_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            # Trim captured video - extract just the content between bookends
-            # If we're processing motion-compensated video, start_time might be 0
-            if content_start_time > 0 or "motion_comp" not in captured_path:
+            # Ensure exact reference frame count for perfect alignment
+            ref_aligned_info = self._get_video_info(aligned_reference)
+            exact_ref_frames = ref_aligned_info.get('frame_count', ref_frame_count)
+            logger.info(f"Exact reference frame count: {exact_ref_frames}")
+            
+            # Calculate exact duration for frame matching
+            frame_duration = exact_ref_frames / ref_fps if ref_fps > 0 else content_duration
+            
+            # Adjust start time to skip white frames at the beginning
+            # The 0.2 second adjustment is to ensure we start after any white frames
+            adjusted_start = content_start_time + 0.2
+            adjusted_duration = frame_duration
+            
+            logger.info(f"Adjusting content timing: original={content_start_time:.3f}s, adjusted={adjusted_start:.3f}s")
+            logger.info(f"Content duration: {content_duration:.3f}s, frame-based duration: {frame_duration:.3f}s")
+
+            # Trim captured video with precise frame count control
+            if adjusted_start > 0 or "motion_comp" not in captured_path:
                 cap_cmd = [
-                    "ffmpeg", "-y", "-i", captured_path,
-                    "-ss", str(content_start_time),
-                    "-t", str(content_duration),
+                    "ffmpeg", "-y", 
+                    "-i", captured_path,
+                    "-ss", str(adjusted_start),
                     "-c:v", "libx264", "-crf", "18",
-                    "-preset", "fast", "-c:a", "copy",
+                    "-preset", "fast", 
+                    "-r", str(cap_fps),  # Ensure exact frame rate
+                    "-frames:v", str(exact_ref_frames),  # Force exact frame count match
                     aligned_captured
                 ]
-                log_msg = f"Creating aligned captured video from {content_start_time:.3f}s to {content_start_time + content_duration:.3f}s"
-            else:
-                # If we're already using a motion-compensated clip, just copy it
-                cap_cmd = [
-                    "ffmpeg", "-y", "-i", captured_path,
-                    "-c:v", "libx264", "-crf", "18",
-                    "-preset", "fast", "-c:a", "copy",
-                    aligned_captured
-                ]
-                log_msg = "Using pre-processed motion-compensated clip for aligned output"
                 
-            logger.info(log_msg)
+                logger.info(f"Creating aligned captured video from {adjusted_start:.3f}s with exact {exact_ref_frames} frames")
+            else:
+                # Motion compensated clip needs different handling
+                cap_cmd = [
+                    "ffmpeg", "-y", 
+                    "-i", captured_path,
+                    "-c:v", "libx264", "-crf", "18",
+                    "-preset", "fast",
+                    "-r", str(cap_fps),  # Ensure exact frame rate
+                    "-frames:v", str(exact_ref_frames),  # Force exact frame count match
+                    aligned_captured
+                ]
+                
+                logger.info(f"Using motion-compensated clip with forced {exact_ref_frames} frames")
+            
+            # Run the alignment command
             subprocess.run(cap_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            # Verify the files were created
+            # Verify aligned videos
             if not os.path.exists(aligned_reference) or not os.path.exists(aligned_captured):
                 logger.error("Failed to create aligned videos")
                 return None, None
 
-            # Get info for aligned videos to verify
+            # Verify frame counts match exactly
             ref_aligned_info = self._get_video_info(aligned_reference)
             cap_aligned_info = self._get_video_info(aligned_captured)
 
             if ref_aligned_info and cap_aligned_info:
-                logger.info(f"Created aligned videos: {ref_aligned_info.get('duration'):.2f}s / {cap_aligned_info.get('duration'):.2f}s")
+                ref_frames = ref_aligned_info.get('frame_count', 0)
+                cap_frames = cap_aligned_info.get('frame_count', 0)
+                
+                logger.info(f"Final frame counts: reference={ref_frames}, captured={cap_frames}")
+                
+                if ref_frames != cap_frames:
+                    logger.warning(f"Frame count mismatch: reference={ref_frames}, captured={cap_frames}")
+                    
+                    # If still mismatched, try one more fix to ensure exact frame count
+                    if cap_frames != ref_frames:
+                        logger.info("Attempting final frame count correction...")
+                        
+                        # One more try with direct frame extraction
+                        final_fix_cmd = [
+                            "ffmpeg", "-y",
+                            "-i", aligned_captured,
+                            "-vf", f"select=1:n={ref_frames}",  # Select exact number of frames
+                            "-vsync", "0",  # Do not duplicate/drop frames
+                            "-c:v", "libx264", "-crf", "18",
+                            "-preset", "fast",
+                            f"{aligned_captured}.fixed.mp4"
+                        ]
+                        
+                        try:
+                            subprocess.run(final_fix_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            
+                            # If successful, replace the original
+                            if os.path.exists(f"{aligned_captured}.fixed.mp4"):
+                                os.replace(f"{aligned_captured}.fixed.mp4", aligned_captured)
+                                logger.info("Frame count correction applied successfully")
+                        except Exception as e:
+                            logger.warning(f"Final frame count correction failed: {e}")
             else:
                 logger.warning("Could not verify aligned video info")
 
@@ -524,6 +652,22 @@ class BookendAligner(QObject):
             import traceback
             logger.error(traceback.format_exc())
             return None, None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def _get_video_info(self, video_path):
         """Get detailed information about a video file using FFprobe"""
@@ -980,30 +1124,72 @@ class BookendAlignmentThread(QThread):
         # Initialize advanced options from options_manager if provided
         if options_manager:
             try:
+                # DEBUGGING: Add logging of the entire options dictionary
+                all_settings = options_manager.get_all_settings()
+                logger.info(f"All settings from options_manager: {all_settings}")
+                
+                # Get the specific bookend settings
                 bookend_settings = options_manager.get_setting('bookend')
+                logger.info(f"Raw bookend settings from options_manager: {bookend_settings}")
+                
                 if isinstance(bookend_settings, dict):
-                    # Set advanced options
+                    # Extract settings with more explicit error checking
                     frame_sampling_rate = bookend_settings.get('frame_sampling_rate', 5)
                     adaptive_brightness = bookend_settings.get('adaptive_brightness', True)
-                    motion_compensation = bookend_settings.get('motion_compensation', True)
                     
+                    # IMPORTANT: Force log the motion compensation setting to diagnose
+                    motion_comp_setting = bookend_settings.get('motion_compensation', False)  # Default to False if not found
+                    logger.info(f"Motion compensation setting from options_manager: {motion_comp_setting}")
+                    
+                    fallback_to_full_video = bookend_settings.get('fallback_to_full_video', True)
+                    
+                    # Apply the settings to the aligner
                     self.aligner.set_advanced_options(
                         frame_sampling_rate=frame_sampling_rate,
                         adaptive_brightness=adaptive_brightness,
-                        motion_compensation=motion_compensation
+                        motion_compensation=motion_comp_setting,  # Use the explicit variable
+                        fallback_to_full_video=fallback_to_full_video
                     )
+                    
+                    # Double-check that settings were applied correctly
+                    logger.info(f"Aligner motion_compensation after setting: {self.aligner.motion_compensation}")
+                    
                     logger.info(f"Applied bookend settings from options_manager: " +
-                              f"frame_sampling_rate={frame_sampling_rate}, " +
-                              f"adaptive_brightness={adaptive_brightness}, " +
-                              f"motion_compensation={motion_compensation}")
+                            f"frame_sampling_rate={frame_sampling_rate}, " +
+                            f"adaptive_brightness={adaptive_brightness}, " +
+                            f"motion_compensation={motion_comp_setting}, " + 
+                            f"fallback_to_full_video={fallback_to_full_video}")
             except Exception as e:
                 logger.error(f"Error loading bookend options: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                
+                # Set default values explicitly if there's an error
+                self.aligner.set_advanced_options(
+                    frame_sampling_rate=5,
+                    adaptive_brightness=True,
+                    motion_compensation=False,  # Default to FALSE for motion compensation
+                    fallback_to_full_video=True
+                )
 
         # Connect signals with direct connections for responsive UI updates
         self.aligner.alignment_progress.connect(self.alignment_progress, Qt.DirectConnection)
         self.aligner.alignment_complete.connect(self.alignment_complete, Qt.DirectConnection)
         self.aligner.error_occurred.connect(self.error_occurred, Qt.DirectConnection)
-        self.aligner.status_update.connect(self.status_update, Qt.DirectConnection)
+        self.aligner.status_update.connect(self.status_update, Qt.DirectConnection)               
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
 
     def __del__(self):
         """Clean up resources when thread is destroyed"""
@@ -1083,6 +1269,9 @@ class Aligner(QObject):
     def set_options_manager(self, options_manager):
         self.options_manager = options_manager
 
+
+
+
     def align_videos_with_bookends(self, reference_path, captured_path):
         """Align videos based on bookend frames"""
         logger.info(f"Starting bookend alignment process")
@@ -1092,16 +1281,33 @@ class Aligner(QObject):
         self.alignment_state = AlignmentState.RUNNING
         self.alignment_state_changed.emit(self.alignment_state)
 
+        # Debug log to show options_manager settings
+        if self.options_manager:
+            try:
+                bookend_settings = self.options_manager.get_setting('bookend')
+                logger.info(f"Bookend settings from options_manager before thread creation: {bookend_settings}")
+                
+                # Specific debug for motion compensation
+                motion_comp_setting = False
+                if isinstance(bookend_settings, dict):
+                    motion_comp_setting = bookend_settings.get('motion_compensation', False)
+                logger.info(f"Motion compensation setting to be passed to thread: {motion_comp_setting}")
+            except Exception as e:
+                logger.error(f"Error accessing bookend settings: {e}")
+
         # Start alignment thread with options manager
         thread = BookendAlignmentThread(reference_path, captured_path, options_manager=self.options_manager)
         thread.alignment_progress.connect(self.alignment_progress)
         thread.alignment_complete.connect(lambda result: self._on_alignment_complete(result))
         thread.error_occurred.connect(self.alignment_error)
-        thread.delete_capture_file.connect(self._on_delete_capture_file) # Connect delete signal
+        thread.delete_capture_file.connect(self._on_delete_capture_file)
         thread.start()
 
         self.alignment_state = AlignmentState.RUNNING
         self.alignment_state_changed.emit(self.alignment_state)
+
+
+
 
     def _on_alignment_complete(self, result):
         """Handle alignment completion"""

@@ -323,6 +323,11 @@ class VMAFAnalyzer(QObject):
                     vmaf_options.append("feature=name=vif_scale3:enable=1")
                     vmaf_options.append("feature=name=adm2:enable=1")
                     vmaf_options.append("feature=name=motion:enable=1")
+                    
+                    # Only add motion feature if it's not already added and motion score is enabled
+                    if self.enable_motion_score:
+                        vmaf_options.append("feature=name=motion:enable=1")                   
+                    
                 
                 # Build the filter option
                 vmaf_filter = f"libvmaf={':'.join(vmaf_options)}"
