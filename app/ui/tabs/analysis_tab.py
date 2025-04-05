@@ -307,14 +307,20 @@ class AnalysisTab(QWidget):
         # Reset alignment handled flag
         self._alignment_handled = False
 
-        # Create new thread
+        # Create new thread with correct arguments
+        # The error shows BookendAlignmentThread takes 3-5 arguments but we're passing 7
+        # Check the class definition and pass only required arguments
         self.alignment_thread = BookendAlignmentThread(
             self.parent.reference_info['path'],
-            self.parent.capture_path,
-            bookend_duration,
-            min_loops,
-            white_threshold,
-            frame_sampling_rate
+            self.parent.capture_path
+        )
+        
+        # Set the additional parameters using properties/methods
+        self.alignment_thread.set_bookend_params(
+            duration=bookend_duration, 
+            min_loops=min_loops, 
+            white_threshold=white_threshold,
+            frame_sampling_rate=frame_sampling_rate
         )
 
         # Log reference and captured paths
