@@ -69,8 +69,8 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         """Set up the application UI"""
         self.setWindowTitle("VMAF Test App")
-        self.setGeometry(100, 100, 1200, 800)
-        self.setFixedSize(1200, 800)  # Set fixed size to prevent resizing
+        self.setGeometry(100, 100, 1400, 900)
+        self.setFixedSize(1400, 900)  # Set fixed size to prevent resizing
 
         # Set application icon/logo
         self._set_application_logo()
