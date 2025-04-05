@@ -1394,6 +1394,24 @@ class OptionsTab(QWidget):
         bookend_group.setLayout(bookend_layout)
         advanced_layout.addWidget(bookend_group)
         
+        # Add the Debugging section
+        debug_group = QGroupBox("Debugging")
+        debug_layout = QFormLayout()
+
+        self.combo_log_level = QComboBox()
+        self.combo_log_level.addItems(["INFO", "DEBUG", "WARNING", "ERROR", "CRITICAL"])
+        debug_layout.addRow("Log Level:", self.combo_log_level)
+
+        self.check_save_logs = QCheckBox()
+        self.check_save_logs.setChecked(True)
+        debug_layout.addRow("Save Logs:", self.check_save_logs)
+
+        self.check_show_commands = QCheckBox()
+        self.check_show_commands.setChecked(True)
+        debug_layout.addRow("Show FFmpeg Commands:", self.check_show_commands)
+
+        debug_group.setLayout(debug_layout)
+        advanced_layout.addWidget(debug_group)
 
         return advanced_tab
 
