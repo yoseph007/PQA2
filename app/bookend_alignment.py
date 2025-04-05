@@ -563,7 +563,6 @@ class BookendAligner(QObject):
             # Adjust start time to skip white frames at the beginning
             # The 0.2 second adjustment is to ensure we start after any white frames
             adjusted_start = content_start_time + 0.2
-            adjusted_duration = frame_duration
             
             logger.info(f"Adjusting content timing: original={content_start_time:.3f}s, adjusted={adjusted_start:.3f}s")
             logger.info(f"Content duration: {content_duration:.3f}s, frame-based duration: {frame_duration:.3f}s")

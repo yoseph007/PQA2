@@ -1,15 +1,12 @@
 import logging
 import os
-import platform
-import re
-import subprocess
 
 from PyQt5.QtCore import Qt 
 from PyQt5.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
-                             QFormLayout, QGridLayout, QGroupBox, QHBoxLayout,
-                             QLabel, QLineEdit, QMessageBox, QPushButton,
-                             QSlider, QSpinBox, QTabWidget, QVBoxLayout,
-                             QWidget, QApplication, QScrollArea)
+                             QFormLayout, QGroupBox, QHBoxLayout, QLabel,
+                             QLineEdit, QMessageBox, QPushButton, QSlider,
+                             QSpinBox, QTabWidget, QVBoxLayout, QWidget,
+                             QApplication)
 
 logger = logging.getLogger(__name__)
 

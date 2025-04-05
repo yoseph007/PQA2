@@ -4,9 +4,9 @@ import os  # Required for file path operations
 from datetime import datetime
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QComboBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QLabel,
-                             QMessageBox, QProgressBar, QPushButton, QStyle,
-                             QTextEdit, QVBoxLayout, QWidget, QSlider, QSpinBox)
+from PyQt5.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
+                             QProgressBar, QPushButton, QStyle, QTextEdit,
+                             QVBoxLayout, QWidget)
 
 
 
