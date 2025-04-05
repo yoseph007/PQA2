@@ -307,20 +307,28 @@ class AnalysisTab(QWidget):
         # Reset alignment handled flag
         self._alignment_handled = False
 
-        # Create new thread with correct arguments
-        # The error shows BookendAlignmentThread takes 3-5 arguments but we're passing 7
-        # Check the class definition and pass only required arguments
+        # Create a new options_manager to pass bookend parameters to the alignment thread
+        from app.options_manager import OptionsManager
+        temp_options_manager = OptionsManager()
+        
+        # Set bookend parameters in the options manager
+        bookend_settings = {
+            'frame_sampling_rate': frame_sampling_rate,
+            'adaptive_brightness': True,
+            'motion_compensation': False,
+            'fallback_to_full_video': True,
+            'bookend_duration': bookend_duration,
+            'min_loops': min_loops,
+            'white_threshold': white_threshold
+        }
+        temp_options_manager.set_setting('bookend', bookend_settings)
+        
+        # Create new thread with options manager containing bookend parameters
         self.alignment_thread = BookendAlignmentThread(
             self.parent.reference_info['path'],
-            self.parent.capture_path
-        )
-        
-        # Set the additional parameters using properties/methods
-        self.alignment_thread.set_bookend_params(
-            duration=bookend_duration, 
-            min_loops=min_loops, 
-            white_threshold=white_threshold,
-            frame_sampling_rate=frame_sampling_rate
+            self.parent.capture_path,
+            False,  # delete_primary set to False
+            temp_options_manager
         )
 
         # Log reference and captured paths
