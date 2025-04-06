@@ -1140,11 +1140,11 @@ class BookendAlignmentThread(QThread):
     status_update = pyqtSignal(str)
     delete_capture_file = pyqtSignal(bool)  # Signal to indicate if primary capture file should be deleted
 
-    def __init__(self, reference_path, captured_path, delete_primary=False, options_manager=None):
+    def __init__(self, reference_path, captured_path, delete_primary=True, options_manager=None):
         super().__init__()
         self.reference_path = reference_path
         self.captured_path = captured_path
-        self.delete_primary = delete_primary
+        self.delete_primary = delete_primary  # Default to True to delete original capture file
         self.options_manager = options_manager
         self.aligner = BookendAligner()
         self._running = True
@@ -1257,16 +1257,20 @@ class BookendAlignmentThread(QThread):
                 # After successful alignment, we can delete the primary capture file
                 if self.delete_primary and os.path.exists(self.captured_path):
                     try:
-                        # Signal that we want to delete this file
+                        # Directly delete the file here
+                        os.remove(self.captured_path)
+                        logger.info(f"Successfully deleted original capture file: {self.captured_path}")
+                        # Also signal that we deleted this file (for backward compatibility)
                         self.delete_capture_file.emit(True)
-                        logger.info(f"Primary capture file flagged for deletion: {self.captured_path}")
                     except Exception as e:
-                        logger.warning(f"Error marking capture file for deletion: {str(e)}")
+                        logger.warning(f"Error deleting original capture file: {str(e)}")
+                        # Signal that deletion failed
+                        self.delete_capture_file.emit(False)
 
                 # Ensure progress is set to 100% at completion
                 self.alignment_progress.emit(100)
                 
-                self.status_update.emit("Bookend alignment complete!")
+                self.status_update.emit("Bookend alignment complete! Original capture file deleted.")
             else:
                 self.error_occurred.emit("Bookend alignment failed")
         except Exception as e:
@@ -1344,11 +1348,14 @@ class Aligner(QObject):
         self.alignment_complete.emit(f"Alignment complete: {result}")
 
     def _on_delete_capture_file(self, should_delete):
-        """Handle deletion of capture file"""
-        if should_delete:
+        """Handle deletion of capture file (if not already deleted in the thread)"""
+        if should_delete and hasattr(self, 'captured_path'):
             try:
-                os.remove(self.captured_path)
-                logger.info(f"Successfully deleted capture file: {self.captured_path}")
+                if os.path.exists(self.captured_path):
+                    os.remove(self.captured_path)
+                    logger.info(f"Successfully deleted capture file: {self.captured_path}")
+                else:
+                    logger.info(f"Capture file already deleted: {self.captured_path}")
             except Exception as e:
                 logger.error(f"Error deleting capture file: {e}")
 
