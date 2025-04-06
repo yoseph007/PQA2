@@ -689,6 +689,13 @@ class VMAFAnalyzer(QObject):
                 psnr_status = psnr_filename if os.path.exists(psnr_path) else "Not Available"
                 ssim_status = ssim_filename if os.path.exists(ssim_path) else "Not Available"
                 
+                # Extract model information from raw results or use a default value
+                model_info = "unknown"
+                if "model" in vmaf_data:
+                    model_info = vmaf_data["model"]
+                elif "version" in vmaf_data:
+                    model_info = vmaf_data["version"]
+                
                 # Return results with consistent path format and additional metadata
                 results = {
                     'vmaf_score': vmaf_score,
@@ -700,7 +707,7 @@ class VMAFAnalyzer(QObject):
                     'reference_video': reference_filename,  # Changed to just filename
                     'distorted_video': distorted_filename,  # Changed to just filename
                     'raw_results': raw_results,
-                    'model': model,
+                    'model': model_info,
                     'width': width,
                     'height': height
                 }
