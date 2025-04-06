@@ -310,7 +310,7 @@ class AnalysisTab(QWidget):
         self.alignment_thread = BookendAlignmentThread(
             self.parent.reference_info['path'],
             self.parent.capture_path,
-            False,  # delete_primary set to False
+            True,  # delete_primary set to True to ensure original capture file is deleted
             temp_options_manager
         )
 

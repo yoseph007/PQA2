@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+import time
 from datetime import datetime
 
 import cv2
@@ -1148,6 +1149,11 @@ class BookendAlignmentThread(QThread):
         self.options_manager = options_manager
         self.aligner = BookendAligner()
         self._running = True
+        
+        # Log the delete_primary setting
+        logger.info(f"BookendAlignmentThread initialized with delete_primary={delete_primary}")
+        logger.info(f"Reference path: {reference_path}")
+        logger.info(f"Captured path: {captured_path}")
 
         # Initialize advanced options from options_manager if provided
         if options_manager:
@@ -1243,6 +1249,9 @@ class BookendAlignmentThread(QThread):
                 self.error_occurred.emit(f"Captured video not found: {self.captured_path}")
                 return
 
+            # Store the original capture path before alignment
+            original_capture_path = self.captured_path
+            
             # Run alignment
             result = self.aligner.align_bookend_videos(
                 self.reference_path,
@@ -1254,18 +1263,29 @@ class BookendAlignmentThread(QThread):
                 return
 
             if result:
-                # After successful alignment, we can delete the primary capture file
-                if self.delete_primary and os.path.exists(self.captured_path):
+                # After successful alignment, delete the primary capture file
+                # Use the stored original path to ensure we're deleting the right file
+                if self.delete_primary and os.path.exists(original_capture_path):
                     try:
+                        # Add a small delay to ensure file is not still in use
+                        time.sleep(1)
+                        
                         # Directly delete the file here
-                        os.remove(self.captured_path)
-                        logger.info(f"Successfully deleted original capture file: {self.captured_path}")
+                        os.remove(original_capture_path)
+                        logger.info(f"Successfully deleted original capture file: {original_capture_path}")
+                        
                         # Also signal that we deleted this file (for backward compatibility)
                         self.delete_capture_file.emit(True)
                     except Exception as e:
-                        logger.warning(f"Error deleting original capture file: {str(e)}")
+                        # Log detailed error for debugging
+                        logger.error(f"Error deleting original capture file: {str(e)}")
+                        import traceback
+                        logger.error(traceback.format_exc())
+                        
                         # Signal that deletion failed
                         self.delete_capture_file.emit(False)
+                else:
+                    logger.warning(f"Not deleting capture file. delete_primary={self.delete_primary}, file exists={os.path.exists(original_capture_path)}")
 
                 # Ensure progress is set to 100% at completion
                 self.alignment_progress.emit(100)
