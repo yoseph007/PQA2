@@ -1,6 +1,8 @@
 import json
 import logging
 import os  # Required for file path operations
+import platform
+import subprocess
 from datetime import datetime
 
 from PyQt5.QtCore import Qt
@@ -215,7 +217,7 @@ class AnalysisTab(QWidget):
             # Access the options_manager to get bookend settings
             if hasattr(self, 'options_manager') and self.options_manager:
                 bookend_settings = self.options_manager.get_setting("bookend")
-                
+
                 # Extract individual settings with fallbacks
                 bookend_duration = bookend_settings.get('bookend_duration', 0.2)
                 min_loops = bookend_settings.get('min_loops', 3)
@@ -228,7 +230,7 @@ class AnalysisTab(QWidget):
                 white_threshold = 200
                 frame_sampling_rate = 5
                 logger.warning("Options manager not available, using default bookend settings")
-            
+
             self.log_to_analysis(f"Bookend Duration: {bookend_duration}")
             self.log_to_analysis(f"Minimum Loops: {min_loops}")
             self.log_to_analysis(f"White Threshold: {white_threshold}")
@@ -293,7 +295,7 @@ class AnalysisTab(QWidget):
         # Create a new options_manager to pass bookend parameters to the alignment thread
         from app.options_manager import OptionsManager
         temp_options_manager = OptionsManager()
-        
+
         # Set bookend parameters in the options manager
         bookend_settings = {
             'frame_sampling_rate': frame_sampling_rate,
@@ -305,7 +307,7 @@ class AnalysisTab(QWidget):
             'white_threshold': white_threshold
         }
         temp_options_manager.set_setting('bookend', bookend_settings)
-        
+
         # Create new thread with options manager containing bookend parameters
         self.alignment_thread = BookendAlignmentThread(
             self.parent.reference_info['path'],
@@ -676,21 +678,21 @@ class AnalysisTab(QWidget):
 
                 # Add results to metadata
                 metadata = self.test_metadata.copy()
-                
+
                 # Get file paths and convert to just filenames
                 reference_file = os.path.basename(results.get('reference_path', '')) if results.get('reference_path') else ''
                 distorted_file = os.path.basename(results.get('distorted_path', '')) if results.get('distorted_path') else ''
-                
+
                 # Get PSNR and SSIM file paths
                 psnr_file = os.path.basename(results.get('psnr_log', '')) if results.get('psnr_log') else ''
                 ssim_file = os.path.basename(results.get('ssim_log', '')) if results.get('ssim_log') else ''
-                
+
                 # Get video metadata from results
                 raw_results = results.get('raw_results', {})
                 frame_count = 0
                 video_duration = 0
                 fps = 0
-                
+
                 # Try to extract metadata from raw results
                 if raw_results:
                     # Look for frame count
@@ -703,37 +705,83 @@ class AnalysisTab(QWidget):
                             fps = video_info['framerate']
                         if 'duration' in video_info:
                             video_duration = video_info['duration']
-                
+
                 # For video dimensions, extract from distorted path metadata if possible
                 width = results.get('width', 0)
                 height = results.get('height', 0)
                 resolution = f"{width}x{height}" if width and height else "Unknown"
-                
+
                 # Get VMAF model information
                 vmaf_model = results.get('model', 'vmaf_v0.6.1')  # Default if not specified
-                
+
                 # Get options settings for analysis details
                 analysis_settings = {}
                 if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
                     analysis_settings = self.parent.options_manager.get_setting('vmaf', {})
-                
+
                 # Get capture settings for device details
                 capture_settings = {}
                 if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
                     capture_settings = self.parent.options_manager.get_setting('capture', {})
-                
+
+                # Get FFmpeg version info
+                try:
+                    ffmpeg_exe, _, _ = get_ffmpeg_path() #Requires get_ffmpeg_path definition
+                    process = subprocess.run([ffmpeg_exe, "-version"], capture_output=True, text=True)
+                    ffmpeg_version = process.stdout.split('\n')[0] if process.returncode == 0 else "Unknown"
+                except:
+                    ffmpeg_version = "Unknown"
+
+                # Get capture device info if available through options manager
+                capture_device_info = {}
+                if hasattr(self, 'options_manager') and self.options_manager:
+                    capture_device_info = {
+                        'device_name': self.options_manager.get_option('capture_device', 'Unknown'),
+                        'resolution': self.options_manager.get_option('capture_resolution', 'Unknown'),
+                        'framerate': self.options_manager.get_option('capture_framerate', 'Unknown'),
+                        'format': self.options_manager.get_option('capture_format', 'Unknown')
+                    }
+
+                # Get video metadata
+                video_info = {}
+                if 'raw_results' in results and 'frames' in results['raw_results']:
+                    num_frames = len(results['raw_results']['frames'])
+                    fps = results.get('frame_rate', 0)
+                    duration_seconds = num_frames / fps if fps > 0 else 0
+
+                    video_info = {
+                        'num_frames': num_frames,
+                        'duration_seconds': round(duration_seconds, 2),
+                        'fps': fps,
+                        'resolution': f"{results.get('width', 0)}x{results.get('height', 0)}",
+                        'format': results.get('pix_fmt', 'Unknown')
+                    }
+
+                # Get VMAF analysis settings
+                vmaf_options = {}
+                if hasattr(self, 'vmaf_analyzer') and self.vmaf_analyzer:
+                    vmaf_options = {
+                        'model': results.get('model', 'vmaf_v0.6.1'),
+                        'pool_method': self.vmaf_analyzer.pool_method,
+                        'feature_subsample': self.vmaf_analyzer.feature_subsample,
+                        'enable_motion_score': self.vmaf_analyzer.enable_motion_score,
+                        'enable_temporal_features': self.vmaf_analyzer.enable_temporal_features,
+                        'psnr_enabled': self.vmaf_analyzer.psnr_enabled,
+                        'ssim_enabled': self.vmaf_analyzer.ssim_enabled
+                    }
+
                 # Organize metadata in logical groups
                 metadata.update({
                     # Test Results
                     "vmaf_score": vmaf_score,
-                    
+
                     # File Information
                     "reference_video": reference_file,
                     "distorted_video": distorted_file,
                     "psnr_file": psnr_file,
                     "ssim_file": ssim_file,
                     "json_result": os.path.basename(results.get('json_path', '')),
-                    
+
                     # Video Characteristics
                     "video_details": {
                         "resolution": resolution,
@@ -743,7 +791,7 @@ class AnalysisTab(QWidget):
                         "frame_count": frame_count,
                         "duration_seconds": video_duration
                     },
-                    
+
                     # Analysis Details
                     "analysis_settings": {
                         "vmaf_model": vmaf_model,
@@ -754,7 +802,7 @@ class AnalysisTab(QWidget):
                         "enable_motion_score": analysis_settings.get('enable_motion_score', False),
                         "enable_temporal_features": analysis_settings.get('enable_temporal_features', False)
                     },
-                    
+
                     # Capture Device Information
                     "capture_details": {
                         "device": capture_settings.get('default_device', 'Unknown'),
@@ -764,7 +812,18 @@ class AnalysisTab(QWidget):
                         "encoder": capture_settings.get('encoder', 'Unknown'),
                         "crf": capture_settings.get('crf', 0),
                         "preset": capture_settings.get('preset', 'Unknown')
-                    }
+                    },
+                    # System Information
+                    "system_info": {
+                        "ffmpeg_version": ffmpeg_version,
+                        "os": platform.system(),
+                        "os_version": platform.version(),
+                        "processor": platform.processor()
+                    },
+                    # Capture Device Info
+                    "capture_device": capture_device_info,
+                    # VMAF Analysis Options
+                    "vmaf_options": vmaf_options
                 })
 
                 # Save metadata to JSON file
@@ -1025,3 +1084,11 @@ class AnalysisTab(QWidget):
             logger.info(f"Scanning for VMAF models in: {models_dir}")
         except Exception as e:
             logger.error(f"Error loading settings: {e}")
+
+def get_ffmpeg_path():
+    """Helper function to get the path to ffmpeg and ffprobe executables."""
+    # Implement your logic here to determine the paths.  This is placeholder code.
+    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    ffmpeg_exe = os.path.join(root_dir, "ffmpeg_bin", "ffmpeg.exe")
+    ffprobe_exe = os.path.join(root_dir, "ffmpeg_bin", "ffprobe.exe")
+    return ffmpeg_exe, ffprobe_exe, "" #Placeholder for error

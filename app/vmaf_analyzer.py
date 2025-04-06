@@ -664,6 +664,9 @@ class VMAFAnalyzer(QObject):
                 # Store raw results for potential detailed analysis
                 raw_results = vmaf_data
 
+                # Get FFprobe path
+                _, ffprobe_exe, _ = get_ffmpeg_path()
+                
                 # Get video metadata
                 dist_meta = self.get_video_metadata(distorted_path, ffprobe_exe)
                 ref_meta = self.get_video_metadata(reference_path, ffprobe_exe)
@@ -675,16 +678,27 @@ class VMAFAnalyzer(QObject):
                     width = dist_meta.get('width', 0)
                     height = dist_meta.get('height', 0)
                 
+                # Get just filenames for path references
+                json_filename = os.path.basename(json_path) if json_path else ""
+                psnr_filename = os.path.basename(psnr_path) if psnr_path else ""
+                ssim_filename = os.path.basename(ssim_path) if ssim_path else ""
+                reference_filename = os.path.basename(reference_path) if reference_path else ""
+                distorted_filename = os.path.basename(distorted_path) if distorted_path else ""
+                
+                # Create PSNR and SSIM status text
+                psnr_status = psnr_filename if os.path.exists(psnr_path) else "Not Available"
+                ssim_status = ssim_filename if os.path.exists(ssim_path) else "Not Available"
+                
                 # Return results with consistent path format and additional metadata
                 results = {
                     'vmaf_score': vmaf_score,
-                    'psnr': psnr_score,
-                    'ssim': ssim_score,
+                    'psnr_score': psnr_status,  # Changed to use filename or status
+                    'ssim_score': ssim_status,  # Changed to use filename or status
                     'json_path': json_path,
                     'psnr_log': psnr_path,
                     'ssim_log': ssim_path,
-                    'reference_path': reference_path,
-                    'distorted_path': distorted_path,
+                    'reference_video': reference_filename,  # Changed to just filename
+                    'distorted_video': distorted_filename,  # Changed to just filename
                     'raw_results': raw_results,
                     'model': model,
                     'width': width,
