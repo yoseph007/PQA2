@@ -676,12 +676,95 @@ class AnalysisTab(QWidget):
 
                 # Add results to metadata
                 metadata = self.test_metadata.copy()
+                
+                # Get file paths and convert to just filenames
+                reference_file = os.path.basename(results.get('reference_path', '')) if results.get('reference_path') else ''
+                distorted_file = os.path.basename(results.get('distorted_path', '')) if results.get('distorted_path') else ''
+                
+                # Get PSNR and SSIM file paths
+                psnr_file = os.path.basename(results.get('psnr_log', '')) if results.get('psnr_log') else ''
+                ssim_file = os.path.basename(results.get('ssim_log', '')) if results.get('ssim_log') else ''
+                
+                # Get video metadata from results
+                raw_results = results.get('raw_results', {})
+                frame_count = 0
+                video_duration = 0
+                fps = 0
+                
+                # Try to extract metadata from raw results
+                if raw_results:
+                    # Look for frame count
+                    if 'frames' in raw_results:
+                        frame_count = len(raw_results['frames'])
+                    # Try to extract FPS from video info if available
+                    if 'video_info' in raw_results:
+                        video_info = raw_results['video_info']
+                        if 'framerate' in video_info:
+                            fps = video_info['framerate']
+                        if 'duration' in video_info:
+                            video_duration = video_info['duration']
+                
+                # For video dimensions, extract from distorted path metadata if possible
+                width = results.get('width', 0)
+                height = results.get('height', 0)
+                resolution = f"{width}x{height}" if width and height else "Unknown"
+                
+                # Get VMAF model information
+                vmaf_model = results.get('model', 'vmaf_v0.6.1')  # Default if not specified
+                
+                # Get options settings for analysis details
+                analysis_settings = {}
+                if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                    analysis_settings = self.parent.options_manager.get_setting('vmaf', {})
+                
+                # Get capture settings for device details
+                capture_settings = {}
+                if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                    capture_settings = self.parent.options_manager.get_setting('capture', {})
+                
+                # Organize metadata in logical groups
                 metadata.update({
+                    # Test Results
                     "vmaf_score": vmaf_score,
-                    "psnr_score": psnr,
-                    "ssim_score": ssim,
-                    "reference_path": results.get('reference_path'),
-                    "distorted_path": results.get('distorted_path')
+                    
+                    # File Information
+                    "reference_video": reference_file,
+                    "distorted_video": distorted_file,
+                    "psnr_file": psnr_file,
+                    "ssim_file": ssim_file,
+                    "json_result": os.path.basename(results.get('json_path', '')),
+                    
+                    # Video Characteristics
+                    "video_details": {
+                        "resolution": resolution,
+                        "width": width,
+                        "height": height,
+                        "fps": fps,
+                        "frame_count": frame_count,
+                        "duration_seconds": video_duration
+                    },
+                    
+                    # Analysis Details
+                    "analysis_settings": {
+                        "vmaf_model": vmaf_model,
+                        "pool_method": analysis_settings.get('pool_method', 'mean'),
+                        "feature_subsample": analysis_settings.get('feature_subsample', 1),
+                        "psnr_enabled": analysis_settings.get('psnr_enabled', True),
+                        "ssim_enabled": analysis_settings.get('ssim_enabled', True),
+                        "enable_motion_score": analysis_settings.get('enable_motion_score', False),
+                        "enable_temporal_features": analysis_settings.get('enable_temporal_features', False)
+                    },
+                    
+                    # Capture Device Information
+                    "capture_details": {
+                        "device": capture_settings.get('default_device', 'Unknown'),
+                        "format_code": capture_settings.get('format_code', 'Unknown'),
+                        "pixel_format": capture_settings.get('pixel_format', 'Unknown'),
+                        "video_input": capture_settings.get('video_input', 'Unknown'),
+                        "encoder": capture_settings.get('encoder', 'Unknown'),
+                        "crf": capture_settings.get('crf', 0),
+                        "preset": capture_settings.get('preset', 'Unknown')
+                    }
                 })
 
                 # Save metadata to JSON file

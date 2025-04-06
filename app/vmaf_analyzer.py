@@ -664,7 +664,18 @@ class VMAFAnalyzer(QObject):
                 # Store raw results for potential detailed analysis
                 raw_results = vmaf_data
 
-                # Return results with consistent path format
+                # Get video metadata
+                dist_meta = self.get_video_metadata(distorted_path, ffprobe_exe)
+                ref_meta = self.get_video_metadata(reference_path, ffprobe_exe)
+                
+                # Extract video dimensions if available
+                width = 0
+                height = 0
+                if dist_meta:
+                    width = dist_meta.get('width', 0)
+                    height = dist_meta.get('height', 0)
+                
+                # Return results with consistent path format and additional metadata
                 results = {
                     'vmaf_score': vmaf_score,
                     'psnr': psnr_score,
@@ -674,7 +685,10 @@ class VMAFAnalyzer(QObject):
                     'ssim_log': ssim_path,
                     'reference_path': reference_path,
                     'distorted_path': distorted_path,
-                    'raw_results': raw_results
+                    'raw_results': raw_results,
+                    'model': model,
+                    'width': width,
+                    'height': height
                 }
 
                 # Set progress to 100%
