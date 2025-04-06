@@ -2527,21 +2527,33 @@ class ResultsTab(QWidget):
         
         # Update metrics display
         vmaf_score = results.get('vmaf_score')
-        psnr = results.get('psnr')
-        ssim = results.get('ssim')
+        psnr_score = results.get('psnr_score')
+        ssim_score = results.get('ssim_score')
         
         if vmaf_score is not None:
             self.lbl_vmaf_score.setText(f"VMAF Score: {vmaf_score:.2f}")
         else:
             self.lbl_vmaf_score.setText("VMAF Score: N/A")
         
-        if psnr is not None:
-            self.lbl_psnr_score.setText(f"PSNR: {psnr:.2f} dB")
+        # For PSNR, display file info if it's a string (filename) or score if it's a number
+        if isinstance(psnr_score, (int, float)):
+            self.lbl_psnr_score.setText(f"PSNR: {psnr_score:.2f} dB")
+        elif isinstance(psnr_score, str):
+            if psnr_score == "Not Available":
+                self.lbl_psnr_score.setText("PSNR: Not Available")
+            else:
+                self.lbl_psnr_score.setText(f"PSNR: File generated ({psnr_score})")
         else:
             self.lbl_psnr_score.setText("PSNR: N/A")
         
-        if ssim is not None:
-            self.lbl_ssim_score.setText(f"SSIM: {ssim:.4f}")
+        # For SSIM, display file info if it's a string (filename) or score if it's a number
+        if isinstance(ssim_score, (int, float)):
+            self.lbl_ssim_score.setText(f"SSIM: {ssim_score:.4f}")
+        elif isinstance(ssim_score, str):
+            if ssim_score == "Not Available":
+                self.lbl_ssim_score.setText("SSIM: Not Available")
+            else:
+                self.lbl_ssim_score.setText(f"SSIM: File generated ({ssim_score})")
         else:
             self.lbl_ssim_score.setText("SSIM: N/A")
         
@@ -2564,6 +2576,20 @@ class ResultsTab(QWidget):
         if json_path and os.path.exists(json_path):
             item = QListWidgetItem(f"VMAF Results: {os.path.basename(json_path)}")
             item.setData(Qt.UserRole, json_path)
+            self.list_result_files.addItem(item)
+        
+        # Add PSNR log file if available
+        psnr_log = results.get('psnr_log')
+        if psnr_log and os.path.exists(psnr_log):
+            item = QListWidgetItem(f"PSNR Results: {os.path.basename(psnr_log)}")
+            item.setData(Qt.UserRole, psnr_log)
+            self.list_result_files.addItem(item)
+        
+        # Add SSIM log file if available
+        ssim_log = results.get('ssim_log')
+        if ssim_log and os.path.exists(ssim_log):
+            item = QListWidgetItem(f"SSIM Results: {os.path.basename(ssim_log)}")
+            item.setData(Qt.UserRole, ssim_log)
             self.list_result_files.addItem(item)
         
         reference_path = results.get('reference_path')
@@ -2658,8 +2684,10 @@ class ResultsTab(QWidget):
             # Extract data
             results = self.parent.analysis_results
             vmaf_score = results.get('vmaf_score', 'N/A')
-            psnr_score = results.get('psnr', 'N/A')
-            ssim_score = results.get('ssim', 'N/A')
+            psnr_score = results.get('psnr_score', 'N/A')
+            ssim_score = results.get('ssim_score', 'N/A')
+            psnr_log = results.get('psnr_log', 'N/A')
+            ssim_log = results.get('ssim_log', 'N/A')
             reference_path = results.get('reference_path', 'N/A')
             distorted_path = results.get('distorted_path', 'N/A')
             
@@ -2669,18 +2697,22 @@ class ResultsTab(QWidget):
                 writer = csv.writer(csvfile)
                 
                 # Write header and summary data
-                writer.writerow(['Test Name', 'Date', 'VMAF Score', 'PSNR Score', 'SSIM Score'])
+                writer.writerow(['Test Name', 'Date', 'VMAF Score', 'PSNR Score/File', 'SSIM Score/File'])
                 writer.writerow([
                     test_name,
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     vmaf_score if isinstance(vmaf_score, str) else f"{vmaf_score:.4f}",
-                    psnr_score if isinstance(psnr_score, str) else f"{psnr_score:.4f}",
-                    ssim_score if isinstance(ssim_score, str) else f"{ssim_score:.4f}"
+                    psnr_score if isinstance(psnr_score, str) else f"{psnr_score:.4f}" if isinstance(psnr_score, (int, float)) else psnr_score,
+                    ssim_score if isinstance(ssim_score, str) else f"{ssim_score:.4f}" if isinstance(ssim_score, (int, float)) else ssim_score
                 ])
                 
                 writer.writerow([])  # Empty row
                 writer.writerow(['Reference File', reference_path])
                 writer.writerow(['Distorted File', distorted_path])
+                if os.path.exists(psnr_log) if isinstance(psnr_log, str) else False:
+                    writer.writerow(['PSNR File', psnr_log])
+                if os.path.exists(ssim_log) if isinstance(ssim_log, str) else False:
+                    writer.writerow(['SSIM File', ssim_log])
                 
                 # Write frame data if available
                 if 'raw_results' in results and 'frames' in results['raw_results']:

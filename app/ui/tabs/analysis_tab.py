@@ -676,8 +676,8 @@ class AnalysisTab(QWidget):
                 # Get the test directory from the VMAF results
                 test_dir = os.path.dirname(results.get('json_path'))
 
-                # Add results to metadata
-                metadata = self.test_metadata.copy()
+                # Add results to metadata (safely)
+                metadata = self.test_metadata.copy() if hasattr(self, 'test_metadata') and self.test_metadata else {}
 
                 # Get file paths and convert to just filenames
                 reference_file = os.path.basename(results.get('reference_path', '')) if results.get('reference_path') else ''
@@ -770,6 +770,13 @@ class AnalysisTab(QWidget):
                         'ssim_enabled': self.vmaf_analyzer.ssim_enabled
                     }
 
+                # Get file names safely
+                reference_file = os.path.basename(results.get('reference_video', '')) if results.get('reference_video') else ''
+                distorted_file = os.path.basename(results.get('distorted_video', '')) if results.get('distorted_video') else ''
+                psnr_file = os.path.basename(results.get('psnr_log', '')) if results.get('psnr_log') else ''
+                ssim_file = os.path.basename(results.get('ssim_log', '')) if results.get('ssim_log') else ''
+                json_file = os.path.basename(results.get('json_path', '')) if results.get('json_path') else ''
+                
                 # Organize metadata in logical groups
                 metadata.update({
                     # Test Results
@@ -780,7 +787,7 @@ class AnalysisTab(QWidget):
                     "distorted_video": distorted_file,
                     "psnr_file": psnr_file,
                     "ssim_file": ssim_file,
-                    "json_result": os.path.basename(results.get('json_path', '')),
+                    "json_result": json_file,
 
                     # Video Characteristics
                     "video_details": {
