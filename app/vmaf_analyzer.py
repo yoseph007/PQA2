@@ -146,12 +146,20 @@ class VMAFAnalyzer(QObject):
                 frame_rate = num / den if den else 0
             else:
                 frame_rate = float(fr_str) if fr_str else 0
+            
+            # Format frame rate nicely
+            if abs(frame_rate - int(frame_rate)) < 0.001:
+                # For whole numbers like 30.0, display as integer
+                formatted_frame_rate = int(frame_rate)
+            else:
+                # For fractional frame rates, round to 2 decimal places
+                formatted_frame_rate = round(frame_rate, 2)
                 
             # Get metadata
             metadata = {
                 'path': video_path,
                 'duration': float(info.get('format', {}).get('duration', 0)),
-                'frame_rate': frame_rate,
+                'frame_rate': formatted_frame_rate,
                 'width': int(video_stream.get('width', 0)),
                 'height': int(video_stream.get('height', 0)),
                 'pix_fmt': video_stream.get('pix_fmt', 'unknown'),
