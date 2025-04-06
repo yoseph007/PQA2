@@ -1,0 +1,19 @@
+2025-04-06 13:35:26,307 - app.vmaf_analyzer - INFO - VMAF progress: [Parsed_libvmaf_0 @ 000001473b050700] VMAF score: 99.590720
+2025-04-06 13:35:26,342 - app.vmaf_analyzer - INFO - VMAF progress: frame=  180 fps= 23 q=-0.0 Lsize=N/A time=00:00:05.99 bitrate=N/A speed=0.768x
+2025-04-06 13:35:26,447 - app.vmaf_analyzer - INFO - VMAF process completed with return code: 0
+2025-04-06 13:35:26,448 - app.vmaf_analyzer - INFO - Running PSNR analysis...
+2025-04-06 13:35:26,449 - app.vmaf_analyzer - INFO - PSNR command: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe -hide_banner -i DANCE__capture_133256_aligned.mp4 -i DANCE__133256_aligned.mp4 -lavfi psnr=stats_file=22222_20250406_133518_psnr.txt -f null -
+2025-04-06 13:35:27,532 - app.vmaf_analyzer - INFO - PSNR analysis completed successfully
+2025-04-06 13:35:27,532 - app.vmaf_analyzer - INFO - Running SSIM analysis...
+2025-04-06 13:35:27,532 - app.vmaf_analyzer - INFO - SSIM command: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe -hide_banner -i DANCE__capture_133256_aligned.mp4 -i DANCE__133256_aligned.mp4 -lavfi ssim=stats_file=22222_20250406_133518_ssim.txt -f null -
+2025-04-06 13:35:28,660 - app.vmaf_analyzer - INFO - SSIM analysis completed successfully
+2025-04-06 13:35:28,662 - app.vmaf_analyzer - INFO - VMAF Score: 99.59072
+2025-04-06 13:35:28,662 - app.vmaf_analyzer - INFO - PSNR Score: None
+2025-04-06 13:35:28,662 - app.vmaf_analyzer - INFO - SSIM Score: None
+2025-04-06 13:35:28,663 - app.utils - INFO - Root directory determined to be: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app
+2025-04-06 13:35:28,663 - app.utils - INFO - Using FFmpeg bin directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin
+2025-04-06 13:35:28,664 - app.utils - INFO - FFmpeg path: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe
+2025-04-06 13:35:28,664 - app.utils - INFO - FFprobe path: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffprobe.exe
+2025-04-06 13:35:28,814 - app.vmaf_analyzer - INFO - Video metadata extracted: 1920x1080 @ 29.97002997002997fps
+2025-04-06 13:35:28,953 - app.vmaf_analyzer - INFO - Video metadata extracted: 1920x1080 @ 29.97002997002997fps
+2025-04-06 13:35:28,955 - app.ui.tabs.analysis_tab - ERROR - Error saving test metadata: 'NoneType' object has no attribute 'get'
