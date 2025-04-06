@@ -1,0 +1,25 @@
+2025-04-06 12:40:00,677 - app.vmaf_analyzer - INFO - VMAF progress: frame=  108 fps= 26 q=-0.0 size=N/A time=00:00:03.60 bitrate=N/A speed=0.87x
+2025-04-06 12:40:01,194 - app.vmaf_analyzer - INFO - VMAF progress: frame=  121 fps= 26 q=-0.0 size=N/A time=00:00:04.03 bitrate=N/A speed=0.869x
+2025-04-06 12:40:01,718 - app.vmaf_analyzer - INFO - VMAF progress: frame=  135 fps= 26 q=-0.0 size=N/A time=00:00:04.50 bitrate=N/A speed=0.873x
+2025-04-06 12:40:02,236 - app.vmaf_analyzer - INFO - VMAF progress: frame=  150 fps= 26 q=-0.0 size=N/A time=00:00:05.00 bitrate=N/A speed=0.88x
+2025-04-06 12:40:02,753 - app.vmaf_analyzer - INFO - VMAF progress: frame=  164 fps= 26 q=-0.0 size=N/A time=00:00:05.47 bitrate=N/A speed=0.882x
+2025-04-06 12:40:02,874 - app.vmaf_analyzer - INFO - VMAF progress: frame=  179 fps= 27 q=-0.0 size=N/A time=00:00:05.97 bitrate=N/A speed=0.889x
+2025-04-06 12:40:02,875 - app.vmaf_analyzer - INFO - VMAF progress: [Parsed_libvmaf_0 @ 0000025c4afc1c00] VMAF score: 99.563523
+2025-04-06 12:40:02,905 - app.vmaf_analyzer - INFO - VMAF progress: frame=  180 fps= 26 q=-0.0 Lsize=N/A time=00:00:05.99 bitrate=N/A speed=0.872x
+2025-04-06 12:40:02,991 - app.vmaf_analyzer - INFO - VMAF process completed with return code: 0
+2025-04-06 12:40:02,992 - app.vmaf_analyzer - INFO - Running PSNR analysis...
+2025-04-06 12:40:02,994 - app.vmaf_analyzer - INFO - PSNR command: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe -hide_banner -i DANCE__capture_123733_aligned.mp4 -i DANCE__123733_aligned.mp4 -lavfi psnr=stats_file=12121_20250406_123955_psnr.txt -f null -
+2025-04-06 12:40:03,872 - app.vmaf_analyzer - INFO - PSNR analysis completed successfully
+2025-04-06 12:40:03,873 - app.vmaf_analyzer - INFO - Running SSIM analysis...
+2025-04-06 12:40:03,873 - app.vmaf_analyzer - INFO - SSIM command: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe -hide_banner -i DANCE__capture_123733_aligned.mp4 -i DANCE__123733_aligned.mp4 -lavfi ssim=stats_file=12121_20250406_123955_ssim.txt -f null -
+2025-04-06 12:40:04,785 - app.vmaf_analyzer - INFO - SSIM analysis completed successfully
+2025-04-06 12:40:04,789 - app.vmaf_analyzer - INFO - VMAF Score: 99.563523
+2025-04-06 12:40:04,789 - app.vmaf_analyzer - INFO - PSNR Score: None
+2025-04-06 12:40:04,790 - app.vmaf_analyzer - INFO - SSIM Score: None
+2025-04-06 12:40:04,790 - app.utils - INFO - Root directory determined to be: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app
+2025-04-06 12:40:04,791 - app.utils - INFO - Using FFmpeg bin directory: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin
+2025-04-06 12:40:04,791 - app.utils - INFO - FFmpeg path: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffmpeg.exe
+2025-04-06 12:40:04,792 - app.utils - INFO - FFprobe path: C:\Apps\VMAF_2app_approach\VMAF\VB01-vmaf-app\ffmpeg_bin\ffprobe.exe
+2025-04-06 12:40:04,921 - app.vmaf_analyzer - INFO - Video metadata extracted: 1920x1080 @ 29.97002997002997fps
+2025-04-06 12:40:05,050 - app.vmaf_analyzer - INFO - Video metadata extracted: 1920x1080 @ 29.97002997002997fps
+2025-04-06 12:40:05,053 - app.ui.tabs.analysis_tab - ERROR - Error saving test metadata: 'NoneType' object has no attribute 'get'
