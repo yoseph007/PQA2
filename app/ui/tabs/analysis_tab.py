@@ -664,11 +664,18 @@ class AnalysisTab(QWidget):
         # Store the ID of this result object to prevent duplicate processing
         self._last_result_id = id(results)
 
+        # Log results received for debugging
+        logger.info(f"Test metadata: {self.test_metadata if hasattr(self, 'test_metadata') else 'None'}")
+        logger.info(f"Reference file: {results.get('reference_video', '')}")
+        logger.info(f"PSNR file: {results.get('psnr_log', '')}")
+        logger.info(f"SSIM file: {results.get('ssim_log', '')}")
+
         self.parent.vmaf_results = results
 
         vmaf_score = results.get('vmaf_score')
-        psnr = results.get('psnr')
-        ssim = results.get('ssim')
+        # Get the PSNR and SSIM filenames rather than scores
+        psnr_file = results.get('psnr_score')  # This contains filename from _parse_vmaf_results
+        ssim_file = results.get('ssim_score')  # This contains filename from _parse_vmaf_results
 
         # Save test metadata to JSON file in the test directory
         try:
@@ -678,14 +685,23 @@ class AnalysisTab(QWidget):
 
                 # Add results to metadata (safely)
                 metadata = self.test_metadata.copy() if hasattr(self, 'test_metadata') and self.test_metadata else {}
+                
+                # Ensure metadata is a dictionary
+                if metadata is None:
+                    metadata = {}
 
                 # Get file paths and convert to just filenames
-                reference_file = os.path.basename(results.get('reference_path', '')) if results.get('reference_path') else ''
-                distorted_file = os.path.basename(results.get('distorted_path', '')) if results.get('distorted_path') else ''
+                reference_file = results.get('reference_video', '')
+                distorted_file = results.get('distorted_video', '')
 
-                # Get PSNR and SSIM file paths
-                psnr_file = os.path.basename(results.get('psnr_log', '')) if results.get('psnr_log') else ''
-                ssim_file = os.path.basename(results.get('ssim_log', '')) if results.get('ssim_log') else ''
+                # Get PSNR and SSIM file paths from the results
+                psnr_file_path = results.get('psnr_log', '')
+                ssim_file_path = results.get('ssim_log', '')
+                
+                # Get the basename of files if they exist
+                psnr_filename = os.path.basename(psnr_file_path) if psnr_file_path else ''
+                ssim_filename = os.path.basename(ssim_file_path) if ssim_file_path else ''
+                json_filename = os.path.basename(results.get('json_path', '')) if results.get('json_path') else ''
 
                 # Get video metadata from results
                 raw_results = results.get('raw_results', {})
@@ -706,10 +722,19 @@ class AnalysisTab(QWidget):
                         if 'duration' in video_info:
                             video_duration = video_info['duration']
 
-                # For video dimensions, extract from distorted path metadata if possible
+                # For video dimensions, extract from results
                 width = results.get('width', 0)
                 height = results.get('height', 0)
                 resolution = f"{width}x{height}" if width and height else "Unknown"
+
+                # Format fps to 2 decimal places if it contains a decimal part
+                if isinstance(fps, float):
+                    if fps == int(fps):
+                        formatted_fps = str(int(fps))
+                    else:
+                        formatted_fps = f"{fps:.2f}".rstrip('0').rstrip('.')
+                else:
+                    formatted_fps = str(fps)
 
                 # Get VMAF model information
                 vmaf_model = results.get('model', 'vmaf_v0.6.1')  # Default if not specified
@@ -726,56 +751,37 @@ class AnalysisTab(QWidget):
 
                 # Get FFmpeg version info
                 try:
-                    ffmpeg_exe, _, _ = get_ffmpeg_path() #Requires get_ffmpeg_path definition
+                    ffmpeg_exe, _, _ = get_ffmpeg_path()
                     process = subprocess.run([ffmpeg_exe, "-version"], capture_output=True, text=True)
                     ffmpeg_version = process.stdout.split('\n')[0] if process.returncode == 0 else "Unknown"
-                except:
+                except Exception as ffmpeg_error:
+                    logger.warning(f"Could not get FFmpeg version: {ffmpeg_error}")
                     ffmpeg_version = "Unknown"
 
                 # Get capture device info if available through options manager
                 capture_device_info = {}
-                if hasattr(self, 'options_manager') and self.options_manager:
+                if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                    options_manager = self.parent.options_manager
                     capture_device_info = {
-                        'device_name': self.options_manager.get_option('capture_device', 'Unknown'),
-                        'resolution': self.options_manager.get_option('capture_resolution', 'Unknown'),
-                        'framerate': self.options_manager.get_option('capture_framerate', 'Unknown'),
-                        'format': self.options_manager.get_option('capture_format', 'Unknown')
-                    }
-
-                # Get video metadata
-                video_info = {}
-                if 'raw_results' in results and 'frames' in results['raw_results']:
-                    num_frames = len(results['raw_results']['frames'])
-                    fps = results.get('frame_rate', 0)
-                    duration_seconds = num_frames / fps if fps > 0 else 0
-
-                    video_info = {
-                        'num_frames': num_frames,
-                        'duration_seconds': round(duration_seconds, 2),
-                        'fps': fps,
-                        'resolution': f"{results.get('width', 0)}x{results.get('height', 0)}",
-                        'format': results.get('pix_fmt', 'Unknown')
+                        'device_name': options_manager.get_setting('capture', {}).get('default_device', 'Unknown'),
+                        'resolution': options_manager.get_setting('capture', {}).get('resolution', 'Unknown'),
+                        'framerate': options_manager.get_setting('capture', {}).get('framerate', 'Unknown'),
+                        'format': options_manager.get_setting('capture', {}).get('format', 'Unknown')
                     }
 
                 # Get VMAF analysis settings
                 vmaf_options = {}
-                if hasattr(self, 'vmaf_analyzer') and self.vmaf_analyzer:
+                if hasattr(self.parent, 'vmaf_thread') and hasattr(self.parent.vmaf_thread, 'vmaf_analyzer'):
+                    vmaf_analyzer = self.parent.vmaf_thread.vmaf_analyzer
                     vmaf_options = {
-                        'model': results.get('model', 'vmaf_v0.6.1'),
-                        'pool_method': self.vmaf_analyzer.pool_method,
-                        'feature_subsample': self.vmaf_analyzer.feature_subsample,
-                        'enable_motion_score': self.vmaf_analyzer.enable_motion_score,
-                        'enable_temporal_features': self.vmaf_analyzer.enable_temporal_features,
-                        'psnr_enabled': self.vmaf_analyzer.psnr_enabled,
-                        'ssim_enabled': self.vmaf_analyzer.ssim_enabled
+                        'model': vmaf_model,
+                        'pool_method': vmaf_analyzer.pool_method,
+                        'feature_subsample': vmaf_analyzer.feature_subsample,
+                        'enable_motion_score': vmaf_analyzer.enable_motion_score,
+                        'enable_temporal_features': vmaf_analyzer.enable_temporal_features,
+                        'psnr_enabled': vmaf_analyzer.psnr_enabled,
+                        'ssim_enabled': vmaf_analyzer.ssim_enabled
                     }
-
-                # Get file names safely
-                reference_file = os.path.basename(results.get('reference_video', '')) if results.get('reference_video') else ''
-                distorted_file = os.path.basename(results.get('distorted_video', '')) if results.get('distorted_video') else ''
-                psnr_file = os.path.basename(results.get('psnr_log', '')) if results.get('psnr_log') else ''
-                ssim_file = os.path.basename(results.get('ssim_log', '')) if results.get('ssim_log') else ''
-                json_file = os.path.basename(results.get('json_path', '')) if results.get('json_path') else ''
                 
                 # Organize metadata in logical groups
                 metadata.update({
@@ -785,16 +791,16 @@ class AnalysisTab(QWidget):
                     # File Information
                     "reference_video": reference_file,
                     "distorted_video": distorted_file,
-                    "psnr_file": psnr_file,
-                    "ssim_file": ssim_file,
-                    "json_result": json_file,
+                    "psnr_file": psnr_filename,
+                    "ssim_file": ssim_filename,
+                    "json_result": json_filename,
 
                     # Video Characteristics
                     "video_details": {
                         "resolution": resolution,
                         "width": width,
                         "height": height,
-                        "fps": fps,
+                        "fps": formatted_fps,
                         "frame_count": frame_count,
                         "duration_seconds": video_duration
                     },
@@ -839,10 +845,12 @@ class AnalysisTab(QWidget):
                     json.dump(metadata, f, indent=4)
 
                 logger.info(f"Test metadata saved to: {metadata_path}")
-                self.log_to_analysis(f"Test metadata saved to test directory")
+                self.log_to_analysis(f"Test metadata saved to test directory: {os.path.basename(metadata_path)}")
         except Exception as e:
             logger.error(f"Error saving test metadata: {str(e)}")
             self.log_to_analysis(f"Error saving test metadata: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
 
         # Ensure progress bar shows 100% when complete
         self.pb_vmaf_progress.setValue(100)
@@ -859,14 +867,14 @@ class AnalysisTab(QWidget):
             self.lbl_vmaf_status.setText("VMAF Score: N/A")
             self.log_to_analysis("VMAF analysis complete! Score: N/A")
 
-        # Add PSNR/SSIM metrics to log
-        if psnr is not None:
-            self.log_to_analysis(f"PSNR: {psnr:.2f} dB")
+        # Add PSNR/SSIM metrics to log - use the filenames instead of scores
+        if psnr_file:
+            self.log_to_analysis(f"PSNR: {psnr_file}")
         else:
             self.log_to_analysis("PSNR: N/A")
 
-        if ssim is not None:
-            self.log_to_analysis(f"SSIM: {ssim:.4f}")
+        if ssim_file:
+            self.log_to_analysis(f"SSIM: {ssim_file}")
         else:
             self.log_to_analysis("SSIM: N/A")
 

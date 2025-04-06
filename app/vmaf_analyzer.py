@@ -160,7 +160,18 @@ class VMAFAnalyzer(QObject):
                 'nb_frames': int(video_stream.get('nb_frames', 0))
             }
             
-            logger.info(f"Video metadata extracted: {metadata['width']}x{metadata['height']} @ {metadata['frame_rate']}fps")
+            # Format frame rate nicely
+            if isinstance(metadata['frame_rate'], float):
+                if metadata['frame_rate'] == int(metadata['frame_rate']):
+                    # If it's a whole number, display without decimal
+                    fps_display = str(int(metadata['frame_rate']))
+                else:
+                    # Format to 2 decimal places and remove trailing zeros
+                    fps_display = f"{metadata['frame_rate']:.2f}".rstrip('0').rstrip('.')
+            else:
+                fps_display = str(metadata['frame_rate'])
+                
+            logger.info(f"Video metadata extracted: {metadata['width']}x{metadata['height']} @ {fps_display}fps")
             return metadata
             
         except Exception as e:
