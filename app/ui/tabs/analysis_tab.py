@@ -5,7 +5,8 @@ import platform
 import subprocess
 from datetime import datetime
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
                              QProgressBar, QPushButton, QStyle, QTextEdit,
                              QVBoxLayout, QWidget)
@@ -16,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 class AnalysisTab(QWidget):
     """Analysis tab for video alignment and VMAF analysis"""
+    analysis_started = pyqtSignal()
+    analysis_completed = pyqtSignal(dict)  # Add this signal definition  
 
     def __init__(self, parent):
         super().__init__()
@@ -654,238 +657,298 @@ class AnalysisTab(QWidget):
         # Re-enable button
         self.btn_run_combined_analysis.setEnabled(True)
 
+
+
+
+
+
+
+
+
+
+
+
+
     def handle_vmaf_complete(self, results):
         """Handle completion of VMAF analysis"""
-        # Check if we've already processed this result (prevent duplicate processing)
-        if hasattr(self, '_last_result_id') and self._last_result_id == id(results):
-            logger.warning("Ignoring duplicate VMAF analysis result")
-            return
-
-        # Store the ID of this result object to prevent duplicate processing
-        self._last_result_id = id(results)
-
-        self.parent.vmaf_results = results
-
-        vmaf_score = results.get('vmaf_score')
-        psnr = results.get('psnr')
-        ssim = results.get('ssim')
-
-        # Save test metadata to JSON file in the test directory
         try:
-            if hasattr(self, 'test_metadata') and results.get('json_path'):
-                # Get the test directory from the VMAF results
-                test_dir = os.path.dirname(results.get('json_path'))
+            # Check if we've already processed this result (prevent duplicate processing)
+            if hasattr(self, '_last_result_id') and self._last_result_id == id(results):
+                logger.warning("Ignoring duplicate VMAF analysis result")
+                return
 
-                # Add results to metadata (safely)
-                metadata = self.test_metadata.copy() if hasattr(self, 'test_metadata') and self.test_metadata else {}
+            # Store the ID of this result object to prevent duplicate processing
+            self._last_result_id = id(results)
 
-                # Get file paths and convert to just filenames
-                reference_file = os.path.basename(results.get('reference_path', '')) if results.get('reference_path') else ''
-                distorted_file = os.path.basename(results.get('distorted_path', '')) if results.get('distorted_path') else ''
+            # Store results in parent for access by other tabs
+            self.parent.analysis_results = results
 
-                # Get PSNR and SSIM file paths
-                psnr_file = os.path.basename(results.get('psnr_log', '')) if results.get('psnr_log') else ''
-                ssim_file = os.path.basename(results.get('ssim_log', '')) if results.get('ssim_log') else ''
+            # Extract main scores
+            vmaf_score = results.get('vmaf_score', 'N/A')
+            psnr_score = results.get('psnr_score', 'N/A')
+            ssim_score = results.get('ssim_score', 'N/A')
 
-                # Get video metadata from results
-                raw_results = results.get('raw_results', {})
-                frame_count = 0
-                video_duration = 0
-                fps = 0
+            # Save test metadata to JSON file in the test directory
+            try:
+                if results.get('json_path'):
+                    # Get the test directory from the VMAF results
+                    test_dir = os.path.dirname(results.get('json_path'))
 
-                # Try to extract metadata from raw results
-                if raw_results:
-                    # Look for frame count
-                    if 'frames' in raw_results:
-                        frame_count = len(raw_results['frames'])
-                    # Try to extract FPS from video info if available
-                    if 'video_info' in raw_results:
-                        video_info = raw_results['video_info']
-                        if 'framerate' in video_info:
-                            fps = video_info['framerate']
-                        if 'duration' in video_info:
-                            video_duration = video_info['duration']
+                    # Add results to metadata (safely)
+                    metadata = self.test_metadata.copy() if hasattr(self, 'test_metadata') and self.test_metadata else {}
 
-                # For video dimensions, extract from distorted path metadata if possible
-                width = results.get('width', 0)
-                height = results.get('height', 0)
-                resolution = f"{width}x{height}" if width and height else "Unknown"
+                    # Get file names safely
+                    reference_file = results.get('reference_video', '')
+                    distorted_file = results.get('distorted_video', '')
+                    psnr_file = os.path.basename(results.get('psnr_log', '')) if results.get('psnr_log') else ''
+                    ssim_file = os.path.basename(results.get('ssim_log', '')) if results.get('ssim_log') else ''
+                    json_file = os.path.basename(results.get('json_path', '')) if results.get('json_path') else ''
+                    
+                    # Get video dimensions and metrics
+                    width = results.get('width', 0)
+                    height = results.get('height', 0)
+                    resolution = f"{width}x{height}" if width and height else "Unknown"
 
-                # Get VMAF model information
-                vmaf_model = results.get('model', 'vmaf_v0.6.1')  # Default if not specified
+                    # Extract frame count, duration, and fps from results
+                    frame_count = 0
+                    video_duration = 0
+                    fps = 0
+                    
+                    # Try to get from metadata if available
+                    if 'metadata' in results and 'video' in results['metadata']:
+                        video_meta = results['metadata']['video']
+                        frame_count = video_meta.get('frame_count', 0)
+                        video_duration = video_meta.get('duration', 0)
+                        fps = video_meta.get('fps', 0)
+                    # Fallback to raw_results
+                    elif 'raw_results' in results and 'frames' in results['raw_results']:
+                        frames = results['raw_results']['frames']
+                        frame_count = len(frames)
+                        # Try to calculate duration if fps is available
+                        if fps > 0:
+                            video_duration = frame_count / fps
 
-                # Get options settings for analysis details
-                analysis_settings = {}
-                if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-                    analysis_settings = self.parent.options_manager.get_setting('vmaf', {})
+                    # Get VMAF model information
+                    vmaf_model = results.get('model', '')
+                    if not vmaf_model and 'metadata' in results:
+                        vmaf_model = results['metadata'].get('test', {}).get('model', 'vmaf_v0.6.1')
 
-                # Get capture settings for device details
-                capture_settings = {}
-                if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-                    capture_settings = self.parent.options_manager.get_setting('capture', {})
+                    # Get analysis settings from vmaf_analyzer if available
+                    vmaf_options = {}
+                    if hasattr(self, 'vmaf_analyzer') and self.vmaf_analyzer:
+                        vmaf_options = {
+                            'model': vmaf_model,
+                            'pool_method': self.vmaf_analyzer.pool_method,
+                            'feature_subsample': self.vmaf_analyzer.feature_subsample,
+                            'enable_motion_score': self.vmaf_analyzer.enable_motion_score,
+                            'enable_temporal_features': self.vmaf_analyzer.enable_temporal_features,
+                            'psnr_enabled': self.vmaf_analyzer.psnr_enabled,
+                            'ssim_enabled': self.vmaf_analyzer.ssim_enabled
+                        }
+                    # Fallback to metadata if available
+                    elif 'metadata' in results and 'vmaf_options' in results['metadata']:
+                        vmaf_options = results['metadata']['vmaf_options']
 
-                # Get FFmpeg version info
+                    # Get capture settings
+                    capture_settings = {}
+                    if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                        capture_settings = self.parent.options_manager.get_setting('capture', {})
+
+                    # Get FFmpeg version info
+                    try:
+                        ffmpeg_exe, _, _ = get_ffmpeg_path()
+                        process = subprocess.run([ffmpeg_exe, "-version"], capture_output=True, text=True)
+                        ffmpeg_version = process.stdout.split('\n')[0] if process.returncode == 0 else "Unknown"
+                    except Exception:
+                        ffmpeg_version = "Unknown"
+
+                    # Organize metadata in logical groups
+                    metadata.update({
+                        # Test Results
+                        "vmaf_score": vmaf_score,
+
+                        # File Information
+                        "reference_video": reference_file,
+                        "distorted_video": distorted_file,
+                        "psnr_file": psnr_file,
+                        "ssim_file": ssim_file,
+                        "json_result": json_file,
+
+                        # Video Characteristics
+                        "video_details": {
+                            "resolution": resolution,
+                            "width": width,
+                            "height": height,
+                            "fps": fps,
+                            "frame_count": frame_count,
+                            "duration_seconds": video_duration
+                        },
+
+                        # Analysis Details
+                        "analysis_settings": vmaf_options,
+
+                        # Capture Device Information
+                        "capture_details": capture_settings,
+
+                        # System Information
+                        "system_info": {
+                            "ffmpeg_version": ffmpeg_version,
+                            "os": platform.system(),
+                            "os_version": platform.version(),
+                            "processor": platform.processor()
+                        }
+                    })
+
+                    # Save metadata to JSON file
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    test_name = metadata.get('test_name', 'test') if 'test_name' in metadata else (
+                        self.test_metadata.get('test_name', 'test') if hasattr(self, 'test_metadata') and self.test_metadata else 'test'
+                    )
+                    metadata_path = os.path.join(test_dir, f"{test_name}_{timestamp}_metadata.json")
+                    
+                    with open(metadata_path, 'w') as f:
+                        json.dump(metadata, f, indent=4)
+
+                    logger.info(f"Test metadata saved to: {metadata_path}")
+                    self.log_to_analysis(f"Test metadata saved to test directory")
+            except Exception as e:
+                logger.error(f"Error saving test metadata: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                self.log_to_analysis(f"Error saving test metadata: {str(e)}")
+
+            # Ensure progress bar shows 100% when complete
+            self.pb_vmaf_progress.setValue(100)
+
+            # Re-enable analysis button
+            self.btn_run_combined_analysis.setEnabled(True)
+            self.analysis_running = False
+            
+            if hasattr(self.parent, 'vmaf_running'):
+                self.parent.vmaf_running = False
+
+            # Update UI with vmaf score
+            if isinstance(vmaf_score, (int, float)):
+                self.lbl_vmaf_status.setText(f"VMAF Score: {vmaf_score:.2f}")
+                self.log_to_analysis(f"VMAF analysis complete! Score: {vmaf_score:.2f}")
+            else:
+                self.lbl_vmaf_status.setText(f"VMAF Score: {vmaf_score}")
+                self.log_to_analysis(f"VMAF analysis complete! Score: {vmaf_score}")
+
+            # Add PSNR/SSIM metrics to log
+            if isinstance(psnr_score, (int, float)):
+                self.log_to_analysis(f"PSNR: {psnr_score:.2f} dB")
+            else:
+                self.log_to_analysis(f"PSNR: {psnr_score}")
+
+            if isinstance(ssim_score, (int, float)):
+                self.log_to_analysis(f"SSIM: {ssim_score:.4f}")
+            else:
+                self.log_to_analysis(f"SSIM: {ssim_score}")
+
+            # Enable results tab
+            self.btn_next_to_results.setEnabled(True)
+
+            # Update results tab using available methods
+            if hasattr(self.parent, 'on_analysis_completed'):
                 try:
-                    ffmpeg_exe, _, _ = get_ffmpeg_path() #Requires get_ffmpeg_path definition
-                    process = subprocess.run([ffmpeg_exe, "-version"], capture_output=True, text=True)
-                    ffmpeg_version = process.stdout.split('\n')[0] if process.returncode == 0 else "Unknown"
-                except:
-                    ffmpeg_version = "Unknown"
+                    # Call the parent's method to handle results
+                    self.parent.on_analysis_completed(results)
+                except Exception as e:
+                    logger.error(f"Error calling parent.on_analysis_completed: {str(e)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            else:
+                # Try different ways to update the results tab
+                try:
+                    # Option 1: Direct method call (removed - was causing error)
+                    # self.parent.results_tab.update_results(results)
+                    
+                    # Option 2: Use MainWindow's on_analysis_completed if it exists
+                    if hasattr(self.parent, 'on_analysis_completed'):
+                        self.parent.on_analysis_completed(results)
+                    
+                    # Option 3: Set results in results_tab directly
+                    if hasattr(self.parent, 'results_tab'):
+                        # Update basic UI elements directly
+                        results_tab = self.parent.results_tab
+                        
+                        # Update labels if they exist
+                        if hasattr(results_tab, 'lbl_vmaf_score') and isinstance(vmaf_score, (int, float)):
+                            results_tab.lbl_vmaf_score.setText(f"VMAF Score: {vmaf_score:.2f}")
+                        
+                        if hasattr(results_tab, 'lbl_psnr_score'):
+                            if isinstance(psnr_score, (int, float)):
+                                results_tab.lbl_psnr_score.setText(f"PSNR: {psnr_score:.2f} dB")
+                            else:
+                                results_tab.lbl_psnr_score.setText(f"PSNR: {psnr_score}")
+                        
+                        if hasattr(results_tab, 'lbl_ssim_score'):
+                            if isinstance(ssim_score, (int, float)):
+                                results_tab.lbl_ssim_score.setText(f"SSIM: {ssim_score:.4f}")
+                            else:
+                                results_tab.lbl_ssim_score.setText(f"SSIM: {ssim_score}")
+                        
+                        # Update result files list if method exists
+                        if hasattr(results_tab, 'update_result_files_list'):
+                            results_tab.update_result_files_list(results)
+                        
+                        # Enable export buttons if they exist
+                        if hasattr(results_tab, 'btn_export_pdf'):
+                            results_tab.btn_export_pdf.setEnabled(True)
+                        if hasattr(results_tab, 'btn_export_csv'):
+                            results_tab.btn_export_csv.setEnabled(True)
+                except Exception as e:
+                    logger.error(f"Error updating results tab directly: {str(e)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
 
-                # Get capture device info if available through options manager
-                capture_device_info = {}
-                if hasattr(self, 'options_manager') and self.options_manager:
-                    capture_device_info = {
-                        'device_name': self.options_manager.get_option('capture_device', 'Unknown'),
-                        'resolution': self.options_manager.get_option('capture_resolution', 'Unknown'),
-                        'framerate': self.options_manager.get_option('capture_framerate', 'Unknown'),
-                        'format': self.options_manager.get_option('capture_format', 'Unknown')
-                    }
+            # Show message with VMAF score
+            if isinstance(vmaf_score, (int, float)):
+                QMessageBox.information(self, "Analysis Complete", 
+                                    f"VMAF analysis complete!\n\nVMAF Score: {vmaf_score:.2f}")
+            else:
+                QMessageBox.information(self, "Analysis Complete", 
+                                    "VMAF analysis complete!")
 
-                # Get video metadata
-                video_info = {}
-                if 'raw_results' in results and 'frames' in results['raw_results']:
-                    num_frames = len(results['raw_results']['frames'])
-                    fps = results.get('frame_rate', 0)
-                    duration_seconds = num_frames / fps if fps > 0 else 0
-
-                    video_info = {
-                        'num_frames': num_frames,
-                        'duration_seconds': round(duration_seconds, 2),
-                        'fps': fps,
-                        'resolution': f"{results.get('width', 0)}x{results.get('height', 0)}",
-                        'format': results.get('pix_fmt', 'Unknown')
-                    }
-
-                # Get VMAF analysis settings
-                vmaf_options = {}
-                if hasattr(self, 'vmaf_analyzer') and self.vmaf_analyzer:
-                    vmaf_options = {
-                        'model': results.get('model', 'vmaf_v0.6.1'),
-                        'pool_method': self.vmaf_analyzer.pool_method,
-                        'feature_subsample': self.vmaf_analyzer.feature_subsample,
-                        'enable_motion_score': self.vmaf_analyzer.enable_motion_score,
-                        'enable_temporal_features': self.vmaf_analyzer.enable_temporal_features,
-                        'psnr_enabled': self.vmaf_analyzer.psnr_enabled,
-                        'ssim_enabled': self.vmaf_analyzer.ssim_enabled
-                    }
-
-                # Get file names safely
-                reference_file = os.path.basename(results.get('reference_video', '')) if results.get('reference_video') else ''
-                distorted_file = os.path.basename(results.get('distorted_video', '')) if results.get('distorted_video') else ''
-                psnr_file = os.path.basename(results.get('psnr_log', '')) if results.get('psnr_log') else ''
-                ssim_file = os.path.basename(results.get('ssim_log', '')) if results.get('ssim_log') else ''
-                json_file = os.path.basename(results.get('json_path', '')) if results.get('json_path') else ''
+            # Switch to results tab if available
+            try:
+                if hasattr(self.parent, 'tabs') and self.parent.tabs is not None:
+                    results_tab_index = 4  # Typically the results tab is index 4
+                    if self.parent.tabs.count() > results_tab_index:
+                        self.parent.tabs.setCurrentIndex(results_tab_index)
+            except Exception as e:
+                logger.error(f"Error switching to results tab: {str(e)}")
                 
-                # Organize metadata in logical groups
-                metadata.update({
-                    # Test Results
-                    "vmaf_score": vmaf_score,
-
-                    # File Information
-                    "reference_video": reference_file,
-                    "distorted_video": distorted_file,
-                    "psnr_file": psnr_file,
-                    "ssim_file": ssim_file,
-                    "json_result": json_file,
-
-                    # Video Characteristics
-                    "video_details": {
-                        "resolution": resolution,
-                        "width": width,
-                        "height": height,
-                        "fps": fps,
-                        "frame_count": frame_count,
-                        "duration_seconds": video_duration
-                    },
-
-                    # Analysis Details
-                    "analysis_settings": {
-                        "vmaf_model": vmaf_model,
-                        "pool_method": analysis_settings.get('pool_method', 'mean'),
-                        "feature_subsample": analysis_settings.get('feature_subsample', 1),
-                        "psnr_enabled": analysis_settings.get('psnr_enabled', True),
-                        "ssim_enabled": analysis_settings.get('ssim_enabled', True),
-                        "enable_motion_score": analysis_settings.get('enable_motion_score', False),
-                        "enable_temporal_features": analysis_settings.get('enable_temporal_features', False)
-                    },
-
-                    # Capture Device Information
-                    "capture_details": {
-                        "device": capture_settings.get('default_device', 'Unknown'),
-                        "format_code": capture_settings.get('format_code', 'Unknown'),
-                        "pixel_format": capture_settings.get('pixel_format', 'Unknown'),
-                        "video_input": capture_settings.get('video_input', 'Unknown'),
-                        "encoder": capture_settings.get('encoder', 'Unknown'),
-                        "crf": capture_settings.get('crf', 0),
-                        "preset": capture_settings.get('preset', 'Unknown')
-                    },
-                    # System Information
-                    "system_info": {
-                        "ffmpeg_version": ffmpeg_version,
-                        "os": platform.system(),
-                        "os_version": platform.version(),
-                        "processor": platform.processor()
-                    },
-                    # Capture Device Info
-                    "capture_device": capture_device_info,
-                    # VMAF Analysis Options
-                    "vmaf_options": vmaf_options
-                })
-
-                # Save metadata to JSON file
-                metadata_path = os.path.join(test_dir, f"{self.test_metadata['test_name']}_{self.test_metadata['timestamp']}_metadata.json")
-                with open(metadata_path, 'w') as f:
-                    json.dump(metadata, f, indent=4)
-
-                logger.info(f"Test metadata saved to: {metadata_path}")
-                self.log_to_analysis(f"Test metadata saved to test directory")
         except Exception as e:
-            logger.error(f"Error saving test metadata: {str(e)}")
-            self.log_to_analysis(f"Error saving test metadata: {str(e)}")
+            logger.error(f"Error in handle_vmaf_complete: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            # Ensure UI is updated even on error
+            self.pb_vmaf_progress.setValue(100)
+            self.btn_run_combined_analysis.setEnabled(True)
+            self.analysis_running = False
+            
+            if hasattr(self.parent, 'vmaf_running'):
+                self.parent.vmaf_running = False
+                
+            QMessageBox.critical(self, "Analysis Error", 
+                            f"An error occurred when processing analysis results:\n\n{str(e)}")
 
-        # Ensure progress bar shows 100% when complete
-        self.pb_vmaf_progress.setValue(100)
 
-        # Re-enable analysis button
-        self.btn_run_combined_analysis.setEnabled(True)
-        self.parent.vmaf_running = False # Reset vmaf_running flag
 
-        # Update UI with vmaf score
-        if vmaf_score is not None:
-            self.lbl_vmaf_status.setText(f"VMAF Score: {vmaf_score:.2f}")
-            self.log_to_analysis(f"VMAF analysis complete! Score: {vmaf_score:.2f}")
-        else:
-            self.lbl_vmaf_status.setText("VMAF Score: N/A")
-            self.log_to_analysis("VMAF analysis complete! Score: N/A")
 
-        # Add PSNR/SSIM metrics to log
-        if psnr is not None:
-            self.log_to_analysis(f"PSNR: {psnr:.2f} dB")
-        else:
-            self.log_to_analysis("PSNR: N/A")
 
-        if ssim is not None:
-            self.log_to_analysis(f"SSIM: {ssim:.4f}")
-        else:
-            self.log_to_analysis("SSIM: N/A")
 
-        # Enable results tab
-        self.btn_next_to_results.setEnabled(True)
 
-        # Update results tab with results data
-        self.parent.results_tab.update_results(results)
 
-        # Show message with VMAF score
-        if vmaf_score is not None:
-            QMessageBox.information(self, "Analysis Complete", 
-                                f"VMAF analysis complete!\n\nVMAF Score: {vmaf_score:.2f}")
-        else:
-            QMessageBox.information(self, "Analysis Complete", 
-                                "VMAF analysis complete!")
 
-        # Switch to results tab
-        self.parent.tabs.setCurrentIndex(3)
+
+
+
+
+
 
     def handle_vmaf_error(self, error_msg):
         """Handle error in VMAF analysis"""

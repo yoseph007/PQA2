@@ -29,7 +29,7 @@ class VMAFAnalyzer(QObject):
         self._process_lock = threading.Lock()
         self._current_process = None
         self._terminate_requested = False
-        
+        self.threads = 4  # Default number of threads for VMAF analysis
         # Default values for advanced options
         self.pool_method = "mean"  # Options: mean, min, harmonic_mean
         self.enable_motion_score = False
@@ -37,6 +37,76 @@ class VMAFAnalyzer(QObject):
         self.feature_subsample = 1
         self.psnr_enabled = True
         self.ssim_enabled = True
+
+
+
+
+    def set_options_from_manager(self, options_manager):
+        """Set VMAF options from the options manager"""
+        if not options_manager:
+            logger.warning("No options manager provided, using default settings")
+            return
+            
+        try:
+            # Get VMAF settings
+            vmaf_settings = options_manager.get_setting("vmaf")
+            
+            # Set threads from settings (default to 4 if not found)
+            self.threads = vmaf_settings.get("threads", 4)
+            
+            # Set feature subsample (default to 1 if not found)
+            self.feature_subsample = vmaf_settings.get("feature_subsample", 1)
+            
+            # Set other options
+            self.pool_method = vmaf_settings.get("pool_method", "mean")
+            self.enable_motion_score = vmaf_settings.get("enable_motion_score", False)
+            self.enable_temporal_features = vmaf_settings.get("enable_temporal_features", False)
+            self.psnr_enabled = vmaf_settings.get("psnr_enabled", True)
+            self.ssim_enabled = vmaf_settings.get("ssim_enabled", True)
+            
+            logger.info(f"VMAF options set from manager: threads={self.threads}, "
+                    f"feature_subsample={self.feature_subsample}, pool={self.pool_method}")
+        except Exception as e:
+            logger.error(f"Error setting VMAF options from manager: {e}")
+
+
+
+
+
+
+    def set_options_manager(self, options_manager):
+        """Set VMAF options from the options manager"""
+        if not options_manager:
+            logger.warning("No options manager provided, using default settings")
+            return
+            
+        try:
+            # Get VMAF settings
+            vmaf_settings = options_manager.get_setting("vmaf")
+            
+            # Set threads from settings (default to 4 if not found)
+            self.threads = vmaf_settings.get("threads", 4)
+            
+            # Set feature subsample (default to 1 if not found)
+            self.feature_subsample = vmaf_settings.get("feature_subsample", 1)
+            
+            # Set other options
+            self.pool_method = vmaf_settings.get("pool_method", "mean")
+            self.enable_motion_score = vmaf_settings.get("enable_motion_score", False)
+            self.enable_temporal_features = vmaf_settings.get("enable_temporal_features", False)
+            self.psnr_enabled = vmaf_settings.get("psnr_enabled", True)
+            self.ssim_enabled = vmaf_settings.get("ssim_enabled", True)
+            
+            logger.info(f"VMAF options set from manager: threads={self.threads}, "
+                    f"feature_subsample={self.feature_subsample}, pool={self.pool_method}")
+        except Exception as e:
+            logger.error(f"Error setting VMAF options from manager: {e}")
+
+
+
+
+
+
 
     def set_output_directory(self, output_dir):
         """Set output directory for results"""
@@ -261,13 +331,14 @@ class VMAFAnalyzer(QObject):
                     logger.info(f"No model specified, using default model: {model}")
 
                 # Format model string correctly for the 'model' parameter
-                # If it doesn't start with "version=" and doesn't contain a path separator, add "version="
-                if not model.startswith("version=") and not any(sep in model for sep in ["/", "\\"]):
-                    model_name = f"version={model}"
+                # More compatible model format for FFmpeg 7.1.1
+                if not model.startswith("path=") and not any(sep in model for sep in ["/", "\\"]):
+                    if model in ["vmaf_v0.6.1", "vmaf_4k_v0.6.1", "vmaf_b_v0.6.3"]:
+                        model_name = f"model={model}"  # Use standard format for built-in models
+                    else:
+                        model_name = f"path={model}"   # Use path format for custom models
                 else:
-                    model_name = model
-                    
-                logger.info(f"Using model parameter: {model_name}")
+                    model_name = f"path={model}"  # Already a path
 
                 # Use current directory as a base for relative paths
                 os.getcwd()
@@ -302,15 +373,17 @@ class VMAFAnalyzer(QObject):
                 vmaf_options = [
                     f"log_path={json_rel_path}",
                     "log_fmt=json",
-                    f"model={model_name}",
-                    f"n_threads=4",
+                    # Use the exact format from your working command
+                    f"model=version={model}" if not any(sep in model for sep in ["/", "\\"]) else f"model=path={model}",
+                    f"n_threads={self.threads if hasattr(self, 'threads') else 4}",
                     f"n_subsample={self.feature_subsample}"
-                ]
+]
                 
                 # Add pool method if not using default
                 if self.pool_method != "mean":
                     vmaf_options.append(f"pool={self.pool_method}")
-                
+                    vmaf_options.append("psnr=1")
+                    vmaf_options.append("ssim=1")
                 # Enable motion score if requested
                 if self.enable_motion_score:
                     vmaf_options.append("feature=name=motion:enable=1")
@@ -331,6 +404,8 @@ class VMAFAnalyzer(QObject):
                 
                 # Build the filter option
                 vmaf_filter = f"libvmaf={':'.join(vmaf_options)}"
+                # Log the actual filter string for debugging
+                logger.info(f"VMAF filter: {vmaf_filter}")
                 
                 # Use optimized VMAF command with relative paths and quoted filter
                 optimized_cmd = [
@@ -670,6 +745,72 @@ class VMAFAnalyzer(QObject):
                 # Get video metadata
                 dist_meta = self.get_video_metadata(distorted_path, ffprobe_exe)
                 ref_meta = self.get_video_metadata(reference_path, ffprobe_exe)
+ 
+ 
+                # Add a direct call to ffprobe to ensure we get accurate frame count and duration
+                if dist_meta and (dist_meta.get('frame_count', 0) == 0 or dist_meta.get('duration', 0) == 0):
+                    try:
+                        # Use ffprobe to get exact frame count and duration
+                        cmd = [
+                            ffprobe_exe,
+                            "-v", "error",
+                            "-select_streams", "v:0",
+                            "-count_frames",
+                            "-show_entries", "stream=nb_read_frames,duration,r_frame_rate",
+                            "-of", "default=noprint_wrappers=1:nokey=1",
+                            self._prepare_ffmpeg_path(distorted_path)
+                        ]
+                        
+                        startupinfo = None
+                        if platform.system() == 'Windows':
+                            startupinfo = subprocess.STARTUPINFO()
+                            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                        
+                        result = subprocess.run(cmd, capture_output=True, text=True, startupinfo=startupinfo)
+                        
+                        if result.returncode == 0:
+                            # Parse the output - should be duration and frame count on separate lines
+                            output_lines = result.stdout.strip().split('\n')
+                            if len(output_lines) >= 3:
+                                # Extract duration from first line
+                                duration = float(output_lines[0])
+                                # Extract frame count from second line
+                                frame_count = int(output_lines[1])
+                                # Extract framerate from third line (typically in format like "30000/1001")
+                                fps_str = output_lines[2]
+                                if '/' in fps_str:
+                                    num, den = map(int, fps_str.split('/'))
+                                    fps = num / den if den > 0 else 0
+                                else:
+                                    fps = float(fps_str) if fps_str else 0
+                                
+                                # Update dist_meta
+                                if dist_meta:
+                                    dist_meta['duration'] = duration
+                                    dist_meta['nb_frames'] = frame_count
+                                    dist_meta['frame_rate'] = fps
+                                    
+                                logger.info(f"Updated video metadata from ffprobe: duration={duration}s, frames={frame_count}, fps={fps}")
+                        else:
+                            logger.warning(f"Failed to get accurate frame count and duration: {result.stderr}")
+                    except Exception as e:
+                        logger.error(f"Error getting accurate frame count and duration: {str(e)}")
+                
+                
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
                 
                 # Extract video dimensions if available
                 width = 0
@@ -695,6 +836,84 @@ class VMAFAnalyzer(QObject):
                     model_info = vmaf_data["model"]
                 elif "version" in vmaf_data:
                     model_info = vmaf_data["version"]
+                    
+                    
+                # Calculate frame count and duration
+                frame_count = 0
+                duration = 0
+                fps = 0
+                width = 0
+                height = 0  
+                if dist_meta:
+                    frame_count = dist_meta.get('nb_frames', 0)
+                    duration = dist_meta.get('duration', 0)
+                    fps = dist_meta.get('frame_rate', 0)
+                    width = dist_meta.get('width', 0)   
+                    height = dist_meta.get('height', 0)
+                    
+                    # Estimate if not available
+                    if frame_count == 0 and fps > 0 and duration > 0:
+                        frame_count = int(fps * duration)
+
+                # Return results with consistent path format and additional metadata
+                results = {
+                    'vmaf_score': vmaf_score,
+                    'psnr_score': psnr_status,  # Changed to use filename or status
+                    'ssim_score': ssim_status,  # Changed to use filename or status
+                    'json_path': json_path,
+                    'psnr_log': psnr_path,
+                    'ssim_log': ssim_path,
+                    'reference_video': reference_filename,  # Changed to just filename
+                    'distorted_video': distorted_filename,  # Changed to just filename
+                    'raw_results': raw_results,
+                    'metadata': {
+                        'test': {
+                            'model': model_info,
+                            'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            'test_name': self.test_name or "Unnamed Test"
+                        },
+                        'video': {
+                            'width': width,
+                            'height': height,
+                            'frame_count': frame_count,
+                            'duration': duration,
+                            'fps': fps,
+                            'format': dist_meta.get('pix_fmt', 'unknown') if dist_meta else 'unknown',
+                            'codec': dist_meta.get('codec_name', 'unknown') if dist_meta else 'unknown',
+                            'bitrate': dist_meta.get('bit_rate', 0) if dist_meta else 0
+                        },
+                        'vmaf_options': {
+                            'pool_method': self.pool_method,
+                            'feature_subsample': self.feature_subsample,
+                            'motion_score': self.enable_motion_score,
+                            'temporal_features': self.enable_temporal_features
+                        }
+                    }
+                }                    
+                                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
                 
                 # Return results with consistent path format and additional metadata
                 results = {

@@ -249,193 +249,205 @@ class CaptureTab(QWidget):
         # Use options manager to get devices
         QTimer.singleShot(500, self.populate_devices_and_check_status)
 
-    def populate_devices_and_check_status(self):
-        """Populate device dropdown with devices and check their status"""
-        # Get devices from options manager
-        devices = []
-        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-            try:
-                # Try to get devices from options manager
-                devices = self.parent.options_manager.get_decklink_devices()
-                logger.info(f"Found devices from options manager: {devices}")
-            except Exception as e:
-                logger.error(f"Error getting devices from options manager: {e}")
-
-        # If no devices found, add default options
-        if not devices:
-            # Common Blackmagic device names as fallback
-            devices = [
-                "Intensity Shuttle", 
-                "UltraStudio", 
-                "DeckLink",
-                "Decklink Video Capture",
-                "Intensity Pro"
-            ]
-            logger.info(f"Using default device list: {devices}")
-
-        # Update dropdown
-        self.device_combo.clear()
-        for device in devices:
-            self.device_combo.addItem(device, device)
-
-        # Set current device from settings
-        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
-            try:
-                current_device = self.parent.options_manager.get_setting("capture", "default_device")
-                index = self.device_combo.findText(current_device)
-                if index >= 0:
-                    self.device_combo.setCurrentIndex(index)
-                logger.info(f"Set current device to: {current_device}")
-            except Exception as e:
-                logger.error(f"Error setting current device: {e}")
-
-        # Check if device is available
-        if hasattr(self.parent, 'capture_mgr') and self.parent.capture_mgr:
-            try:
-                # Get selected device for check
-                selected_device = self.device_combo.currentText()
-                if selected_device:
-                    # Skip device availability check since method is missing
-                    available, message = True, "Device check skipped"
-                    logger.info(f"Device '{selected_device}' availability: {available}, message: {message}")
-
-                    if available:
-                        # Green for connected device
-                        self.device_status_indicator.setStyleSheet("background-color: #00AA00; border-radius: 8px;")
-                        self.device_status_indicator.setToolTip(f"Capture card status: connected ({message})")
-                    else:
-                        # Red for unavailable device
-                        self.device_status_indicator.setStyleSheet("background-color: #AA0000; border-radius: 8px;")
-                        self.device_status_indicator.setToolTip(f"Capture card status: not connected ({message})")
-                else:
-                    # Grey for no selected device
-                    self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
-                    self.device_status_indicator.setToolTip("No capture device selected")
-            except Exception as e:
-                # Grey for error during check
-                logger.error(f"Error checking device availability: {e}")
-                self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
-                self.device_status_indicator.setToolTip(f"Error checking device: {str(e)}")
-        else:
-            # Grey for initialization not complete
-            self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
-            self.device_status_indicator.setToolTip("Capture manager not initialized")
 
 
+    def _ensure_signals_connected(self):
+        """Ensure all required signals are connected properly"""
+        if not hasattr(self, '_signals_connected') or not self._signals_connected:
+            if hasattr(self.parent, 'capture_mgr'):
+                # Connect status signals
+                self.parent.capture_mgr.status_update.connect(self.update_capture_status)
+                self.parent.capture_mgr.progress_update.connect(self.update_capture_progress)
+                self.parent.capture_mgr.state_changed.connect(self.handle_capture_state_change)
+                
+                # Connect process signals
+                self.parent.capture_mgr.capture_started.connect(self.handle_capture_started)
+                self.parent.capture_mgr.capture_finished.connect(self.handle_capture_finished)
+                self.parent.capture_mgr.frame_available.connect(self.update_preview)
+                
+                # Mark signals as connected
+                self._signals_connected = True
+                logger.info("Connected capture manager signals")
 
-
-
-
-    def start_capture(self):
-        """Start the bookend capture process"""
-        if not self.parent.reference_info:
-            QMessageBox.warning(self, "Warning", "Please select a reference video first")
-            return
-
-        # Get device
-        device_name = self.device_combo.currentData()
-        if not device_name:
-            QMessageBox.warning(self, "Warning", "Please select a capture device")
-            return
-
-        # Update UI
-        self.btn_start_capture.setEnabled(False)
-        self.btn_stop_capture.setEnabled(True)
-        self.pb_capture_progress.setValue(0)
-
-        # Clear logs
-        self.txt_capture_log.clear()
-        self.log_to_capture("Starting bookend capture process...")
-
-        # Get output directory using FileManager
-        # Use FileManager's get_default_base_dir instead of trying to access setup_tab attributes
+    def _get_output_directory(self):
+        """Get appropriate output directory for captures"""
+        # First try to use FileManager
         if hasattr(self.parent, 'file_manager') and self.parent.file_manager:
-            output_dir = self.parent.file_manager.get_default_base_dir()
-        else:
-            # Create a temporary FileManager to get the default directory
-            from app.utils import FileManager
-            temp_file_manager = FileManager()
-            output_dir = temp_file_manager.get_default_base_dir()
+            return self.parent.file_manager.get_default_base_dir()
+        
+        # Then try to get from options
+        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+            output_dir = self.parent.options_manager.get_setting("paths", "default_output_dir")
+            if output_dir and os.path.exists(output_dir):
+                return output_dir
+        
+        # Fall back to reference video directory
+        if hasattr(self.parent, 'reference_info') and self.parent.reference_info:
+            return os.path.dirname(self.parent.reference_info.get('path', ''))
+        
+        # Last resort - use home directory
+        return os.path.expanduser("~")
 
-        # Get test name - use a timestamp if not available
+    def _get_test_name(self):
+        """Get appropriate test name for captures"""
+        # Generate default based on timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        test_name = f"test_{timestamp}"
-
-        # Try to get test name from setup_tab if it exists
+        default_name = f"test_{timestamp}"
+        
+        # Try to get name from setup tab if available
         if hasattr(self.parent, 'setup_tab'):
-            # Look for common test name field naming patterns
             for attr_name in ['test_name', 'txt_test_name', 'test_name_field']:
                 if hasattr(self.parent.setup_tab, attr_name):
                     field = getattr(self.parent.setup_tab, attr_name)
                     if hasattr(field, 'text'):
                         test_name_value = field.text()
                         if test_name_value:
-                            test_name = test_name_value
-                            break
+                            return test_name_value
+        
+        return default_name
 
-        self.log_to_capture(f"Using test name: {test_name}")
-        self.log_to_capture(f"Output directory: {output_dir}")
+    def _show_capturing_preview(self):
+        """Show a placeholder preview while starting capture"""
+        try:
+            # Create a placeholder image
+            placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
+            placeholder[:] = (50, 50, 50)  # Dark gray background
+            
+            # Add a pulsating red recording indicator
+            cv2.circle(placeholder, (30, 30), 15, (0, 0, 180), -1)
+            
+            # Add text
+            cv2.putText(placeholder, "STARTING CAPTURE...", (80, 40), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2)
+            
+            # Add reference video info
+            if hasattr(self.parent, 'reference_info') and self.parent.reference_info:
+                ref_info = self.parent.reference_info
+                ref_name = os.path.basename(ref_info.get('path', 'Unknown'))
+                cv2.putText(placeholder, f"Reference: {ref_name}", (30, 80), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+                
+                # Add resolution and duration
+                resolution = f"{ref_info.get('width', 0)}x{ref_info.get('height', 0)}"
+                duration = ref_info.get('duration', 0)
+                cv2.putText(placeholder, f"Resolution: {resolution}, Duration: {duration:.1f}s", (30, 110), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+            
+            # Add device info
+            device = self.device_combo.currentText()
+            cv2.putText(placeholder, f"Device: {device}", (30, 140), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+            
+            # Add a progress bar
+            cv2.rectangle(placeholder, (30, 200), (450, 220), (50, 50, 100), -1)  # Background
+            cv2.rectangle(placeholder, (30, 200), (80, 220), (0, 120, 255), -1)   # Progress (10%)
+            cv2.putText(placeholder, "Initializing...", (200, 215), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            # Emit the frame to the preview
+            self.update_preview(placeholder)
+        except Exception as e:
+            logger.error(f"Error creating capturing preview: {e}")
 
-        # Set output information in capture manager
-        if hasattr(self.parent, 'capture_mgr'):
-            self.parent.capture_mgr.set_output_directory(output_dir)
-            self.parent.capture_mgr.set_test_name(test_name)
-
-            # Start bookend capture
-            self.log_to_capture("Starting bookend frame capture...")
-            self.parent.capture_mgr.start_bookend_capture(device_name)
-        else:
-            self.log_to_capture("Error: Capture manager not initialized")
-            self.btn_start_capture.setEnabled(True)
-            self.btn_stop_capture.setEnabled(False)     
-
-
-
-
-
-
-    def stop_capture(self):
-        """Stop the capture process"""
-        self.log_to_capture("Stopping capture...")
-        if hasattr(self.parent, 'capture_mgr'):
-            self.parent.capture_mgr.stop_capture(cleanup_temp=True)
-        else:
-            self.log_to_capture("Error: Capture manager not initialized")
-
-        # Reset progress bar to avoid stuck state
-        self.pb_capture_progress.setValue(0)
-
+    def handle_capture_finished(self, success, output_path):
+        """Handle capture completion with better UI feedback"""
         # Update UI
         self.btn_start_capture.setEnabled(True)
         self.btn_stop_capture.setEnabled(False)
-
-    def update_capture_status(self, status_text):
-        """Update capture status label"""
-        self.lbl_capture_status.setText(status_text)
-        self.log_to_capture(status_text)
-
-    def update_capture_progress(self, progress):
-        """Handle capture progress updates with proper scale"""
-        if isinstance(progress, int):
-            # Ensure progress is between 0-100
-            scaled_progress = min(100, max(0, progress))
-            self.pb_capture_progress.setValue(scaled_progress)
+        
+        if success:
+            # Show success message with output path
+            self.log_to_capture(f"Capture completed successfully")
+            self.log_to_capture(f"Output file: {output_path}")
+            
+            # Update progress to 100%
+            self.pb_capture_progress.setValue(100)
+            
+            # Enable analysis button if it exists
+            if hasattr(self, 'btn_next_to_analysis'):
+                self.btn_next_to_analysis.setEnabled(True)
+                
+            # Show a completion frame
+            try:
+                # Try to grab a frame from the output file for preview
+                if os.path.exists(output_path):
+                    cap = cv2.VideoCapture(output_path)
+                    if cap.isOpened():
+                        # Skip to middle frame
+                        frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, frames // 2)
+                        
+                        # Read frame
+                        ret, frame = cap.read()
+                        if ret:
+                            # Add completion overlay
+                            height, width = frame.shape[:2]
+                            cv2.rectangle(frame, (0, 0), (width, 30), (0, 150, 0), -1)
+                            cv2.putText(frame, "CAPTURE COMPLETE", (width//2 - 80, 20), 
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                            
+                            # Update preview
+                            self.update_preview(frame)
+                        
+                        # Clean up
+                        cap.release()
+            except Exception as e:
+                logger.error(f"Error showing completion frame: {e}")
         else:
-            # Just in case we receive non-int progress
+            # Show error message
+            self.log_to_capture(f"Capture failed: {output_path}")
+            
+            # Reset progress
             self.pb_capture_progress.setValue(0)
+            
+            # Show error frame
+            try:
+                placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
+                placeholder[:] = (50, 50, 70)  # Dark blue-gray background
+                
+                # Add red error banner
+                cv2.rectangle(placeholder, (0, 0), (480, 40), (0, 0, 150), -1)
+                cv2.putText(placeholder, "CAPTURE FAILED", (150, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                
+                # Add error message (truncate if too long)
+                error_msg = output_path
+                if len(error_msg) > 60:
+                    error_msg = error_msg[:57] + "..."
+                
+                lines = self._wrap_text(error_msg, 60)  # Wrap text to avoid overflow
+                y_pos = 80
+                for line in lines:
+                    cv2.putText(placeholder, line, (30, y_pos), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+                    y_pos += 25
+                
+                # Update preview
+                self.update_preview(placeholder)
+            except Exception as e:
+                logger.error(f"Error showing error frame: {e}")
 
-    def handle_capture_state_change(self, state):
-        """Handle changes in capture state"""
-        state_text = f"Capture state: {state.name}"
-        self.log_to_capture(state_text)
-
-    def handle_capture_started(self):
-        """Handle capture start"""
-        self.btn_start_capture.setEnabled(False)
-        self.btn_stop_capture.setEnabled(True)
+    def _wrap_text(self, text, max_width):
+        """Helper to wrap text to multiple lines for CV2 text rendering"""
+        words = text.split()
+        lines = []
+        current_line = ""
+        
+        for word in words:
+            test_line = current_line + " " + word if current_line else word
+            if len(test_line) <= max_width:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word
+                
+        if current_line:
+            lines.append(current_line)
+            
+        return lines
 
     def update_preview(self, frame):
-        """Update the preview with a video frame"""
+        """Update the preview with a video frame with better error handling"""
         try:
             # Check if we're in headless mode
             if hasattr(self.parent, 'headless_mode') and self.parent.headless_mode:
@@ -498,8 +510,11 @@ class CaptureTab(QWidget):
                     # Update label
                     self.lbl_preview.setPixmap(scaled_pixmap)
 
-                    # Update status
-                    self.lbl_preview_status.setText(f"Status: Capture in progress")
+                    # Update status based on capture state
+                    if hasattr(self.parent, 'capture_mgr') and self.parent.capture_mgr.is_capturing:
+                        self.lbl_preview_status.setText(f"Status: Capture in progress")
+                    else:
+                        self.lbl_preview_status.setText(f"Status: Preview active")
 
                     # Update frame counter
                     frame_count = getattr(self, '_frame_count', 0) + 1
@@ -512,6 +527,273 @@ class CaptureTab(QWidget):
         except Exception as e:
             logger.error(f"Error updating preview: {str(e)}")
             self._show_placeholder_image(f"Preview error: {str(e)}")
+
+    def stop_capture(self):
+        """Stop the capture process with better error handling"""
+        try:
+            self.log_to_capture("Stopping capture...")
+            
+            if hasattr(self.parent, 'capture_mgr'):
+                # Show stopping message in preview
+                try:
+                    placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
+                    placeholder[:] = (70, 70, 70)  # Gray background
+                    
+                    # Add stopping indication
+                    cv2.rectangle(placeholder, (0, 0), (480, 40), (150, 70, 0), -1)  # Orange header
+                    cv2.putText(placeholder, "STOPPING CAPTURE...", (130, 30), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    
+                    # Add message
+                    cv2.putText(placeholder, "Please wait while the capture is stopped", (40, 100), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+                    cv2.putText(placeholder, "and resources are released...", (100, 130), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+                    
+                    # Add spinner-like effect
+                    current_time = time.time()
+                    angle = int(current_time * 4) % 8
+                    positions = [(240, 200), (260, 180), (280, 200), (260, 220)]
+                    position = positions[angle % 4]
+                    cv2.circle(placeholder, position, 10, (0, 150, 255), -1)
+                    
+                    # Update preview
+                    self.update_preview(placeholder)
+                except Exception as e:
+                    logger.error(f"Error showing stopping preview: {e}")
+                
+                # Perform actual stop
+                self.parent.capture_mgr.stop_capture(cleanup_temp=True)
+            else:
+                self.log_to_capture("Error: Capture manager not initialized")
+
+            # Reset progress bar to avoid stuck state
+            self.pb_capture_progress.setValue(0)
+
+            # Update UI
+            self.btn_start_capture.setEnabled(True)
+            self.btn_stop_capture.setEnabled(False)
+            
+            # Show stopped preview
+            try:
+                placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
+                placeholder[:] = (80, 80, 80)  # Gray background
+                
+                # Add header
+                cv2.rectangle(placeholder, (0, 0), (480, 40), (120, 20, 20), -1)  # Red header
+                cv2.putText(placeholder, "CAPTURE STOPPED", (150, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                
+                # Add message
+                cv2.putText(placeholder, "Capture was stopped by user", (120, 120), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
+                cv2.putText(placeholder, "Click Start Capture to begin a new capture", (70, 180), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+                
+                # Update preview
+                self.update_preview(placeholder)
+            except Exception as e:
+                logger.error(f"Error showing stopped preview: {e}")
+            
+        except Exception as e:
+            logger.error(f"Error stopping capture: {e}")
+            self.log_to_capture(f"Error stopping capture: {e}")
+            
+            # Make sure UI is reset
+            self.btn_start_capture.setEnabled(True)
+            self.btn_stop_capture.setEnabled(False)
+
+
+
+
+    def populate_devices_and_check_status(self):
+        """Populate device dropdown with devices and check their status"""
+        # Get devices from options manager
+        devices = []
+        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+            try:
+                # Try to get devices from options manager
+                devices = self.parent.options_manager.get_decklink_devices()
+                logger.info(f"Found devices from options manager: {devices}")
+            except Exception as e:
+                logger.error(f"Error getting devices from options manager: {e}")
+
+        # If no devices found, add default options
+        if not devices:
+            # Common Blackmagic device names as fallback
+            devices = [
+                "Intensity Shuttle", 
+                "UltraStudio", 
+                "DeckLink",
+                "Decklink Video Capture",
+                "Intensity Pro"
+            ]
+            logger.info(f"Using default device list: {devices}")
+
+        # Update dropdown
+        self.device_combo.clear()
+        for device in devices:
+            self.device_combo.addItem(device, device)
+
+        # Set current device from settings
+        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+            try:
+                current_device = self.parent.options_manager.get_setting("capture", "default_device")
+                index = self.device_combo.findText(current_device)
+                if index >= 0:
+                    self.device_combo.setCurrentIndex(index)
+                logger.info(f"Set current device to: {current_device}")
+            except Exception as e:
+                logger.error(f"Error setting current device: {e}")
+
+        # Check if device is available
+        if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+            try:
+                # Get selected device for check
+                selected_device = self.device_combo.currentText()
+                if selected_device:
+                    # Try to use test_device_connection method if available
+                    if hasattr(self.parent.options_manager, 'test_device_connection'):
+                        available, message = self.parent.options_manager.test_device_connection(selected_device)
+                    else:
+                        # If method not available, assume device is available
+                        available, message = True, "Device check skipped"
+                    
+                    logger.info(f"Device '{selected_device}' availability: {available}, message: {message}")
+
+                    if available:
+                        # Green for connected device
+                        self.device_status_indicator.setStyleSheet("background-color: #00AA00; border-radius: 8px;")
+                        self.device_status_indicator.setToolTip(f"Capture card status: connected ({message})")
+                    else:
+                        # Red for unavailable device
+                        self.device_status_indicator.setStyleSheet("background-color: #AA0000; border-radius: 8px;")
+                        self.device_status_indicator.setToolTip(f"Capture card status: not connected ({message})")
+                else:
+                    # Grey for no selected device
+                    self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
+                    self.device_status_indicator.setToolTip("No capture device selected")
+            except Exception as e:
+                # Grey for error during check
+                logger.error(f"Error checking device availability: {e}")
+                self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
+                self.device_status_indicator.setToolTip(f"Error checking device: {str(e)}")
+        else:
+            # Grey for initialization not complete
+            self.device_status_indicator.setStyleSheet("background-color: #808080; border-radius: 8px;")
+            self.device_status_indicator.setToolTip("Capture manager not initialized")
+
+
+
+
+
+    def start_capture(self):
+        """Start the bookend capture process with improved error handling and UI feedback"""
+        if not self.parent.reference_info:
+            QMessageBox.warning(self, "Warning", "Please select a reference video first")
+            return
+
+        # Get device and validate
+        device_name = self.device_combo.currentData()
+        if not device_name:
+            QMessageBox.warning(self, "Warning", "Please select a capture device")
+            return
+
+        # Update UI for capture in progress
+        self.btn_start_capture.setEnabled(False)
+        self.btn_stop_capture.setEnabled(True)
+        self.pb_capture_progress.setValue(0)
+
+        # Clear logs and show start message
+        self.txt_capture_log.clear()
+        self.log_to_capture("Starting bookend capture process...")
+
+        # Get output directory using app's methods
+        output_dir = self._get_output_directory()
+        
+        # Get test name - use a timestamp if not available
+        test_name = self._get_test_name()
+
+        self.log_to_capture(f"Using test name: {test_name}")
+        self.log_to_capture(f"Output directory: {output_dir}")
+
+        # Set output information in capture manager
+        if hasattr(self.parent, 'capture_mgr'):
+            # Save selected device to options_manager before starting capture
+            if hasattr(self.parent, 'options_manager') and self.parent.options_manager:
+                self.parent.options_manager.update_setting("capture", "default_device", device_name)
+            
+            # Set capture settings        
+            self.parent.capture_mgr.set_output_directory(output_dir)
+            self.parent.capture_mgr.set_test_name(test_name)
+
+            # Connect signals if not already connected
+            self._ensure_signals_connected()
+
+            # Start bookend capture
+            self.log_to_capture("Starting bookend frame capture...")
+            
+            # Show capturing status in preview
+            self._show_capturing_preview()
+            
+            # Start the actual capture
+            success = self.parent.capture_mgr.start_bookend_capture(device_name)
+            
+            if not success:
+                self.log_to_capture("Error: Failed to start capture")
+                self.btn_start_capture.setEnabled(True)
+                self.btn_stop_capture.setEnabled(False)
+        else:
+            self.log_to_capture("Error: Capture manager not initialized")
+            self.btn_start_capture.setEnabled(True)
+            self.btn_stop_capture.setEnabled(False)
+
+
+
+
+
+
+
+    def stop_capture(self):
+        """Stop the capture process"""
+        self.log_to_capture("Stopping capture...")
+        if hasattr(self.parent, 'capture_mgr'):
+            self.parent.capture_mgr.stop_capture(cleanup_temp=True)
+        else:
+            self.log_to_capture("Error: Capture manager not initialized")
+
+        # Reset progress bar to avoid stuck state
+        self.pb_capture_progress.setValue(0)
+
+        # Update UI
+        self.btn_start_capture.setEnabled(True)
+        self.btn_stop_capture.setEnabled(False)
+
+    def update_capture_status(self, status_text):
+        """Update capture status label"""
+        self.lbl_capture_status.setText(status_text)
+        self.log_to_capture(status_text)
+
+    def update_capture_progress(self, progress):
+        """Handle capture progress updates with proper scale"""
+        if isinstance(progress, int):
+            # Ensure progress is between 0-100
+            scaled_progress = min(100, max(0, progress))
+            self.pb_capture_progress.setValue(scaled_progress)
+        else:
+            # Just in case we receive non-int progress
+            self.pb_capture_progress.setValue(0)
+
+    def handle_capture_state_change(self, state):
+        """Handle changes in capture state"""
+        state_text = f"Capture state: {state.name}"
+        self.log_to_capture(state_text)
+
+    def handle_capture_started(self):
+        """Handle capture start"""
+        self.btn_start_capture.setEnabled(False)
+        self.btn_stop_capture.setEnabled(True)
+
 
     def _show_placeholder_image(self, message="No video feed"):
         """Show an enhanced status display with text when no video is available"""
