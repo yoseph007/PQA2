@@ -6,13 +6,20 @@ from app.ui.main_window import MainWindow
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
 
-# Configure logging
+
+
+# Safe log directory for all environments (user profile)
+log_dir = os.path.join(os.getenv('APPDATA'), 'ChromaPQA', 'logs')
+os.makedirs(log_dir, exist_ok=True)
+
+log_file = os.path.join(log_dir, 'vmaf_app.log')
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(os.path.join('logs', 'vmaf_app.log'), mode='a')
+        logging.FileHandler(log_file, mode='a', encoding='utf-8')
     ]
 )
 

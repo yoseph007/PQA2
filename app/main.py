@@ -11,18 +11,19 @@ from app.utils import FileManager
 
 def setup_logging():
     """Setup logging configuration with both file and console handlers"""
-    log_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Use user-local AppData directory for logging
+    log_dir = os.path.join(os.getenv('APPDATA'), 'ChromaPQA', 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+
     log_file = os.path.join(log_dir, 'vmaf_app.log')
-    
-    # Create logs directory if it doesn't exist
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
-    
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler(log_file)
+            logging.FileHandler(log_file, encoding='utf-8')
         ]
     )
     return logging.getLogger(__name__)

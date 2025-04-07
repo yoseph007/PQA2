@@ -55,7 +55,7 @@ test_results/
 *.tmp
 *.mp4
 *.bat
-
+*.iss
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -84,6 +84,11 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+tools/
+temp/
+attached_assets/
+dist/
+installer/
 
 # Config directory (contains settings.json)
 config/
