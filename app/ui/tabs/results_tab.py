@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
                              QHeaderView, QLabel, QLineEdit, QListWidget,
                              QListWidgetItem, QMainWindow, QMessageBox,
                              QProgressBar, QPushButton, QSpinBox, QTableWidget,
-                             QTabWidget, QTextEdit, QVBoxLayout, QWidget)
+                             QTabWidget, QTextEdit, QVBoxLayout, QWidget, QProgressDialog)
 
 # Configure logging
 logging.basicConfig(
@@ -454,6 +454,7 @@ class MainWindow(QMainWindow):
     """Main application window for video quality assessment"""
     
     def __init__(self):
+        self.analysis_tab.analysis_completed.connect(self.on_analysis_completed)
         super().__init__()
         self.setWindowTitle("Video Quality Assessment")
         self.setMinimumSize(1024, 768)
@@ -2389,6 +2390,66 @@ class AnalysisTab(QWidget):
 class ResultsTab(QWidget):
     """Results tab for displaying quality assessment results"""
     
+    
+    def _interpret_vmaf(self, score):
+        """Interpret VMAF score meaning"""
+        if not isinstance(score, (int, float)):
+            return "Unable to interpret"
+            
+        if score >= 90:
+            return "Excellent quality (transparent)"
+        elif score >= 80:
+            return "Good quality (perceptible but not annoying)"
+        elif score >= 70:
+            return "Fair quality (slightly annoying)"
+        elif score >= 60:
+            return "Poor quality (annoying)"
+        else:
+            return "Bad quality (very annoying)"
+
+    def _interpret_psnr(self, score):
+        """Interpret PSNR score meaning"""
+        if not isinstance(score, (int, float)):
+            return "Unable to interpret"
+            
+        if score >= 40:
+            return "Excellent quality"
+        elif score >= 30:
+            return "Good quality"
+        elif score >= 20:
+            return "Acceptable quality"
+        else:
+            return "Poor quality"
+
+    def _interpret_ssim(self, score):
+        """Interpret SSIM score meaning"""
+        if not isinstance(score, (int, float)):
+            return "Unable to interpret"
+            
+        if score >= 0.95:
+            return "Excellent quality (imperceptible difference)"
+        elif score >= 0.90:
+            return "Good quality (perceptible but not annoying)"
+        elif score >= 0.80:
+            return "Fair quality (slightly annoying)"
+        elif score >= 0.70:
+            return "Poor quality (annoying)"
+        else:
+            return "Bad quality (very annoying)"   
+        
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
@@ -2515,57 +2576,233 @@ class ResultsTab(QWidget):
         
         # Load results history
         self.load_results_history()
+ 
+ 
+ 
+ 
+        # Location: app/ui/tabs/results_tab.py, in update_results method
+
+        def update_results(self, results):
+            """Updates UI with analysis results"""
+            if not results:
+                return
+            
+            # Update test name in header
+            test_name = self.parent.setup_tab.txt_test_name.text()
+            self.lbl_results_summary.setText(f"VMAF Analysis Results for {test_name}")
+            
+            # Update metrics display
+            vmaf_score = results.get('vmaf_score')
+            psnr_score = results.get('psnr_score')
+            ssim_score = results.get('ssim_score')
+            
+            if vmaf_score is not None:
+                self.lbl_vmaf_score.setText(f"VMAF Score: {vmaf_score:.2f}")
+            else:
+                self.lbl_vmaf_score.setText("VMAF Score: N/A")
+            
+            # For PSNR, display file info if it's a string (filename) or score if it's a number
+            if isinstance(psnr_score, (int, float)):
+                self.lbl_psnr_score.setText(f"PSNR: {psnr_score:.2f} dB")
+            elif isinstance(psnr_score, str):
+                self.lbl_psnr_score.setText(f"PSNR: {psnr_score}")
+            else:
+                self.lbl_psnr_score.setText("PSNR: N/A")
+            
+            # For SSIM, display file info if it's a string (filename) or score if it's a number
+            if isinstance(ssim_score, (int, float)):
+                self.lbl_ssim_score.setText(f"SSIM: {ssim_score:.4f}")
+            elif isinstance(ssim_score, str):
+                self.lbl_ssim_score.setText(f"SSIM: {ssim_score}")
+            else:
+                self.lbl_ssim_score.setText("SSIM: N/A")
+            
+            # Display metadata in the info panel
+            if 'metadata' in results:
+                metadata = results['metadata']
+                # Code to display metadata in info panel will be implemented below
+            
+            # Enable export buttons
+            self.btn_export_pdf.setEnabled(True)
+            self.btn_export_csv.setEnabled(True)
+            
+            # Update result files list
+            self.update_result_files_list(results)
+            
+            # Save metadata.json for future reference
+            self.save_metadata_json(results)
+            
+            # Refresh history
+            self.load_results_history()
+        
+  
+  
+  
+  
+    def save_metadata_json(self, results):
+        """Saves metadata.json file in the test directory"""
+        try:
+            # Determine test directory
+            json_path = results.get('json_path')
+            if not json_path:
+                logger.warning("Cannot save metadata.json: No json_path in results")
+                return
+                
+            test_dir = os.path.dirname(json_path)
+            metadata_path = os.path.join(test_dir, "metadata.json")
+            
+            # Create a clean copy of results for serialization
+            # Remove raw_results to avoid huge files
+            results_copy = results.copy()
+            if 'raw_results' in results_copy:
+                # Keep only essential parts of raw_results
+                raw_copy = {}
+                if 'pooled_metrics' in results_copy['raw_results']:
+                    raw_copy['pooled_metrics'] = results_copy['raw_results']['pooled_metrics']
+                
+                # Only keep first and last 5 frames to reduce size
+                if 'frames' in results_copy['raw_results'] and len(results_copy['raw_results']['frames']) > 10:
+                    frames = results_copy['raw_results']['frames']
+                    raw_copy['frames'] = frames[:5] + frames[-5:]
+                    raw_copy['frames_note'] = f"Showing 10 of {len(frames)} frames"
+                
+                results_copy['raw_results'] = raw_copy
+            
+            # Save metadata to JSON
+            with open(metadata_path, 'w') as f:
+                json.dump(results_copy, f, indent=4)
+                
+            logger.info(f"Saved metadata to {metadata_path}")
+        except Exception as e:
+            logger.error(f"Error saving metadata: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
     
-    def update_results(self, results):
-        """Updates UI with analysis results"""
-        if not results:
+  
+
+    def export_pdf_report(self):
+        """Exports results as PDF report"""
+        if not self.parent.analysis_results:
+            QMessageBox.warning(self, "No Results", "No analysis results available to export.")
             return
         
-        # Update test name in header
+        # Get output file path
         test_name = self.parent.setup_tab.txt_test_name.text()
-        self.lbl_results_summary.setText(f"VMAF Analysis Results for {test_name}")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"{test_name}_report_{timestamp}.pdf"
         
-        # Update metrics display
-        vmaf_score = results.get('vmaf_score')
-        psnr_score = results.get('psnr_score')
-        ssim_score = results.get('ssim_score')
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save PDF Report",
+            os.path.join(os.path.expanduser("~"), default_filename),
+            "PDF Files (*.pdf)"
+        )
         
-        if vmaf_score is not None:
-            self.lbl_vmaf_score.setText(f"VMAF Score: {vmaf_score:.2f}")
-        else:
-            self.lbl_vmaf_score.setText("VMAF Score: N/A")
+        if not file_path:
+            return
         
-        # For PSNR, display file info if it's a string (filename) or score if it's a number
-        if isinstance(psnr_score, (int, float)):
-            self.lbl_psnr_score.setText(f"PSNR: {psnr_score:.2f} dB")
-        elif isinstance(psnr_score, str):
-            if psnr_score == "Not Available":
-                self.lbl_psnr_score.setText("PSNR: Not Available")
-            else:
-                self.lbl_psnr_score.setText(f"PSNR: File generated ({psnr_score})")
-        else:
-            self.lbl_psnr_score.setText("PSNR: N/A")
+        try:
+            # Show progress dialog
+            progress_dialog = QProgressDialog("Generating PDF report...", "Cancel", 0, 100, self)
+            progress_dialog.setWindowTitle("Exporting PDF")
+            progress_dialog.setWindowModality(Qt.WindowModal)
+            progress_dialog.setAutoClose(True)
+            progress_dialog.setMinimumDuration(0)
+            progress_dialog.show()
+            
+            # Create test metadata
+            results = self.parent.analysis_results
+            test_metadata = {
+                'test_name': test_name,
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'tester_name': self.parent.setup_tab.txt_tester_name.text() if hasattr(self.parent.setup_tab, 'txt_tester_name') else "Unknown",
+                'test_location': self.parent.setup_tab.txt_test_location.text() if hasattr(self.parent.setup_tab, 'txt_test_location') else "Unknown"
+            }
+            
+            # Use the ReportGenerator to create the PDF
+            from app.report_generator import ReportGenerator
+            generator = ReportGenerator()
+            
+            # Connect signals
+            generator.report_progress.connect(progress_dialog.setValue)
+            
+            # Start generation in a new thread
+            from app.report_generator import ReportGeneratorThread
+            thread = ReportGeneratorThread(results, test_metadata, file_path)
+            thread.report_complete.connect(lambda path: self.on_report_complete(path, progress_dialog))
+            thread.report_error.connect(lambda err: self.on_report_error(err, progress_dialog))
+            thread.report_progress.connect(progress_dialog.setValue)
+            thread.start()
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Export Error",
+                f"Failed to export PDF report: {str(e)}"
+            )
+    
+    
+  
+  
+  
+  
+    # Location: app/ui/tabs/results_tab.py, add after export_pdf_report method
+
+    def on_report_complete(self, path, dialog=None):
+        """Handles report generation completion"""
+        if dialog:
+            dialog.close()
+            
+        QMessageBox.information(
+            self,
+            "Export Complete",
+            f"PDF report has been exported to:\n{path}"
+        )
         
-        # For SSIM, display file info if it's a string (filename) or score if it's a number
-        if isinstance(ssim_score, (int, float)):
-            self.lbl_ssim_score.setText(f"SSIM: {ssim_score:.4f}")
-        elif isinstance(ssim_score, str):
-            if ssim_score == "Not Available":
-                self.lbl_ssim_score.setText("SSIM: Not Available")
-            else:
-                self.lbl_ssim_score.setText(f"SSIM: File generated ({ssim_score})")
-        else:
-            self.lbl_ssim_score.setText("SSIM: N/A")
+        # Ask if user wants to open the PDF
+        reply = QMessageBox.question(
+            self,
+            "Open PDF",
+            "Would you like to open the PDF report now?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
         
-        # Enable export buttons
-        self.btn_export_pdf.setEnabled(True)
-        self.btn_export_csv.setEnabled(True)
-        
-        # Update result files list
-        self.update_result_files_list(results)
-        
-        # Refresh history
-        self.load_results_history()
+        if reply == QMessageBox.Yes:
+            try:
+                if platform.system() == 'Windows':
+                    os.startfile(path)
+                elif platform.system() == 'Darwin':  # macOS
+                    subprocess.run(['open', path], check=True)
+                else:  # Linux
+                    subprocess.run(['xdg-open', path], check=True)
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Open Failed",
+                    f"Could not open the PDF file: {str(e)}"
+                )
+
+    def on_report_error(self, error_message, dialog=None):
+        """Handles report generation errors"""
+        if dialog:
+            dialog.close()
+            
+        QMessageBox.critical(
+            self,
+            "Report Error",
+            f"Failed to generate PDF report: {error_message}"
+        )
+    
+    
+    
+  
+  
+  
+  
+  
+  
+  
     
     def update_result_files_list(self, results):
         """Updates the list of result files"""
@@ -2658,9 +2895,16 @@ class ResultsTab(QWidget):
                 "Export Error",
                 f"Failed to export PDF report: {str(e)}"
             )
-    
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
     def export_csv_data(self):
-        """Exports results as CSV data"""
+        """Exports results as CSV data with enhanced metadata"""
         if not self.parent.analysis_results:
             QMessageBox.warning(self, "No Results", "No analysis results available to export.")
             return
@@ -2686,10 +2930,11 @@ class ResultsTab(QWidget):
             vmaf_score = results.get('vmaf_score', 'N/A')
             psnr_score = results.get('psnr_score', 'N/A')
             ssim_score = results.get('ssim_score', 'N/A')
-            psnr_log = results.get('psnr_log', 'N/A')
-            ssim_log = results.get('ssim_log', 'N/A')
-            reference_path = results.get('reference_path', 'N/A')
-            distorted_path = results.get('distorted_path', 'N/A')
+            reference_video = results.get('reference_video', 'N/A')
+            distorted_video = results.get('distorted_video', 'N/A')
+            
+            # Extract metadata
+            metadata = results.get('metadata', {})
             
             # Write CSV file
             with open(file_path, 'w', newline='') as csvfile:
@@ -2697,39 +2942,75 @@ class ResultsTab(QWidget):
                 writer = csv.writer(csvfile)
                 
                 # Write header and summary data
-                writer.writerow(['Test Name', 'Date', 'VMAF Score', 'PSNR Score/File', 'SSIM Score/File'])
-                writer.writerow([
-                    test_name,
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    vmaf_score if isinstance(vmaf_score, str) else f"{vmaf_score:.4f}",
-                    psnr_score if isinstance(psnr_score, str) else f"{psnr_score:.4f}" if isinstance(psnr_score, (int, float)) else psnr_score,
-                    ssim_score if isinstance(ssim_score, str) else f"{ssim_score:.4f}" if isinstance(ssim_score, (int, float)) else ssim_score
-                ])
+                writer.writerow(['Video Quality Analysis Results'])
+                writer.writerow([])
                 
-                writer.writerow([])  # Empty row
-                writer.writerow(['Reference File', reference_path])
-                writer.writerow(['Distorted File', distorted_path])
-                if os.path.exists(psnr_log) if isinstance(psnr_log, str) else False:
-                    writer.writerow(['PSNR File', psnr_log])
-                if os.path.exists(ssim_log) if isinstance(ssim_log, str) else False:
-                    writer.writerow(['SSIM File', ssim_log])
+                # Test information
+                writer.writerow(['Test Information'])
+                writer.writerow(['Test Name', test_name])
+                writer.writerow(['Date', datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+                writer.writerow(['VMAF Model', metadata.get('test', {}).get('model', 'Unknown')])
+                writer.writerow([])
+                
+                # Quality scores
+                writer.writerow(['Quality Scores'])
+                writer.writerow(['Metric', 'Value', 'Interpretation'])
+                writer.writerow([
+                    'VMAF', 
+                    vmaf_score if isinstance(vmaf_score, str) else f"{vmaf_score:.4f}",
+                    self._interpret_vmaf(vmaf_score) if hasattr(self, '_interpret_vmaf') else 'N/A'
+                ])
+                writer.writerow([
+                    'PSNR', 
+                    psnr_score if isinstance(psnr_score, str) else f"{psnr_score:.4f}",
+                    self._interpret_psnr(psnr_score) if hasattr(self, '_interpret_psnr') else 'N/A'
+                ])
+                writer.writerow([
+                    'SSIM', 
+                    ssim_score if isinstance(ssim_score, str) else f"{ssim_score:.4f}",
+                    self._interpret_ssim(ssim_score) if hasattr(self, '_interpret_ssim') else 'N/A'
+                ])
+                writer.writerow([])
+                
+                # Video information
+                writer.writerow(['Video Information'])
+                writer.writerow(['Reference Video', reference_video])
+                writer.writerow(['Distorted Video', distorted_video])
+                
+                video_meta = metadata.get('video', {})
+                writer.writerow(['Resolution', f"{video_meta.get('width', 'N/A')}x{video_meta.get('height', 'N/A')}"]) 
+                writer.writerow(['Duration', f"{video_meta.get('duration', 'N/A'):.2f} seconds"])
+                writer.writerow(['Frame Count', video_meta.get('frame_count', 'N/A')])
+                writer.writerow(['Frame Rate', f"{video_meta.get('fps', 'N/A'):.2f} FPS"])
+                writer.writerow(['Codec', video_meta.get('codec', 'N/A')])
+                writer.writerow(['Format', video_meta.get('format', 'N/A')])
+                writer.writerow(['Bitrate', f"{video_meta.get('bitrate', 0)/1000:.2f} Kbps" if video_meta.get('bitrate', 0) > 0 else 'N/A'])
+                writer.writerow([])
+                
+                # VMAF options
+                vmaf_opts = metadata.get('vmaf_options', {})
+                writer.writerow(['VMAF Analysis Settings'])
+                writer.writerow(['Pool Method', vmaf_opts.get('pool_method', 'N/A')])
+                writer.writerow(['Feature Subsample', vmaf_opts.get('feature_subsample', 'N/A')])
+                writer.writerow(['Motion Score Enabled', 'Yes' if vmaf_opts.get('motion_score', False) else 'No'])
+                writer.writerow(['Temporal Features Enabled', 'Yes' if vmaf_opts.get('temporal_features', False) else 'No'])
+                writer.writerow([])
                 
                 # Write frame data if available
                 if 'raw_results' in results and 'frames' in results['raw_results']:
                     frames = results['raw_results']['frames']
                     
                     if frames:
-                        writer.writerow([])  # Empty row
+                        writer.writerow(['Frame by Frame Analysis'])
                         
                         # Determine which metrics are available
                         first_frame = frames[0]
                         metrics = first_frame.get('metrics', {})
-                        available_metrics = list(metrics.keys())
+                        available_metrics = sorted(list(metrics.keys()))
                         
                         # Write frame data header
                         header = ['Frame Number']
-                        for metric in available_metrics:
-                            header.append(metric)
+                        header.extend(available_metrics)
                         writer.writerow(header)
                         
                         # Write each frame's data
@@ -2782,6 +3063,20 @@ class ResultsTab(QWidget):
                 "Export Error",
                 f"Failed to export CSV: {str(e)}"
             )
+
+    
+    
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
     
     def load_results_history(self):
         """Loads historical test results into the data grid"""
@@ -2947,35 +3242,84 @@ class ResultsTab(QWidget):
                 
         except Exception as e:
             logger.error(f"Error loading results history: {str(e)}")
-    
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+
     def view_result(self):
         """Views a historical test result"""
         sender = self.sender()
         row = sender.property("row")
-        sender.property("dir")
+        test_dir = sender.property("dir")
         
         try:
-            # Get test details
-            item = self.results_table.item(row, 0)
-            test_name = item.text() if item else "Unknown"
-            
-            item = self.results_table.item(row, 1)
-            timestamp = item.text() if item else "Unknown"
-            
-            # Show result dialog
-            QMessageBox.information(
-                self,
-                "View Result",
-                f"This would display detailed results for test:\n{test_name} ({timestamp})\n\n"
-                "With frame-by-frame charts, thumbnails, and detailed metrics."
-            )
-            
+            # Look for metadata.json in the test directory
+            metadata_path = os.path.join(test_dir, "metadata.json")
+            if os.path.exists(metadata_path):
+                # Load the metadata
+                with open(metadata_path, 'r') as f:
+                    test_results = json.load(f)
+                    
+                # Update the current tab to display these results
+                self.update_results(test_results)
+                
+                # Switch to the current result tab
+                self.tabs.setCurrentIndex(0)
+                
+            else:
+                # Try to find and parse VMAF JSON result
+                json_files = [f for f in os.listdir(test_dir) if f.endswith("_vmaf.json") or f == "vmaf.json"]
+                if json_files:
+                    json_path = os.path.join(test_dir, json_files[0])
+                    # Parse the JSON and build a results structure
+                    with open(json_path, 'r') as f:
+                        vmaf_data = json.load(f)
+                    
+                    # Extract basic information
+                    vmaf_score = None
+                    if "pooled_metrics" in vmaf_data and "vmaf" in vmaf_data["pooled_metrics"]:
+                        vmaf_score = vmaf_data["pooled_metrics"]["vmaf"]["mean"]
+                    
+                    # Create minimal results structure
+                    results = {
+                        'vmaf_score': vmaf_score,
+                        'json_path': json_path,
+                        'raw_results': vmaf_data
+                    }
+                    
+                    # Update display
+                    self.update_results(results)
+                    
+                    # Switch to the current result tab
+                    self.tabs.setCurrentIndex(0)
+                else:
+                    QMessageBox.warning(
+                        self,
+                        "No Results Found",
+                        f"Could not find VMAF results in:\n{test_dir}"
+                    )
+                    
         except Exception as e:
             QMessageBox.critical(
                 self,
                 "Error",
                 f"Error viewing result: {str(e)}"
             )
+    
+    
+    
+    
+ 
+ 
+ 
+ 
+ 
     
     def delete_result(self):
         """Deletes a historical test result"""
