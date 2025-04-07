@@ -206,7 +206,7 @@ class BookendAligner(QObject):
                 "-ss", str(start_time),
                 "-t", str(duration),
                 "-vf", f"minterpolate=fps={original_fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
-                "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                "-c:v", "libx264", "-crf", "23", "-preset", "fast",
                 "-r", str(original_fps),  # Ensure output frame rate matches source
                 output_path
             ]
@@ -530,7 +530,7 @@ class BookendAligner(QObject):
             ref_cmd = [
                 "ffmpeg", "-y", "-i", reference_path,
                 "-r", str(ref_fps),  # Preserve original frame rate
-                "-c:v", "libx264", "-crf", "18", 
+                "-c:v", "libx264", "-crf", "23", 
                 "-preset", "fast", "-c:a", "copy",
                 aligned_reference
             ]
@@ -575,22 +575,23 @@ class BookendAligner(QObject):
                     "-itsoffset", str(offset_time),  # Offset to align with reference
                     "-i", captured_path,
                     "-ss", str(adjusted_start),
-                    "-c:v", "libx264", "-crf", "18",
+                    "-c:v", "libx264", "-crf", "23",
                     "-preset", "fast", 
-                    "-r", str(cap_fps),  # Ensure exact frame rate
+                    "-r", str(ref_fps),  # Use reference frame rate instead of capture frame rate
                     "-frames:v", str(exact_ref_frames),  # Force exact frame count match
                     aligned_captured
                 ]
                 
                 logger.info(f"Creating aligned captured video from {adjusted_start:.3f}s with exact {exact_ref_frames} frames")
+                logger.info(f"Aligning captured video to reference frame rate: {ref_fps}fps")
             else:
                 # Motion compensated clip needs different handling
                 cap_cmd = [
                     "ffmpeg", "-y", 
                     "-i", captured_path,
-                    "-c:v", "libx264", "-crf", "18",
+                    "-c:v", "libx264", "-crf", "23",
                     "-preset", "fast",
-                    "-r", str(cap_fps),  # Ensure exact frame rate
+                    "-r", str(ref_fps),  # Use reference frame rate
                     "-frames:v", str(exact_ref_frames),  # Force exact frame count match
                     aligned_captured
                 ]
@@ -628,7 +629,7 @@ class BookendAligner(QObject):
                             "-i", aligned_captured,
                             "-vf", f"select=1:n={ref_frames}",  # Select exact number of frames
                             "-vsync", "0",  # Do not duplicate/drop frames
-                            "-c:v", "libx264", "-crf", "18",
+                            "-c:v", "libx264", "-crf", "23",
                             "-preset", "fast",
                             f"{aligned_captured}.fixed.mp4"
                         ]
