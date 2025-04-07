@@ -4,17 +4,13 @@ import os
 import platform
 import re
 import subprocess
-import threading
 import time
-from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
 import psutil
 from PyQt5.QtCore import QMutex, QObject, QThread, QTimer, pyqtSignal
-from PyQt5.QtGui import QImage
 
 logger = logging.getLogger(__name__)
 
@@ -854,7 +850,7 @@ class CaptureManager(QObject):
         self.start_preview()
 
         # Prepare output path
-        output_path = self._prepare_output_path()
+        self._prepare_output_path()
 
         # Calculate capture duration based on reference and settings
         ref_duration = self.reference_info['duration']

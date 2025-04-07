@@ -744,7 +744,7 @@ class VMAFAnalyzer(QObject):
                 
                 # Get video metadata
                 dist_meta = self.get_video_metadata(distorted_path, ffprobe_exe)
-                ref_meta = self.get_video_metadata(reference_path, ffprobe_exe)
+                self.get_video_metadata(reference_path, ffprobe_exe)
  
  
                 # Add a direct call to ffprobe to ensure we get accurate frame count and duration
@@ -820,7 +820,7 @@ class VMAFAnalyzer(QObject):
                     height = dist_meta.get('height', 0)
                 
                 # Get just filenames for path references
-                json_filename = os.path.basename(json_path) if json_path else ""
+                os.path.basename(json_path) if json_path else ""
                 psnr_filename = os.path.basename(psnr_path) if psnr_path else ""
                 ssim_filename = os.path.basename(ssim_path) if ssim_path else ""
                 reference_filename = os.path.basename(reference_path) if reference_path else ""

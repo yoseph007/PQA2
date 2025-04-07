@@ -6,7 +6,6 @@ import subprocess
 from datetime import datetime
 
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
                              QProgressBar, QPushButton, QStyle, QTextEdit,
                              QVBoxLayout, QWidget)

@@ -2619,7 +2619,7 @@ class ResultsTab(QWidget):
             
             # Display metadata in the info panel
             if 'metadata' in results:
-                metadata = results['metadata']
+                results['metadata']
                 # Code to display metadata in info panel will be implemented below
             
             # Enable export buttons
@@ -3255,7 +3255,7 @@ class ResultsTab(QWidget):
     def view_result(self):
         """Views a historical test result"""
         sender = self.sender()
-        row = sender.property("row")
+        sender.property("row")
         test_dir = sender.property("dir")
         
         try:

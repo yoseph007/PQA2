@@ -5,7 +5,7 @@ import platform
 import re
 import subprocess
 import time
-from typing import Dict, List, Any, Tuple, Optional, Union
+from typing import Dict, List, Any, Tuple, Optional
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
