@@ -1,0 +1,14 @@
+#!/bin/sh
+# Pre-commit hook to run tests before committing
+
+echo "Running tests..."
+python run_tests.py
+
+if [ $? -ne 0 ]; then
+    echo "Tests failed. Commit aborted."
+    echo "Please fix the tests and try again."
+    exit 1
+fi
+
+echo "Tests passed! Proceeding with commit."
+exit 0
