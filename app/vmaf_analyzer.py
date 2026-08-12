@@ -71,43 +71,6 @@ class VMAFAnalyzer(QObject):
 
 
 
-
-
-
-    def set_options_manager(self, options_manager):
-        """Set VMAF options from the options manager"""
-        if not options_manager:
-            logger.warning("No options manager provided, using default settings")
-            return
-            
-        try:
-            # Get VMAF settings
-            vmaf_settings = options_manager.get_setting("vmaf")
-            
-            # Set threads from settings (default to 4 if not found)
-            self.threads = vmaf_settings.get("threads", 4)
-            
-            # Set feature subsample (default to 1 if not found)
-            self.feature_subsample = vmaf_settings.get("feature_subsample", 1)
-            
-            # Set other options
-            self.pool_method = vmaf_settings.get("pool_method", "mean")
-            self.enable_motion_score = vmaf_settings.get("enable_motion_score", False)
-            self.enable_temporal_features = vmaf_settings.get("enable_temporal_features", False)
-            self.psnr_enabled = vmaf_settings.get("psnr_enabled", True)
-            self.ssim_enabled = vmaf_settings.get("ssim_enabled", True)
-            
-            logger.info(f"VMAF options set from manager: threads={self.threads}, "
-                    f"feature_subsample={self.feature_subsample}, pool={self.pool_method}")
-        except Exception as e:
-            logger.error(f"Error setting VMAF options from manager: {e}")
-
-
-
-
-
-
-
     def set_output_directory(self, output_dir):
         """Set output directory for results"""
         self.output_directory = output_dir
@@ -244,12 +207,11 @@ class VMAFAnalyzer(QObject):
         
         import psutil
         cpu_count = psutil.cpu_count(logical=True)
-        print(f"System has {cpu_count} logical CPUs")
-        print(f"Current CPU usage: {psutil.cpu_percent(interval=0.1)}%")
+        logger.debug(f"System has {cpu_count} logical CPUs")
+        logger.debug(f"Current CPU usage: {psutil.cpu_percent(interval=0.1)}%")
         
-        print("VMAF ANALYZER STARTING - DIRECT CONSOLE OUTPUT")
+        logger.info("VMAF analyzer starting")
         with self._process_lock:  # Use lock to prevent duplicate processing
-            original_dir = os.getcwd()
             try:
                 self._terminate_requested = False
                 self.status_update.emit(f"Analyzing videos with model: {model}")
@@ -340,34 +302,22 @@ class VMAFAnalyzer(QObject):
                 else:
                     model_name = f"path={model}"  # Already a path
 
-                # Use current directory as a base for relative paths
-                os.getcwd()
-                
-                # Check if we need to change directory
+                # Use absolute paths with forward slashes for FFmpeg compatibility
+                # (avoids thread-unsafe os.chdir() calls)
                 if platform.system() == 'Windows':
-                    # Get the common base directory to use for relative paths
                     base_dir = os.path.commonpath([reference_path, distorted_path, json_path])
-                    os.chdir(base_dir)
-                    
-                    # Calculate relative paths from the base directory
-                    ref_rel_path = os.path.relpath(reference_path, base_dir)
-                    dist_rel_path = os.path.relpath(distorted_path, base_dir)
-                    json_rel_path = os.path.relpath(json_path, base_dir)
-                    
-                    # Update paths to use forward slashes
-                    ref_rel_path = ref_rel_path.replace('\\', '/')
-                    dist_rel_path = dist_rel_path.replace('\\', '/')
-                    json_rel_path = json_rel_path.replace('\\', '/')
-                    
-                    logger.info(f"Changed directory to: {base_dir}")
-                    logger.info(f"Using relative reference path: {ref_rel_path}")
-                    logger.info(f"Using relative distorted path: {dist_rel_path}")
-                    logger.info(f"Using relative JSON path: {json_rel_path}")
+                    ref_rel_path = self._prepare_ffmpeg_path(reference_path)
+                    dist_rel_path = self._prepare_ffmpeg_path(distorted_path)
+                    json_rel_path = self._prepare_ffmpeg_path(json_path)
                 else:
-                    # On non-Windows systems, we can use the paths as they are
+                    base_dir = os.path.dirname(reference_path)
                     ref_rel_path = reference_path
                     dist_rel_path = distorted_path
                     json_rel_path = json_path
+                
+                logger.info(f"Using reference path: {ref_rel_path}")
+                logger.info(f"Using distorted path: {dist_rel_path}")
+                logger.info(f"Using JSON path: {json_rel_path}")
                 
                 # Set up VMAF options with advanced parameters
                 vmaf_options = [
@@ -533,7 +483,7 @@ class VMAFAnalyzer(QObject):
                         try:
                             self._current_process.kill()
                             self._current_process.wait(timeout=5)
-                        except:
+                        except Exception:
                             pass
                         self._current_process = None
                     return None
@@ -548,7 +498,7 @@ class VMAFAnalyzer(QObject):
                         try:
                             self._current_process.kill()
                             self._current_process.wait(timeout=5)
-                        except:
+                        except Exception:
                             pass
                         self._current_process = None
                     return None
@@ -562,7 +512,7 @@ class VMAFAnalyzer(QObject):
                                 time.sleep(0.5)
                                 if self._current_process.poll() is None:
                                     self._current_process.kill()
-                        except:
+                        except Exception:
                             pass
                         self._current_process = None
 
@@ -591,9 +541,7 @@ class VMAFAnalyzer(QObject):
                 else:
                     logger.info("Skipping PSNR/SSIM analysis as they are disabled")
 
-                # Return to original directory before parsing results
-                os.chdir(original_dir)
-                
+
                 # Parse the VMAF results
                 return self._parse_vmaf_results(json_path, 
                                                psnr_path if self.psnr_enabled else None, 
@@ -607,13 +555,7 @@ class VMAFAnalyzer(QObject):
                 import traceback
                 logger.error(traceback.format_exc())
                 return None
-            finally:
-                # Always restore original directory
-                try:
-                    if original_dir != os.getcwd():
-                        os.chdir(original_dir)
-                except Exception as e:
-                    logger.warning(f"Failed to restore original directory: {e}")
+
 
 
 
@@ -889,46 +831,6 @@ class VMAFAnalyzer(QObject):
                             'temporal_features': self.enable_temporal_features
                         }
                     }
-                }                    
-                                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                
-                # Return results with consistent path format and additional metadata
-                results = {
-                    'vmaf_score': vmaf_score,
-                    'psnr_score': psnr_status,  # Changed to use filename or status
-                    'ssim_score': ssim_status,  # Changed to use filename or status
-                    'json_path': json_path,
-                    'psnr_log': psnr_path,
-                    'ssim_log': ssim_path,
-                    'reference_video': reference_filename,  # Changed to just filename
-                    'distorted_video': distorted_filename,  # Changed to just filename
-                    'raw_results': raw_results,
-                    'model': model_info,
-                    'width': width,
-                    'height': height
                 }
 
                 # Set progress to 100%

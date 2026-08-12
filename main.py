@@ -29,9 +29,6 @@ logger = logging.getLogger("main")
 
 if __name__ == "__main__":
     try:
-        # Create logs directory if it doesn't exist
-        os.makedirs('logs', exist_ok=True)
-
         # Log platform information
         import platform
         platform_info = platform.platform()

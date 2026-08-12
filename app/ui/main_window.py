@@ -21,34 +21,28 @@ class MainWindow(QMainWindow):
     """Main application window for VMAF Test App"""
     def __init__(self, capture_manager, file_manager, options_manager):
         super().__init__()
-        
-        
-        # Initialize output_dir before it's used
+
+        # Store manager references FIRST so they are available for init logic below
+        self.capture_mgr = capture_manager
+        self.file_mgr = file_manager
+        self.options_manager = options_manager
+        self.theme_manager = ThemeManager(self, options_manager)
+
+        # Initialize output_dir from options (now that options_manager is assigned)
         self.output_dir = None
-        
-        # Then try to set it from options if available
-        if hasattr(self, 'options_manager') and self.options_manager:
+        if self.options_manager:
             try:
                 paths = self.options_manager.get_setting('paths')
                 if isinstance(paths, dict) and 'output_dir' in paths:
                     self.output_dir = paths['output_dir']
             except Exception as e:
                 logger.warning(f"Error getting output directory from options: {e}")
-        
-        # If not found in options, use a default
+
+        # Fallback to default if not found in options
         if not self.output_dir:
             from app.utils import get_project_paths
             paths = get_project_paths()
-            self.output_dir = os.path.join(paths['root'], "tests", "test_results")       
-        
-        
-
-
-        # Store manager references
-        self.capture_mgr = capture_manager
-        self.file_mgr = file_manager
-        self.options_manager = options_manager
-        self.theme_manager = ThemeManager(self, options_manager)
+            self.output_dir = os.path.join(paths['root'], "tests", "test_results")
 
         # Flag to handle headless mode
         self.headless_mode = False
@@ -240,9 +234,9 @@ class MainWindow(QMainWindow):
         self.ensure_threads_finished()
 
         # Clean up temporary files if file manager exists
-        if hasattr(self, 'file_manager') and self.file_manager:
+        if hasattr(self, 'file_mgr') and self.file_mgr:
             logger.info("Cleaning up temporary files")
-            self.file_manager.cleanup_temp_files()
+            self.file_mgr.cleanup_temp_files()
 
         # Call parent close event
         logger.info("Cleanup complete, proceeding with application close")

@@ -272,7 +272,7 @@ class FileManager:
         """Cleanup on object destruction"""
         try:
             self.cleanup_temp_files()
-        except:
+        except Exception:
             pass
 
     def get_output_path(self, base_dir=None, test_name=None, filename=None):
@@ -453,12 +453,6 @@ def validate_application_state(app_instance):
         results['issues'].append(f"Validation error: {str(e)}")
         return results
 
-    def get_default_output_dir(self):
-        """Get the default output directory for results"""
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        default_output_dir = os.path.join(script_dir, "tests", "test_results", "results")
-        os.makedirs(default_output_dir, exist_ok=True)
-        return default_output_dir
 
 
 def timestamp_string():
@@ -596,7 +590,7 @@ def get_video_info(video_path):
         ]
 
         # Get startup info to suppress dialogs
-        startupinfo, creationflags = get_subprocess_startupinfo()
+        startupinfo, creationflags, env = get_subprocess_startupinfo()
 
         result = subprocess.run(
             cmd, 

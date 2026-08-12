@@ -69,7 +69,7 @@ class CaptureMonitor(QThread):
                             remaining = self.process.stderr.read()
                             if remaining:
                                 error += remaining.decode('utf-8') if isinstance(remaining, bytes) else remaining
-                        except:
+                        except Exception:
                             pass
 
                     logger.error(f"Capture failed with code {self.process.returncode}: {error}")
@@ -110,7 +110,7 @@ class CaptureMonitor(QThread):
                                     if fps_match:
                                         try:
                                             fps = float(fps_match.group(1))
-                                        except:
+                                        except Exception:
                                             pass  # Keep the default
 
                                     # Always update total_frames when we have fps info, even if it was set before
@@ -245,14 +245,14 @@ class CaptureMonitor(QThread):
                     self.process.kill()
                     try:
                         self.process.wait(timeout=5)  # Wait with timeout
-                    except:
+                    except Exception:
                         pass
             except Exception as e:
                 logger.error(f"Error terminating process: {e}")
                 # As a last resort, try to kill it
                 try:
                     self.process.kill()
-                except:
+                except Exception:
                     pass
 
     def stop(self):
