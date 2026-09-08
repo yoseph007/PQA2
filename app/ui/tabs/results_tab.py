@@ -11,11 +11,11 @@ from enum import Enum, auto
 
 import cv2
 import numpy as np
-from PyQt5.QtCore import (QObject, Qt, QThread, QThreadPool, pyqtSignal,
+from PyQt6.QtCore import (QObject, Qt, QThread, QThreadPool, pyqtSignal,
                           pyqtSlot)
-from PyQt5.QtGui import QImage, QPixmap, QTextCursor
-# PyQt5 imports
-from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
+from PyQt6.QtGui import QImage, QPixmap, QTextCursor
+# PyQt6 imports
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
                              QFormLayout, QFrame, QGroupBox, QHBoxLayout,
                              QHeaderView, QLabel, QLineEdit, QListWidget,
                              QListWidgetItem, QMainWindow, QMessageBox,
@@ -712,11 +712,11 @@ class MainWindow(QMainWindow):
                 self, 
                 "Confirm Exit",
                 "Tasks are still running. Are you sure you want to quit?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
             )
             
-            if reply == QMessageBox.Yes:
+            if reply == QMessageBox.StandardButton.Yes:
                 # Stop running threads
                 if hasattr(self.capture_tab, 'capture_thread'):
                     self.capture_tab.stop_capture()
@@ -952,7 +952,7 @@ class CaptureTab(QWidget):
         
         self.preview_label = QLabel()
         self.preview_label.setMinimumSize(480, 270)
-        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_label.setText("No preview available")
         preview_layout.addWidget(self.preview_label)
         
@@ -1184,15 +1184,15 @@ class CaptureTab(QWidget):
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             # Create QImage
-            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
             
             # Scale for preview (maintain aspect ratio)
             preview_size = self.preview_label.size()
             pixmap = QPixmap.fromImage(q_img)
             pixmap = pixmap.scaled(
                 preview_size,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
             )
             
             # Update preview
@@ -1266,7 +1266,7 @@ class CaptureTab(QWidget):
         self.txt_capture_log.append(f"[{timestamp}] {message}")
         # Scroll to bottom
         cursor = self.txt_capture_log.textCursor()
-        cursor.movePosition(QTextCursor.End)
+        cursor.movePosition(QTextCursor.MoveOperation.End)
         self.txt_capture_log.setTextCursor(cursor)
     
     def reset(self):
@@ -1409,7 +1409,7 @@ class ProcessingTab(QWidget):
         original_layout = QVBoxLayout(original_tab)
         
         self.lbl_original_frame = QLabel("No preview available")
-        self.lbl_original_frame.setAlignment(Qt.AlignCenter)
+        self.lbl_original_frame.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_original_frame.setMinimumSize(480, 270)
         original_layout.addWidget(self.lbl_original_frame)
         
@@ -1420,7 +1420,7 @@ class ProcessingTab(QWidget):
         processed_layout = QVBoxLayout(processed_tab)
         
         self.lbl_processed_frame = QLabel("No preview available")
-        self.lbl_processed_frame.setAlignment(Qt.AlignCenter)
+        self.lbl_processed_frame.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_processed_frame.setMinimumSize(480, 270)
         processed_layout.addWidget(self.lbl_processed_frame)
         
@@ -1510,7 +1510,7 @@ class ProcessingTab(QWidget):
     
     def update_resize_options(self, state):
         """Enables or disables resize dropdown based on checkbox state"""
-        self.cmb_resize.setEnabled(state == Qt.Checked)
+        self.cmb_resize.setEnabled(state == Qt.CheckState.Checked.value or state == Qt.CheckState.Checked)
     
     def apply_preset(self, index):
         """Applies a preset configuration of processing options"""
@@ -1642,15 +1642,15 @@ class ProcessingTab(QWidget):
             # Create QImage
             height, width, channels = rgb_frame.shape
             bytes_per_line = channels * width
-            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
             
             # Scale for preview
             pixmap = QPixmap.fromImage(q_img)
             pixmap = pixmap.scaled(
                 self.lbl_original_frame.width(),
                 self.lbl_original_frame.height(),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
             )
             
             # Update label
@@ -1665,15 +1665,15 @@ class ProcessingTab(QWidget):
             # Create QImage
             height, width, channels = rgb_frame.shape
             bytes_per_line = channels * width
-            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
             
             # Scale for preview
             pixmap = QPixmap.fromImage(q_img)
             pixmap = pixmap.scaled(
                 self.lbl_processed_frame.width(),
                 self.lbl_processed_frame.height(),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
             )
             
             # Update label
@@ -1852,7 +1852,7 @@ class ProcessingTab(QWidget):
         self.txt_processing_log.append(f"[{timestamp}] {message}")
         # Scroll to bottom
         cursor = self.txt_processing_log.textCursor()
-        cursor.movePosition(QTextCursor.End)
+        cursor.movePosition(QTextCursor.MoveOperation.End)
         self.txt_processing_log.setTextCursor(cursor)
     
     def reset(self):
@@ -1921,28 +1921,28 @@ class AnalysisTab(QWidget):
         
         # Reference preview
         ref_frame = QFrame()
-        ref_frame.setFrameShape(QFrame.StyledPanel)
+        ref_frame.setFrameShape(QFrame.Shape.StyledPanel)
         ref_layout = QVBoxLayout(ref_frame)
         
         ref_layout.addWidget(QLabel("<b>Reference:</b>"))
         
         self.lbl_ref_preview = QLabel("No preview")
         self.lbl_ref_preview.setMinimumSize(320, 180)
-        self.lbl_ref_preview.setAlignment(Qt.AlignCenter)
+        self.lbl_ref_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ref_layout.addWidget(self.lbl_ref_preview)
         
         thumbs_layout.addWidget(ref_frame)
         
         # Distorted preview
         dist_frame = QFrame()
-        dist_frame.setFrameShape(QFrame.StyledPanel)
+        dist_frame.setFrameShape(QFrame.Shape.StyledPanel)
         dist_layout = QVBoxLayout(dist_frame)
         
         dist_layout.addWidget(QLabel("<b>Distorted:</b>"))
         
         self.lbl_dist_preview = QLabel("No preview")
         self.lbl_dist_preview.setMinimumSize(320, 180)
-        self.lbl_dist_preview.setAlignment(Qt.AlignCenter)
+        self.lbl_dist_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         dist_layout.addWidget(self.lbl_dist_preview)
         
         thumbs_layout.addWidget(dist_frame)
@@ -2133,15 +2133,15 @@ class AnalysisTab(QWidget):
             # Create QImage
             height, width, channels = rgb_frame.shape
             bytes_per_line = channels * width
-            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
             
             # Scale for preview
             pixmap = QPixmap.fromImage(q_img)
             pixmap = pixmap.scaled(
                 self.lbl_ref_preview.width(),
                 self.lbl_ref_preview.height(),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
             )
             
             # Update label
@@ -2156,15 +2156,15 @@ class AnalysisTab(QWidget):
             # Create QImage
             height, width, channels = rgb_frame.shape
             bytes_per_line = channels * width
-            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            q_img = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
             
             # Scale for preview
             pixmap = QPixmap.fromImage(q_img)
             pixmap = pixmap.scaled(
                 self.lbl_dist_preview.width(),
                 self.lbl_dist_preview.height(),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
             )
             
             # Update label
@@ -2353,7 +2353,7 @@ class AnalysisTab(QWidget):
         self.txt_analysis_log.append(f"[{timestamp}] {message}")
         # Scroll to bottom
         cursor = self.txt_analysis_log.textCursor()
-        cursor.movePosition(QTextCursor.End)
+        cursor.movePosition(QTextCursor.MoveOperation.End)
         self.txt_analysis_log.setTextCursor(cursor)
     
     def reset(self):
@@ -2552,9 +2552,9 @@ class ResultsTab(QWidget):
             "Test Name", "Date/Time", "VMAF Score", "PSNR", "SSIM", 
             "Reference", "Duration", "Actions"
         ])
-        self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         
         history_layout.addWidget(self.results_table)
         
@@ -2705,7 +2705,7 @@ class ResultsTab(QWidget):
             # Show progress dialog
             progress_dialog = QProgressDialog("Generating PDF report...", "Cancel", 0, 100, self)
             progress_dialog.setWindowTitle("Exporting PDF")
-            progress_dialog.setWindowModality(Qt.WindowModal)
+            progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
             progress_dialog.setAutoClose(True)
             progress_dialog.setMinimumDuration(0)
             progress_dialog.show()
@@ -2764,11 +2764,11 @@ class ResultsTab(QWidget):
             self,
             "Open PDF",
             "Would you like to open the PDF report now?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
         )
         
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             try:
                 if platform.system() == 'Windows':
                     os.startfile(path)
@@ -2812,38 +2812,38 @@ class ResultsTab(QWidget):
         json_path = results.get('json_path')
         if json_path and os.path.exists(json_path):
             item = QListWidgetItem(f"VMAF Results: {os.path.basename(json_path)}")
-            item.setData(Qt.UserRole, json_path)
+            item.setData(Qt.ItemDataRole.UserRole, json_path)
             self.list_result_files.addItem(item)
         
         # Add PSNR log file if available
         psnr_log = results.get('psnr_log')
         if psnr_log and os.path.exists(psnr_log):
             item = QListWidgetItem(f"PSNR Results: {os.path.basename(psnr_log)}")
-            item.setData(Qt.UserRole, psnr_log)
+            item.setData(Qt.ItemDataRole.UserRole, psnr_log)
             self.list_result_files.addItem(item)
         
         # Add SSIM log file if available
         ssim_log = results.get('ssim_log')
         if ssim_log and os.path.exists(ssim_log):
             item = QListWidgetItem(f"SSIM Results: {os.path.basename(ssim_log)}")
-            item.setData(Qt.UserRole, ssim_log)
+            item.setData(Qt.ItemDataRole.UserRole, ssim_log)
             self.list_result_files.addItem(item)
         
         reference_path = results.get('reference_path')
         if reference_path and os.path.exists(reference_path):
             item = QListWidgetItem(f"Reference: {os.path.basename(reference_path)}")
-            item.setData(Qt.UserRole, reference_path)
+            item.setData(Qt.ItemDataRole.UserRole, reference_path)
             self.list_result_files.addItem(item)
         
         distorted_path = results.get('distorted_path')
         if distorted_path and os.path.exists(distorted_path):
             item = QListWidgetItem(f"Distorted: {os.path.basename(distorted_path)}")
-            item.setData(Qt.UserRole, distorted_path)
+            item.setData(Qt.ItemDataRole.UserRole, distorted_path)
             self.list_result_files.addItem(item)
     
     def open_result_file(self, item):
         """Opens selected result file"""
-        file_path = item.data(Qt.UserRole)
+        file_path = item.data(Qt.ItemDataRole.UserRole)
         if file_path and os.path.exists(file_path):
             # Use system default application to open the file
             try:
@@ -3038,11 +3038,11 @@ class ResultsTab(QWidget):
                 self,
                 "Open CSV",
                 "Would you like to open the CSV file now?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
             )
             
-            if reply == QMessageBox.Yes:
+            if reply == QMessageBox.StandardButton.Yes:
                 try:
                     if platform.system() == 'Windows':
                         os.startfile(file_path)
@@ -3223,7 +3223,7 @@ class ResultsTab(QWidget):
                         for col in range(7):
                             item = self.results_table.item(row, col)
                             if item:
-                                item.setData(Qt.UserRole, {
+                                item.setData(Qt.ItemDataRole.UserRole, {
                                     "test_dir": test_dir,
                                     "json_path": json_path,
                                     "test_name": test_name,
@@ -3333,11 +3333,11 @@ class ResultsTab(QWidget):
                 self,
                 "Confirm Deletion",
                 f"Are you sure you want to delete this test result?\n\nThis will permanently delete all files in:\n{test_dir}",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
             )
             
-            if reply != QMessageBox.Yes:
+            if reply != QMessageBox.StandardButton.Yes:
                 return
             
             # Delete the directory
@@ -3380,18 +3380,18 @@ class ResultsTab(QWidget):
                 self,
                 "Confirm Deletion",
                 f"Are you sure you want to delete {len(selected_rows)} selected test results?\n\nThis cannot be undone.",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
             )
             
-            if reply != QMessageBox.Yes:
+            if reply != QMessageBox.StandardButton.Yes:
                 return
             
             # Delete selected items (in reverse order to avoid index issues)
             for row in sorted(selected_rows, reverse=True):
                 item = self.results_table.item(row, 0)
                 if item:
-                    data = item.data(Qt.UserRole)
+                    data = item.data(Qt.ItemDataRole.UserRole)
                     if data and "test_dir" in data:
                         test_dir = data["test_dir"]
                         
@@ -3431,7 +3431,7 @@ class ResultsTab(QWidget):
             return
         
         # Get export format
-        from PyQt5.QtWidgets import (QButtonGroup, QDialog, QLabel,
+        from PyQt6.QtWidgets import (QButtonGroup, QDialog, QLabel,
                                      QRadioButton, QVBoxLayout)
         
         dialog = QDialog(self)
@@ -3467,7 +3467,7 @@ class ResultsTab(QWidget):
         layout.addLayout(btn_layout)
         
         # Show dialog
-        if dialog.exec_() != QDialog.Accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         
         export_format = format_group.checkedId()
@@ -3487,7 +3487,7 @@ class ResultsTab(QWidget):
             for row in selected_rows:
                 item = self.results_table.item(row, 0)
                 if item:
-                    data = item.data(Qt.UserRole)
+                    data = item.data(Qt.ItemDataRole.UserRole)
                     if data and "test_dir" in data:
                         test_dir = data["test_dir"]
                         test_name = data.get("test_name", f"test_{row}")
@@ -3675,7 +3675,7 @@ class ResultsTab(QWidget):
                         test_dir = ""
                         item = self.results_table.item(row, 0)
                         if item:
-                            data = item.data(Qt.UserRole)
+                            data = item.data(Qt.ItemDataRole.UserRole)
                             if data and "test_dir" in data:
                                 test_dir = data["test_dir"]
                         
@@ -3816,7 +3816,7 @@ def main():
     window = MainWindow()
     window.show()
     
-    return app.exec_()
+    return app.exec()
 
 
 if __name__ == "__main__":

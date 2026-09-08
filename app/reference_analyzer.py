@@ -4,7 +4,7 @@ import os
 import subprocess
 
 import cv2
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from app.utils import get_ffmpeg_path, get_subprocess_startupinfo
 

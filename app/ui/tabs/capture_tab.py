@@ -4,9 +4,9 @@ from datetime import datetime, time
 
 import cv2
 import numpy as np
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import (QComboBox, QFrame, QGroupBox, QHBoxLayout, QLabel,
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtWidgets import (QComboBox, QFrame, QGroupBox, QHBoxLayout, QLabel,
                              QMessageBox, QProgressBar, QPushButton, QSplitter,
                              QTextEdit, QVBoxLayout, QWidget)
 
@@ -24,13 +24,13 @@ class CaptureTab(QWidget):
 
     def _setup_ui(self):
         """Set up the Capture tab UI with scroll area"""
-        from PyQt5.QtWidgets import QScrollArea
+        from PyQt6.QtWidgets import QScrollArea
 
         # Create a scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         # Create a widget to hold all content
         scroll_content = QWidget()
@@ -46,7 +46,7 @@ class CaptureTab(QWidget):
         layout.addWidget(self.lbl_capture_summary)
 
         # Main content splitter
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # Left side - capture controls
         left_widget = QWidget()
@@ -120,7 +120,7 @@ class CaptureTab(QWidget):
         progress_layout = QHBoxLayout()
         self.pb_capture_progress = QProgressBar()
         self.pb_capture_progress.setTextVisible(True)
-        self.pb_capture_progress.setAlignment(Qt.AlignCenter)
+        self.pb_capture_progress.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.pb_capture_progress.setMinimumWidth(300)
         progress_layout.addWidget(self.pb_capture_progress)
 
@@ -143,13 +143,13 @@ class CaptureTab(QWidget):
 
         # Preview frame with improved styling
         preview_frame = QFrame()
-        preview_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+        preview_frame.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Sunken)
         preview_frame.setLineWidth(1)
         preview_inner_layout = QVBoxLayout(preview_frame)
 
         # Preview label with enhanced styling and initial placeholder
         self.lbl_preview = QLabel("No video feed")
-        self.lbl_preview.setAlignment(Qt.AlignCenter)
+        self.lbl_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_preview.setMinimumSize(480, 270)
         self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black; border-radius: 4px;")
         preview_inner_layout.addWidget(self.lbl_preview)
@@ -184,7 +184,7 @@ class CaptureTab(QWidget):
         # Create log text area with enhanced styling and error highlighting
         self.txt_capture_log = QTextEdit()
         self.txt_capture_log.setReadOnly(True)
-        self.txt_capture_log.setLineWrapMode(QTextEdit.WidgetWidth)  # Enable line wrapping
+        self.txt_capture_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)  # Enable line wrapping
         self.txt_capture_log.setMinimumHeight(150)
         self.txt_capture_log.setMaximumHeight(200)  # Fix height to prevent stretching
         self.txt_capture_log.setFixedWidth(550)  # Fixed width to avoid UI stretching with long messages
@@ -487,13 +487,13 @@ class CaptureTab(QWidget):
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     height, width, channels = rgb_frame.shape
                     bytes_per_line = channels * width
-                    img_format = QImage.Format_RGB888
+                    img_format = QImage.Format.Format_RGB888
                 elif len(frame.shape) == 2:
                     # Handle grayscale images
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
                     height, width, channels = rgb_frame.shape
                     bytes_per_line = channels * width
-                    img_format = QImage.Format_RGB888
+                    img_format = QImage.Format.Format_RGB888
                 else:
                     logger.warning(f"Unsupported frame format: {frame.shape}")
                     self._show_placeholder_image("Unsupported frame format")
@@ -510,8 +510,8 @@ class CaptureTab(QWidget):
                 if label_size.width() > 0 and label_size.height() > 0:
                     scaled_pixmap = pixmap.scaled(
                         label_size,
-                        Qt.KeepAspectRatio,
-                        Qt.SmoothTransformation
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation
                     )
 
                     # Update label
@@ -852,7 +852,7 @@ class CaptureTab(QWidget):
             rgb_image = cv2.cvtColor(placeholder, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
-            q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
             self.lbl_preview.setPixmap(QPixmap.fromImage(q_img))
 
             # Also update status text
@@ -961,14 +961,14 @@ class CaptureTab(QWidget):
                     resized = cv2.resize(frame_rgb, (new_w, new_h))
 
                     # Convert to QImage and QPixmap
-                    from PyQt5.QtGui import QImage, QPixmap
+                    from PyQt6.QtGui import QImage, QPixmap
                     bytes_per_line = ch * new_w
-                    q_img = QImage(resized.data, new_w, new_h, bytes_per_line, QImage.Format_RGB888)
+                    q_img = QImage(resized.data, new_w, new_h, bytes_per_line, QImage.Format.Format_RGB888)
                     pixmap = QPixmap.fromImage(q_img)
 
                     # Set the pixmap to the QLabel
                     self.lbl_preview.setPixmap(pixmap)
-                    self.lbl_preview.setAlignment(Qt.AlignCenter)
+                    self.lbl_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
                     # Update status text
                     ref_name = os.path.basename(reference_path)

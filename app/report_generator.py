@@ -21,7 +21,7 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 
 import matplotlib.pyplot as plt
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet

@@ -8,7 +8,7 @@ import subprocess
 import time
 from typing import Dict, List, Any, Tuple, Optional
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
 
@@ -847,11 +847,6 @@ class OptionsManager(QObject):
             
         except Exception as e:
             return False, f"Error testing device: {str(e)}"
-
-        except Exception as e:
-            logger.error(f"Error getting DeckLink formats: {str(e)}")
-            # Return default formats for Intensity Shuttle in case of error
-            return self._get_default_intensity_shuttle_formats()
 
     def _get_default_intensity_shuttle_formats(self) -> Dict[str, Any]:
         """Return default format specifications for Intensity Shuttle"""

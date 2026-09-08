@@ -11,7 +11,7 @@ from enum import Enum
 
 import cv2
 import numpy as np
-from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 
 from app.utils import (
     get_ffmpeg_path,

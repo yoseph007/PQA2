@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 
 app = QApplication.instance()
 if not app:

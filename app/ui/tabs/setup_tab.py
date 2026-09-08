@@ -2,9 +2,9 @@ import logging
 import os
 from datetime import datetime
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import (QFileDialog, QFrame, QGroupBox, QHBoxLayout,
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtWidgets import (QFileDialog, QFrame, QGroupBox, QHBoxLayout,
                              QLabel, QLineEdit, QMessageBox, QPushButton,
                              QTextEdit, QVBoxLayout, QWidget)
 
@@ -82,9 +82,9 @@ class SetupTab(QWidget):
         self.txt_test_name.setPlaceholderText("Enter a test name (alpha-numeric, _ or - only)")
         self.txt_test_name.setToolTip("Use a descriptive name with letters, numbers, underscores, or hyphens")
         # Add validator to enforce proper naming
-        from PyQt5.QtCore import QRegExp
-        from PyQt5.QtGui import QRegExpValidator
-        validator = QRegExpValidator(QRegExp(r'[A-Za-z0-9_\-]+'))
+        from PyQt6.QtCore import QRegularExpression
+        from PyQt6.QtGui import QRegularExpressionValidator
+        validator = QRegularExpressionValidator(QRegularExpression(r'[A-Za-z0-9_\-]+'))
         self.txt_test_name.setValidator(validator)
         test_name_layout.addWidget(self.txt_test_name)
         left_column.addLayout(test_name_layout)
@@ -132,14 +132,14 @@ class SetupTab(QWidget):
 
         # Preview frame
         preview_frame = QFrame()
-        preview_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+        preview_frame.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Sunken)
         preview_frame.setMinimumHeight(240)
         preview_inner_layout = QVBoxLayout(preview_frame)
         preview_inner_layout.setContentsMargins(0, 0, 0, 0)
 
         # Video preview label
         self.video_preview = QLabel("No video selected")
-        self.video_preview.setAlignment(Qt.AlignCenter)
+        self.video_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_preview.setMinimumSize(400, 225)  # 16:9 aspect ratio
         self.video_preview.setStyleSheet("background-color: #e0e0e0; border-radius: 4px;")
         preview_inner_layout.addWidget(self.video_preview)
@@ -161,7 +161,7 @@ class SetupTab(QWidget):
         # Log text area
         self.txt_setup_log = QTextEdit()
         self.txt_setup_log.setReadOnly(True)
-        self.txt_setup_log.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.txt_setup_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.txt_setup_log.setMinimumHeight(150)
         self.txt_setup_log.setStyleSheet("""
             QTextEdit {
@@ -462,12 +462,12 @@ class SetupTab(QWidget):
 
             # Convert the resized frame to QImage and then to QPixmap
             bytes_per_line = ch * new_w
-            q_img = QImage(resized.data, new_w, new_h, bytes_per_line, QImage.Format_RGB888)
+            q_img = QImage(resized.data, new_w, new_h, bytes_per_line, QImage.Format.Format_RGB888)
             pixmap = QPixmap.fromImage(q_img)
 
             # Set the pixmap to the QLabel
             self.video_preview.setPixmap(pixmap)
-            self.video_preview.setAlignment(Qt.AlignCenter)
+            self.video_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             # Update preview status
             fps = cap.get(cv2.CAP_PROP_FPS)

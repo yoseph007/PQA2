@@ -4,7 +4,8 @@ import tempfile
 import pathlib
 import subprocess
 import unittest
-from unittest.mock import patch
+import json
+from unittest.mock import MagicMock, patch
 
 try:
     import pytest
@@ -60,11 +61,15 @@ def test_video_info_total_frames_alias(tmp_path=None):
 
 
 def _test_video_info_total_frames_alias(tmp_path):
-    fake = {"total_frames": 100, "frame_count": 100}
-    with patch("tests.test_utils.get_video_info", return_value=fake), \
-         patch("app.utils.get_video_info", return_value=fake):
+    probe_output = json.dumps({
+        "streams": [{"codec_type": "video", "nb_frames": "100", "width": 1920, "height": 1080}],
+        "format": {"duration": "10.0"}
+    })
+    mock_res = MagicMock(returncode=0, stdout=probe_output, stderr="")
+    with patch("subprocess.run", return_value=mock_res):
         info = get_video_info(str(tmp_path / "v.mp4"))
-    assert info["total_frames"] == info["frame_count"]
+    assert info is not None
+    assert info["total_frames"] == info["frame_count"] == 100
 
 
 def test_get_all_settings_alias():
