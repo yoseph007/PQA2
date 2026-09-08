@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import os
@@ -152,7 +153,7 @@ class OptionsManager(QObject):
             except Exception as e:
                 logger.error(f"Error migrating settings: {str(e)}")
 
-        self.settings = self.default_settings.copy()
+        self.settings = copy.deepcopy(self.default_settings)
         self.load_settings()
 
     def load_settings(self) -> None:
@@ -167,11 +168,11 @@ class OptionsManager(QObject):
                 self._update_missing_settings()
             else:
                 logger.info(f"Settings file not found, creating with defaults")
-                self.settings = self.default_settings.copy()
+                self.settings = copy.deepcopy(self.default_settings)
                 self.save_settings()
         except Exception as e:
             logger.error(f"Error loading settings: {str(e)}")
-            self.settings = self.default_settings.copy()
+            self.settings = copy.deepcopy(self.default_settings)
 
     def _update_missing_settings(self) -> None:
         """Update settings with any missing keys from defaults"""
@@ -280,7 +281,7 @@ class OptionsManager(QObject):
 
     def reset_to_defaults(self) -> bool:
         """Reset all settings to defaults"""
-        self.settings = self.default_settings.copy()
+        self.settings = copy.deepcopy(self.default_settings)
         return self.save_settings()
 
     def update_settings(self, settings: Dict[str, Any]) -> bool:

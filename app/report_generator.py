@@ -27,21 +27,21 @@ class ReportGenerator(QObject):
     def __init__(self):
         super().__init__()
         self.styles = getSampleStyleSheet()
-        # Create custom styles
+        # Create custom styles (using unique names to avoid collisions with built-in styles)
         self.styles.add(ParagraphStyle(
-            name='Title',
+            name='ReportTitle',
             parent=self.styles['Heading1'],
             fontSize=16,
             spaceAfter=12
         ))
         self.styles.add(ParagraphStyle(
-            name='Subtitle',
+            name='ReportSubtitle',
             parent=self.styles['Heading2'],
             fontSize=14,
             spaceAfter=10
         ))
         self.styles.add(ParagraphStyle(
-            name='Normal',
+            name='ReportBody',
             parent=self.styles['Normal'],
             fontSize=10,
             spaceAfter=8
@@ -95,12 +95,12 @@ class ReportGenerator(QObject):
             
             # Add title and metadata
             title = "VMAF Video Quality Analysis Report"
-            elements.append(Paragraph(title, self.styles['Title']))
+            elements.append(Paragraph(title, self.styles['ReportTitle']))
             
             # Add test metadata
             if test_metadata:
                 test_name = test_metadata.get('test_name', 'Unknown Test')
-                elements.append(Paragraph(f"Test: {test_name}", self.styles['Subtitle']))
+                elements.append(Paragraph(f"Test: {test_name}", self.styles['ReportSubtitle']))
                 
                 metadata_list = [
                     f"Date: {test_metadata.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}",
@@ -109,12 +109,12 @@ class ReportGenerator(QObject):
                 ]
                 
                 for item in metadata_list:
-                    elements.append(Paragraph(item, self.styles['Normal']))
+                    elements.append(Paragraph(item, self.styles['ReportBody']))
             
             elements.append(Spacer(1, 0.2*inch))
             
             # Add score summary
-            elements.append(Paragraph("Quality Scores", self.styles['Subtitle']))
+            elements.append(Paragraph("Quality Scores", self.styles['ReportSubtitle']))
             
             data = [
                 ["Metric", "Value", "Interpretation"],
@@ -141,7 +141,7 @@ class ReportGenerator(QObject):
             elements.append(Spacer(1, 0.2*inch))
             
             # Add file information
-            elements.append(Paragraph("File Information", self.styles['Subtitle']))
+            elements.append(Paragraph("File Information", self.styles['ReportSubtitle']))
             
             ref_name = os.path.basename(reference_path) if reference_path != 'N/A' else 'N/A'
             dist_name = os.path.basename(distorted_path) if distorted_path != 'N/A' else 'N/A'
@@ -171,7 +171,7 @@ class ReportGenerator(QObject):
             # Add charts if available
             self.report_progress.emit(60)
             if chart_paths:
-                elements.append(Paragraph("Quality Metrics Over Time", self.styles['Subtitle']))
+                elements.append(Paragraph("Quality Metrics Over Time", self.styles['ReportSubtitle']))
                 
                 for chart_path in chart_paths:
                     if os.path.exists(chart_path):
@@ -182,7 +182,7 @@ class ReportGenerator(QObject):
             # Add VMAF feature analysis if available
             self.report_progress.emit(80)
             if 'raw_results' in results and 'frames' in results['raw_results']:
-                elements.append(Paragraph("VMAF Feature Analysis", self.styles['Subtitle']))
+                elements.append(Paragraph("VMAF Feature Analysis", self.styles['ReportSubtitle']))
                 
                 # Extract feature data if available
                 frames = results['raw_results']['frames']
@@ -231,14 +231,14 @@ class ReportGenerator(QObject):
             
             # Add certification
             elements.append(Spacer(1, 0.3*inch))
-            elements.append(Paragraph("Certification", self.styles['Subtitle']))
+            elements.append(Paragraph("Certification", self.styles['ReportSubtitle']))
             
             cert_text = (
                 "I hereby certify that the video quality testing described in this report "
                 "was conducted in accordance with industry standards and that the results "
                 "presented are accurate to the best of my knowledge."
             )
-            elements.append(Paragraph(cert_text, self.styles['Normal']))
+            elements.append(Paragraph(cert_text, self.styles['ReportBody']))
             
             # Add signature lines
             elements.append(Spacer(1, 0.5*inch))

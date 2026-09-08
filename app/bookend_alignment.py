@@ -8,6 +8,8 @@ import cv2
 import numpy as np
 from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal
 
+from app.utils import get_ffmpeg_path, get_subprocess_startupinfo
+
 logger = logging.getLogger(__name__)
 
 # Define MAX_REPAIR_ATTEMPTS constant
@@ -25,8 +27,9 @@ def validate_video_file(file_path):
 
     try:
         # Use ffprobe to validate file
+        _, ffprobe_exe, _ = get_ffmpeg_path()
         cmd = [
-            "ffprobe",
+            ffprobe_exe,
             "-v", "error",
             "-select_streams", "v:0",
             "-show_entries", "stream=codec_type",
@@ -75,8 +78,9 @@ def repair_video_file(video_path):
         logger.info(f"Attempting to repair video file: {video_path}")
 
         # Use FFmpeg to remux the file - this often fixes moov atom issues
+        ffmpeg_exe, _, _ = get_ffmpeg_path()
         cmd = [
-            "ffmpeg", "-hide_banner", "-loglevel", "warning",
+            ffmpeg_exe, "-hide_banner", "-loglevel", "warning",
             "-i", video_path, 
             "-c", "copy",  # Copy streams without re-encoding
             "-movflags", "faststart",  # Place moov atom at the beginning
@@ -115,7 +119,9 @@ class BookendAligner(QObject):
 
     def __init__(self):
         super().__init__()
-        self._ffmpeg_path = "ffmpeg"  # Assume ffmpeg is in PATH
+        ffmpeg_exe, ffprobe_exe, _ = get_ffmpeg_path()
+        self._ffmpeg_path = ffmpeg_exe
+        self._ffprobe_path = ffprobe_exe
         
         # Default values for advanced options
         self.frame_sampling_rate = 5  # Frames to sample per second during detection
@@ -200,8 +206,9 @@ class BookendAligner(QObject):
             
             # Create FFmpeg command for motion compensation
             # First extract the section we want to process
+            ffmpeg_exe, _, _ = get_ffmpeg_path()
             cmd = [
-                "ffmpeg", "-hide_banner", "-y",
+                ffmpeg_exe, "-hide_banner", "-y",
                 "-i", video_path,
                 "-ss", str(start_time),
                 "-t", str(duration),
@@ -528,7 +535,7 @@ class BookendAligner(QObject):
 
             # Trim reference video - use the whole reference with high quality settings
             ref_cmd = [
-                "ffmpeg", "-y", "-i", reference_path,
+                self._ffmpeg_path, "-y", "-i", reference_path,
                 "-r", str(ref_fps),  # Preserve original frame rate
                 "-c:v", "libx264", "-crf", "23", 
                 "-preset", "fast", "-c:a", "copy",
@@ -571,7 +578,7 @@ class BookendAligner(QObject):
             # Trim captured video with precise frame count control
             if adjusted_start > 0 or "motion_comp" not in captured_path:
                 cap_cmd = [
-                    "ffmpeg", "-y",
+                    self._ffmpeg_path, "-y",
                     "-itsoffset", str(offset_time),  # Offset to align with reference
                     "-i", captured_path,
                     "-ss", str(adjusted_start),
@@ -587,7 +594,7 @@ class BookendAligner(QObject):
             else:
                 # Motion compensated clip needs different handling
                 cap_cmd = [
-                    "ffmpeg", "-y", 
+                    self._ffmpeg_path, "-y", 
                     "-i", captured_path,
                     "-c:v", "libx264", "-crf", "23",
                     "-preset", "fast",
@@ -625,7 +632,7 @@ class BookendAligner(QObject):
                         
                         # One more try with direct frame extraction
                         final_fix_cmd = [
-                            "ffmpeg", "-y",
+                            self._ffmpeg_path, "-y",
                             "-i", aligned_captured,
                             "-vf", f"select=1:n={ref_frames}",  # Select exact number of frames
                             "-vsync", "0",  # Do not duplicate/drop frames
@@ -680,8 +687,9 @@ class BookendAligner(QObject):
     def _get_video_info(self, video_path):
         """Get detailed information about a video file using FFprobe"""
         try:
+            _, ffprobe_exe, _ = get_ffmpeg_path()
             cmd = [
-                "ffprobe",
+                ffprobe_exe,
                 "-v", "quiet",
                 "-print_format", "json",
                 "-show_format", 

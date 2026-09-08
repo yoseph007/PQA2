@@ -899,16 +899,8 @@ class CaptureManager(QObject):
             # Get format code and map to appropriate decklink format if needed
             format_code = capture_options.get('format_code')
             if format_code:
-                # Map common format codes to decklink-specific format codes
-                format_map = {
-                    "Hp29": "hp1080p2997",
-                    "Hp30": "hp1080p30",
-                    "Hp25": "hp1080p25",
-                    "hp59": "hp720p5994",
-                    "hp60": "hp720p60",
-                    "hp50": "hp720p50",
-                }
-                decklink_format = format_map.get(format_code, format_code)
+                # Use the centralized format code mapping method
+                decklink_format = self._map_format_code(format_code)
                 logger.info(f"Mapped format code {format_code} to {decklink_format}")
             else:
                 decklink_format = None

@@ -6,6 +6,8 @@ import subprocess
 import cv2
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 
+from app.utils import get_ffmpeg_path, get_subprocess_startupinfo
+
 logger = logging.getLogger(__name__)
 
 class ReferenceAnalyzer(QObject):
@@ -23,8 +25,10 @@ class ReferenceAnalyzer(QObject):
             self.progress_update.emit(f"Analyzing reference video: {os.path.basename(video_path)}")
             
             # Use FFprobe to get video information
+            _, ffprobe_exe, _ = get_ffmpeg_path()
+            startupinfo, creationflags, env = get_subprocess_startupinfo()
             cmd = [
-                "ffprobe",
+                ffprobe_exe,
                 "-v", "quiet",
                 "-print_format", "json",
                 "-show_format",
@@ -32,7 +36,10 @@ class ReferenceAnalyzer(QObject):
                 video_path
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True,
+                startupinfo=startupinfo, creationflags=creationflags
+            )
             
             if result.returncode != 0:
                 error_msg = f"FFprobe failed: {result.stderr}"
