@@ -743,7 +743,7 @@ class DiffAnalyzer:
         elements.append(Paragraph("Metrological Uncertainty Budget", subtitle_style))
         floor_param = "Empirical Rig Noise Floor" if sig.get("is_empirical_floor") else "Resolution Convention"
         floor_sym = "σ_rig" if sig.get("is_empirical_floor") else "σ_floor"
-        floor_interp = "Measured hardware capture-chain uncertainty (Gage R&R repeatability)" if sig.get("is_empirical_floor") else "Declared instrument resolution floor convention (0.05)"
+        floor_interp = "Characterized capture-chain uncertainty baseline (Gage R&R repeatability)" if sig.get("is_empirical_floor") else "Declared instrument resolution floor convention (0.05)"
         comb_sym = "σ_Δ = √(σ_1² + σ_2² + σ_rig²)" if sig.get("is_empirical_floor") else "σ_Δ = √(σ_1² + σ_2² + σ_floor²)"
         comb_interp = "Quadrature combined uncertainty from empirical repeatability" if sig.get("is_empirical_floor") else "Quadrature combined measurement uncertainty"
 
@@ -772,7 +772,7 @@ class DiffAnalyzer:
         if sig.get("is_empirical_floor"):
             u_note = (
                 "<font size=7.5 color='#166534'><b>Metrological Notice:</b> The 3σ detection threshold is derived from empirical "
-                "hardware re-capture repeatability (σ_rig), replacing the declared resolution convention with measured instrument uncertainty.</font>"
+                "re-capture repeatability characterization (σ_rig), replacing the declared resolution convention with measured uncertainty.</font>"
             )
             elements.append(Paragraph(u_note, styles['Normal']))
             elements.append(Spacer(1, 0.04 * inch))

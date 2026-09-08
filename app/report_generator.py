@@ -362,7 +362,7 @@ class ReportGenerator(QObject):
                     if campaign_type == 'fixed_pair':
                         banner_text += "<br/><font size=8 color='#1e3a8a'><b>Metrology Notice:</b> Fixed-pair comparison proves analysis pipeline determinism (zero decode/filter jitter). Rig repeatability figure requires hardware re-capture campaign.</font>"
                     elif campaign_type == 'recapture':
-                        banner_text += "<br/><font size=8 color='#166534'><b>Hardware Characterization:</b> Re-capture campaign across independent physical display passes. %CV represents empirical capture-chain uncertainty (Gage R&R repeatability).</font>"
+                        banner_text += "<br/><font size=8 color='#d97706'><b>Re-Capture Characterization:</b> Multi-pass repeatability campaign. %CV represents baseline repeatability under capture-chain noise modeling (live hardware σ pending physical rig session).</font>"
                     verdict_p = Paragraph(banner_text, self.styles['ReportBody'])
                     verdict_table = Table([[verdict_p]], colWidths=[6.6*inch])
                     verdict_table.setStyle(TableStyle([
@@ -403,7 +403,7 @@ class ReportGenerator(QObject):
                             ["Metrics Non-Degenerate", "PASS [VERIFIED]", f"VMAF ({mean_val}) & PSNR/SSIM non-trivial across {n_completed} passes"],
                             ["Near-Lossless Advisory", "PASS [VERIFIED]", "Advisory remains silent on non-identical treatment frames"],
                             ["Pipeline Determinism", "PASS [PROVED]", "Software decode and libvmaf execution determinism verified"],
-                            ["Rig Repeatability / Uncertainty", "PASS [CERTIFIED]", f"Hardware capture-chain uncertainty characterized: σ_rig = {sigma_val}, %CV_rig = {cv_val}"],
+                            ["Rig Repeatability (hardware)", "PENDING [SIMULATED]", f"Pipeline & generator characterized (σ = {sigma_val}, %CV = {cv_val}); hardware-capture σ pending live rig session"],
                         ]
                         claims_table = Table(claims_data, colWidths=[2.0*inch, 1.4*inch, 3.2*inch])
                         claims_table.setStyle(TableStyle([
@@ -416,7 +416,8 @@ class ReportGenerator(QObject):
                             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                             ('TOPPADDING', (0, 0), (-1, -1), 4),
                             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-                            ('TEXTCOLOR', (1, 1), (1, -1), colors.HexColor('#16a34a')),
+                            ('TEXTCOLOR', (1, 1), (1, 3), colors.HexColor('#16a34a')),
+                            ('TEXTCOLOR', (1, 4), (1, 4), colors.HexColor('#d97706')),
                             ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
                         ]))
                         elements.append(claims_table)
@@ -424,7 +425,7 @@ class ReportGenerator(QObject):
 
                         rr_fn_text = (
                             "<font size=7 color='#64748b'>"
-                            "<b>Statistical Footnote 1 (Perceptual Pooling vs Pixel-Level Noise):</b> PSNR standard deviation (σ ≈ 0.55 dB, %CV ≈ 1.2%) exposes raw pixel-level ADC and quantization noise across passes, whereas VMAF's non-linear human visual system (HVS) model pools and attenuates high-frequency sub-threshold jitter, yielding higher repeatability (σ_rig = " + sigma_val + ", %CV_rig = " + cv_val + ").<br/>"
+                            "<b>Statistical Footnote 1 (Perceptual Pooling vs Pixel-Level Noise):</b> PSNR standard deviation (σ ≈ 0.55 dB, %CV ≈ 1.2%) exposes raw pixel-level dispersion across pseudo-random noise generator seeds, whereas VMAF's non-linear human visual system (HVS) model pools and attenuates high-frequency sub-threshold jitter, yielding higher repeatability (σ = " + sigma_val + ", %CV = " + cv_val + ").<br/>"
                             "<b>Statistical Footnote 2 (Coverage & Confidence):</b> 3σ detection bounds assume asymptotic normality. For finite campaign sample sizes (e.g. N=" + str(n_completed) + ", ν=" + str(max(1, n_completed - 1)) + " degrees of freedom), Student's t critical values yield slightly broader coverage intervals at nominal 99.7% confidence."
                             "</font>"
                         )
