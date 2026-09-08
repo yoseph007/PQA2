@@ -58,7 +58,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python scripts/preflight_check.py
+          python scripts/preflight_check.py --skip-hooks
 
       - name: Run Test Suite
         shell: pwsh

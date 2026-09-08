@@ -43,8 +43,9 @@ from app.utils import get_ffmpeg_path
 class PreflightChecker:
     """Executes holistic preflight validation checks across app subsystems."""
 
-    def __init__(self, install_hooks_if_missing: bool = False):
+    def __init__(self, install_hooks_if_missing: bool = False, skip_hooks: bool = False):
         self.install_hooks = install_hooks_if_missing
+        self.skip_hooks = skip_hooks
         self.results: List[Tuple[str, bool, str]] = []
 
     def log_result(self, name: str, passed: bool, detail: str):
@@ -161,6 +162,10 @@ class PreflightChecker:
             self.log_result("Git Pre-Commit Hook", True, "Not a git repository or running in CI archive (skipped)")
             return True
 
+        if self.skip_hooks or os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true":
+            self.log_result("Git Pre-Commit Hook", True, "Skipped (CI environment or --skip-hooks specified)")
+            return True
+
         hook_path = os.path.join(git_dir, "hooks", "pre-commit")
         hook_exists = os.path.isfile(hook_path)
 
@@ -210,8 +215,9 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Preflight check for VMAF App development environment")
     parser.add_argument("--install-hooks", action="store_true", help="Auto-install git pre-commit hook if missing")
+    parser.add_argument("--skip-hooks", action="store_true", help="Skip git pre-commit hook verification")
     args = parser.parse_args()
 
-    checker = PreflightChecker(install_hooks_if_missing=args.install_hooks)
+    checker = PreflightChecker(install_hooks_if_missing=args.install_hooks, skip_hooks=args.skip_hooks)
     passed = checker.run_all()
     sys.exit(0 if passed else 1)
