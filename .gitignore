@@ -97,3 +97,4 @@ installer/
 # Config directory (contains settings.json)
 config/
 ffmpeg_bin/
+ci_artifacts/

@@ -22,8 +22,15 @@ class TestUIWarnings(unittest.TestCase):
 
         self.mock_parent = MagicMock()
         self.mock_parent.options_manager = self.options_manager
+        # Prevent background timers and subprocess hardware probing in headless tests
+        self.options_manager.test_device_connection = MagicMock(return_value=(True, "Mocked test device"))
+        self.options_manager.get_decklink_devices = MagicMock(return_value=["Mocked Device"])
+        self.options_manager.detect_formats = MagicMock(return_value={})
+        self._timer_patcher = patch("PyQt5.QtCore.QTimer.singleShot")
+        self.mock_single_shot = self._timer_patcher.start()
 
     def tearDown(self):
+        self._timer_patcher.stop()
         self.td.cleanup()
 
     def test_options_tab_immediate_warning_dialog_is_non_blocking(self):
