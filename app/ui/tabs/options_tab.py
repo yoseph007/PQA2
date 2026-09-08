@@ -1695,7 +1695,9 @@ class OptionsTab(QWidget):
                 self
             )
             msg_box.setModal(False)
-            msg_box.show()
+            app_inst = QApplication.instance()
+            if not app_inst or app_inst.platformName() != "offscreen":
+                msg_box.show()
             self._active_warning_box = msg_box
         else:
             self.lbl_stop_mode_warning.setVisible(False)
