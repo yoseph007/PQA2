@@ -3,8 +3,8 @@ import sys
 import logging
 import os
 from app.ui.main_window import MainWindow
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt
 
 
 
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         window.show()
 
         # Run the application event loop
-        sys.exit(app.exec_())
+        sys.exit(app.exec())
 
     except Exception as e:
         logger.error(f"Application error: {str(e)}")

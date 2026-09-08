@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 app = QApplication.instance()
 if not app:
@@ -27,7 +27,7 @@ class TestUIWarnings(unittest.TestCase):
         self.options_manager.get_decklink_devices = MagicMock(return_value=["Mocked Device"])
         self.options_manager.detect_formats = MagicMock(return_value={})
         self.options_manager.get_formats_for_device = MagicMock(return_value={})
-        self._timer_patcher = patch("PyQt5.QtCore.QTimer.singleShot")
+        self._timer_patcher = patch("PyQt6.QtCore.QTimer.singleShot")
         self.mock_single_shot = self._timer_patcher.start()
         self._msg_patcher = patch.object(QMessageBox, "show")
         self.mock_msg_show = self._msg_patcher.start()

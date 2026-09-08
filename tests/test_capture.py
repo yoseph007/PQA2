@@ -4,7 +4,7 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 
 # Ensure QApplication exists for QThread/QObject
 app = QApplication.instance()

@@ -1,9 +1,9 @@
 import logging
 import os
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QStyle, QTabWidget,
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QStyle, QTabWidget,
                              QVBoxLayout, QWidget)
 
 from .tabs.analysis_tab import AnalysisTab
@@ -86,12 +86,12 @@ class MainWindow(QMainWindow):
         self.help_tab = HelpTab(self) # Added HelpTab instantiation
 
         # Add tabs to tab widget with icons
-        self.tabs.addTab(self.setup_tab, QIcon.fromTheme("document-new", QApplication.style().standardIcon(QStyle.SP_FileDialogStart)), "Setup")
-        self.tabs.addTab(self.capture_tab, QIcon.fromTheme("camera-video", QApplication.style().standardIcon(QStyle.SP_DesktopIcon)), "Capture")
-        self.tabs.addTab(self.analysis_tab, QIcon.fromTheme("system-run", QApplication.style().standardIcon(QStyle.SP_MediaPlay)), "Analysis")
-        self.tabs.addTab(self.results_tab, QIcon.fromTheme("format-justify-fill", QApplication.style().standardIcon(QStyle.SP_FileDialogInfoView)), "Results")
-        self.tabs.addTab(self.options_tab, QIcon.fromTheme("preferences-system", QApplication.style().standardIcon(QStyle.SP_FileDialogDetailedView)), "Options")
-        self.tabs.addTab(self.help_tab, QIcon.fromTheme("help-browser", QApplication.style().standardIcon(QStyle.SP_DialogHelpButton)), "Help") # Added Help tab
+        self.tabs.addTab(self.setup_tab, QIcon.fromTheme("document-new", QApplication.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogStart)), "Setup")
+        self.tabs.addTab(self.capture_tab, QIcon.fromTheme("camera-video", QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DesktopIcon)), "Capture")
+        self.tabs.addTab(self.analysis_tab, QIcon.fromTheme("system-run", QApplication.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)), "Analysis")
+        self.tabs.addTab(self.results_tab, QIcon.fromTheme("format-justify-fill", QApplication.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogInfoView)), "Results")
+        self.tabs.addTab(self.options_tab, QIcon.fromTheme("preferences-system", QApplication.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView)), "Options")
+        self.tabs.addTab(self.help_tab, QIcon.fromTheme("help-browser", QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DialogHelpButton)), "Help") # Added Help tab
 
 
         # Add tabs to main layout
@@ -175,7 +175,7 @@ class MainWindow(QMainWindow):
             self.analysis_tab.btn_run_combined_analysis.setEnabled(True)
 
             # Show success message with normalized path
-            from PyQt5.QtWidgets import QMessageBox
+            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.information(self, "Capture Complete", 
                                   f"Capture completed successfully!\n\nSaved to: {display_path}")
 
@@ -184,7 +184,7 @@ class MainWindow(QMainWindow):
 
         else:
             self.capture_tab.log_to_capture(f"Capture failed: {result}")
-            from PyQt5.QtWidgets import QMessageBox
+            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Capture Failed", f"Capture failed: {result}")
 
     def _set_application_logo(self):
@@ -195,17 +195,17 @@ class MainWindow(QMainWindow):
                                   "assets", "chroma-logo.png")
             
             if os.path.exists(logo_path):
-                from PyQt5.QtGui import QIcon, QPixmap
+                from PyQt6.QtGui import QIcon, QPixmap
 
                 # Load the image
                 pixmap = QPixmap(logo_path)
                 
                 # Resize to proper icon size (32x32 and 64x64 are common sizes)
                 icon = QIcon()
-                icon.addPixmap(pixmap.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                icon.addPixmap(pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                icon.addPixmap(pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                icon.addPixmap(pixmap.scaled(128, 128, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                icon.addPixmap(pixmap.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                icon.addPixmap(pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                icon.addPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                icon.addPixmap(pixmap.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
                 
                 # Set the application icon
                 self.setWindowIcon(icon)

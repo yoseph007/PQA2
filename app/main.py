@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 
 from app.capture import CaptureManager
 from app.ui import MainWindow
@@ -64,14 +64,14 @@ def main():
         # Apply dark theme by default for better appearance
         try:
             import qdarkstyle
-            app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+            app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt6'))
         except ImportError:
             logger.warning("QDarkStyle not installed, using default theme")
             
         window.show()
         
         # Start application loop
-        return app.exec_()
+        return app.exec()
         
     except Exception as e:
         logger.critical(f"Application failed: {str(e)}")

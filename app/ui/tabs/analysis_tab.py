@@ -5,8 +5,8 @@ import platform
 import subprocess
 from datetime import datetime
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
                              QProgressBar, QPushButton, QStyle, QTextEdit,
                              QVBoxLayout, QWidget)
 
@@ -76,7 +76,7 @@ class AnalysisTab(QWidget):
 
         # Run combined analysis button
         self.btn_run_combined_analysis = QPushButton("Run Analysis (Alignment + VMAF)")
-        self.btn_run_combined_analysis.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.btn_run_combined_analysis.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.btn_run_combined_analysis.setEnabled(False)
         self.btn_run_combined_analysis.clicked.connect(self.run_combined_analysis)
         actions_row.addWidget(self.btn_run_combined_analysis)
@@ -104,7 +104,7 @@ class AnalysisTab(QWidget):
 
         self.pb_alignment_progress = QProgressBar()
         self.pb_alignment_progress.setTextVisible(True)
-        self.pb_alignment_progress.setAlignment(Qt.AlignCenter)
+        self.pb_alignment_progress.setAlignment(Qt.AlignmentFlag.AlignCenter)
         progress_layout.addWidget(self.pb_alignment_progress)
 
         # VMAF analysis progress
@@ -117,7 +117,7 @@ class AnalysisTab(QWidget):
 
         self.pb_vmaf_progress = QProgressBar()
         self.pb_vmaf_progress.setTextVisible(True)
-        self.pb_vmaf_progress.setAlignment(Qt.AlignCenter)
+        self.pb_vmaf_progress.setAlignment(Qt.AlignmentFlag.AlignCenter)
         progress_layout.addWidget(self.pb_vmaf_progress)
 
         progress_group.setLayout(progress_layout)
@@ -135,7 +135,7 @@ class AnalysisTab(QWidget):
 
         self.txt_analysis_log = QTextEdit()
         self.txt_analysis_log.setReadOnly(True)
-        self.txt_analysis_log.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.txt_analysis_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.txt_analysis_log.setMinimumHeight(200)
         self.txt_analysis_log.setMaximumHeight(400)
         left_log_layout.addWidget(self.txt_analysis_log)
@@ -149,7 +149,7 @@ class AnalysisTab(QWidget):
 
         self.txt_alignment_log = QTextEdit()
         self.txt_alignment_log.setReadOnly(True)
-        self.txt_alignment_log.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.txt_alignment_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.txt_alignment_log.setMinimumHeight(200)
         self.txt_alignment_log.setMaximumHeight(400)
         right_log_layout.addWidget(self.txt_alignment_log)
@@ -445,7 +445,7 @@ class AnalysisTab(QWidget):
         try:
             # Define a temporary class if needed
             if not 'VMAFAnalysisThread' in globals():
-                from PyQt5.QtCore import QThread
+                from PyQt6.QtCore import QThread
 
                 global VMAFAnalysisThread
                 class VMAFAnalysisThread(QThread):
@@ -578,7 +578,7 @@ class AnalysisTab(QWidget):
         # Now define the VMAFAnalysisThread class so it can be imported elsewhere
         # Make it global to the module
         from app.vmaf_analyzer import VMAFAnalyzer
-        from PyQt5.QtCore import QThread
+        from PyQt6.QtCore import QThread
 
         # Define the class and make it global to the module
         global VMAFAnalysisThread

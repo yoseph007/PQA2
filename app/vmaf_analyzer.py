@@ -9,7 +9,7 @@ from datetime import datetime
 from fractions import Fraction
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 
 # Now using the improved utility functions
 from .utils import get_ffmpeg_path, get_subprocess_startupinfo

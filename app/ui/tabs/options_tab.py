@@ -2,8 +2,8 @@ import logging
 import os
 import platform
 
-from PyQt5.QtCore import Qt 
-from PyQt5.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
+from PyQt6.QtCore import Qt 
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
                              QFormLayout, QGroupBox, QHBoxLayout, QLabel,
                              QLineEdit, QMessageBox, QPushButton, QSlider,
                              QSpinBox, QTabWidget, QVBoxLayout, QWidget,
@@ -32,8 +32,8 @@ class OptionsTab(QWidget):
         # Create a scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         # Create a widget to hold all content
         scroll_content = QWidget()
@@ -88,8 +88,8 @@ class OptionsTab(QWidget):
         # Use a form layout for better alignment and spacing
         directories_form = QFormLayout()
         directories_form.setSpacing(10)  # Increase spacing between rows
-        directories_form.setLabelAlignment(Qt.AlignRight)  # Align labels to the right
-        directories_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)  # Let fields expand
+        directories_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)  # Align labels to the right
+        directories_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)  # Let fields expand
 
         # Reference videos directory
         ref_dir_widget = QWidget()
@@ -549,10 +549,10 @@ class OptionsTab(QWidget):
         threshold_layout = QHBoxLayout(threshold_widget)
         threshold_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.slider_white_threshold = QSlider(Qt.Horizontal)
+        self.slider_white_threshold = QSlider(Qt.Orientation.Horizontal)
         self.slider_white_threshold.setRange(160, 250)
         self.slider_white_threshold.setValue(200)
-        self.slider_white_threshold.setTickPosition(QSlider.TicksBelow)
+        self.slider_white_threshold.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.slider_white_threshold.setTickInterval(10)
 
         self.spin_white_threshold = QSpinBox()
@@ -1431,10 +1431,10 @@ class OptionsTab(QWidget):
             self, 
             "Reset Settings", 
             "Are you sure you want to reset all settings to defaults?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
 
-        if confirm == QMessageBox.Yes and self.options_manager:
+        if confirm == QMessageBox.StandardButton.Yes and self.options_manager:
             self.options_manager.reset_to_defaults()
             self.load_settings()
             QMessageBox.information(self, "Settings Reset", "Settings have been reset to defaults.")
@@ -1688,10 +1688,10 @@ class OptionsTab(QWidget):
         if mode == "immediate":
             self.lbl_stop_mode_warning.setVisible(True)
             msg_box = QMessageBox(
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 "Immediate Stop Mode Warning",
                 "Truncated, potentially unplayable captures; repair may be required.",
-                QMessageBox.Ok,
+                QMessageBox.StandardButton.Ok,
                 self
             )
             msg_box.setModal(False)

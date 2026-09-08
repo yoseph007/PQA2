@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from .vmaf_analyzer import VMAFAnalyzer
 

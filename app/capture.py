@@ -14,7 +14,7 @@ from enum import Enum
 import cv2
 import numpy as np
 import psutil
-from PyQt5.QtCore import QMutex, QObject, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QMutex, QObject, QThread, QTimer, pyqtSignal
 
 logger = logging.getLogger(__name__)
 
