@@ -666,59 +666,14 @@ class OptionsManager(QObject):
             ]
 
     def get_ffmpeg_path(self) -> str:
-        """Find the path to ffmpeg"""
+        """Find the path to ffmpeg, respecting bundled binaries in ffmpeg_bin/"""
         try:
-            # First check if we have a custom path stored in settings
             custom_path = self.get_setting("paths", "ffmpeg_path")
             if custom_path and os.path.exists(custom_path) and os.path.isfile(custom_path):
                 return custom_path
 
-            # Check if ffmpeg is in the path
-            if platform.system() == 'Windows':
-                try:
-                    result = subprocess.run(["where", "ffmpeg"], capture_output=True, text=True)
-                    if result.returncode == 0 and result.stdout.strip():
-                        return result.stdout.strip().split('\n')[0]
-                except:
-                    pass  # Fall through to next method
-            else:
-                try:
-                    result = subprocess.run(["which", "ffmpeg"], capture_output=True, text=True)
-                    if result.returncode == 0 and result.stdout.strip():
-                        return result.stdout.strip()
-                except:
-                    pass  # Fall through to next method
-
-            # Look in common directories
-            common_paths = []
-            
-            if platform.system() == 'Windows':
-                # Windows common paths
-                program_files = os.environ.get('ProgramFiles', 'C:\\Program Files')
-                program_files_x86 = os.environ.get('ProgramFiles(x86)', 'C:\\Program Files (x86)')
-                
-                common_paths = [
-                    os.path.join(program_files, "ffmpeg", "bin", "ffmpeg.exe"),
-                    os.path.join(program_files_x86, "ffmpeg", "bin", "ffmpeg.exe"),
-                    "C:\\ffmpeg\\bin\\ffmpeg.exe",
-                    os.path.join(os.path.expanduser("~"), "ffmpeg", "bin", "ffmpeg.exe")
-                ]
-            else:
-                # Linux/Mac common paths
-                common_paths = [
-                    "/usr/bin/ffmpeg",
-                    "/usr/local/bin/ffmpeg",
-                    "/opt/local/bin/ffmpeg",
-                    "/opt/homebrew/bin/ffmpeg",
-                    os.path.join(os.path.expanduser("~"), "bin", "ffmpeg")
-                ]
-                
-            for path in common_paths:
-                if os.path.exists(path) and os.path.isfile(path):
-                    return path
-
-            # Default fallback to command name
-            return "ffmpeg"
+            from .utils import get_ffmpeg_path
+            return str(get_ffmpeg_path())
         except Exception as e:
             logger.error(f"Error finding ffmpeg: {e}")
             return "ffmpeg"

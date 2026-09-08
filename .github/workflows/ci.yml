@@ -40,10 +40,12 @@ jobs:
           Get-ChildItem -Path "ffmpeg_extracted/*/bin/*" | Copy-Item -Destination "ffmpeg_bin/" -Force
           Remove-Item -Recurse -Force "ffmpeg.zip", "ffmpeg_extracted"
 
-      - name: Verify FFmpeg Installation
+      - name: Verify & Configure FFmpeg on PATH
         shell: pwsh
         run: |
-          ./ffmpeg_bin/ffmpeg.exe -version
+          $binDir = "$((Get-Item .).FullName)\ffmpeg_bin"
+          Add-Content $env:GITHUB_PATH $binDir
+          & "$binDir\ffmpeg.exe" -version
 
       - name: Install Python Dependencies
         shell: pwsh
