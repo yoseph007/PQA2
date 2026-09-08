@@ -141,8 +141,8 @@ def run_recapture_campaign(args: argparse.Namespace) -> Dict[str, Any]:
 
             # Analyze pass
             pass_res = analyzer.analyze_videos(
-                distorted=cap_file,
-                reference=ref_path,
+                reference_path=ref_path,
+                distorted_path=cap_file,
                 model=args.model
             )
 
@@ -253,10 +253,13 @@ def run_recapture_campaign(args: argparse.Namespace) -> Dict[str, Any]:
     print(f" Gage R&R Verdict : {aggregated['verdict']} [{aggregated['verdict_status'].upper()}]")
     print(f" Verdict Details  : {aggregated['verdict_description']}")
     print("-" * 76)
-    print(f" VMAF Distribution: Mean = {vmaf_s['mean']:.2f} | StdDev (sigma_rig) = {vmaf_s['stddev']:.4f} | Range = {vmaf_s['range']:.4f} | %CV_rig = {vmaf_s['cv_pct']:.3f}%")
-    if psnr_s.get("mean"):
+    if vmaf_s.get("mean") is not None:
+        print(f" VMAF Distribution: Mean = {vmaf_s['mean']:.2f} | StdDev (sigma_rig) = {vmaf_s['stddev']:.4f} | Range = {vmaf_s['range']:.4f} | %CV_rig = {vmaf_s['cv_pct']:.3f}%")
+    else:
+        print(" VMAF Distribution: Insufficient valid passes to compute Gage R&R statistics")
+    if psnr_s.get("mean") is not None:
         print(f" PSNR Distribution: Mean = {psnr_s['mean']:.2f} dB | StdDev = {psnr_s['stddev']:.4f} dB | Range = {psnr_s['range']:.4f} dB")
-    if ssim_s.get("mean"):
+    if ssim_s.get("mean") is not None:
         print(f" SSIM Distribution: Mean = {ssim_s['mean']:.4f} | StdDev = {ssim_s['stddev']:.6f} | Range = {ssim_s['range']:.6f}")
     print("-" * 76)
 

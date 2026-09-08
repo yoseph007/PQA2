@@ -103,3 +103,4 @@ config/
 ffmpeg_bin/
 ci_artifacts/
 reports/
+captures/

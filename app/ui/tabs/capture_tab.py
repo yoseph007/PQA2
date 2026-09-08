@@ -900,11 +900,14 @@ class CaptureTab(QWidget):
             self.txt_capture_log.verticalScrollBar().maximum()
         )
 
-        # Update status bar with concise message
+        # Update status bar with concise message if available
         status_summary = message.strip().splitlines()[-1] if message else ""
         if len(status_summary) > 120:
             status_summary = status_summary[:117] + "..."
-        self.parent.statusBar().showMessage(status_summary)
+        if hasattr(self.parent, 'statusBar') and callable(getattr(self.parent, 'statusBar')):
+            sb = self.parent.statusBar()
+            if sb:
+                sb.showMessage(status_summary)
 
 
     def _show_reference_preview(self):
