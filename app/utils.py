@@ -1,13 +1,38 @@
+import json
 import logging
 import os
 import platform
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime
+from fractions import Fraction
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+FFMPEG_TIMEOUT = 30  # seconds
+
+
+import inspect
+
+
+class FFmpegPaths(str):
+    """
+    String representation of ffmpeg path that can also be unpacked as
+    (ffmpeg_path, ffprobe_path, ffplay_path) for backward compatibility.
+    """
+    def __new__(cls, ffmpeg, ffprobe=None, ffplay=None):
+        obj = super().__new__(cls, ffmpeg)
+        obj.ffmpeg = str(ffmpeg)
+        obj.ffprobe = str(ffprobe or ffmpeg.replace("ffmpeg", "ffprobe"))
+        obj.ffplay = str(ffplay or ffmpeg.replace("ffmpeg", "ffplay"))
+        return obj
+
+    def __iter__(self):
+        frame = inspect.currentframe().f_back
+        if frame and frame.f_code.co_name == "list2cmdline":
+            return super().__iter__()
+        return iter((self.ffmpeg, self.ffprobe, self.ffplay))
 
 
 def get_project_paths():
@@ -30,77 +55,31 @@ def get_project_paths():
     }
 
 
-def get_ffmpeg_path():
+def get_ffmpeg_path() -> FFmpegPaths:
     """
-    Get path to ffmpeg executables
-
-    Returns:
-        Tuple of (ffmpeg_exe, ffprobe_exe, ffplay_exe) paths
+    Cross-platform ffmpeg resolution:
+    1. Bundled ffmpeg_bin/ directory (checked first).
+    2. System PATH via shutil.which().
     """
-    import logging
-    import os
+    exe_suffix = ".exe" if platform.system() == "Windows" else ""
 
-    logger = logging.getLogger(__name__)
+    # 1. Bundled binary
+    bundled = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "ffmpeg_bin", f"ffmpeg{exe_suffix}"
+    )
+    if os.path.isfile(bundled):
+        probe = os.path.join(os.path.dirname(bundled), f"ffprobe{exe_suffix}")
+        play = os.path.join(os.path.dirname(bundled), f"ffplay{exe_suffix}")
+        return FFmpegPaths(bundled, probe, play)
 
-    # Find the root directory of the application
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # 2. PATH lookup
+    found = shutil.which("ffmpeg")
+    if found:
+        return FFmpegPaths(found)
 
-    # The directory might be 'app' or we might be at the root already
-    # Try to determine the actual root directory
-    if os.path.basename(current_dir) == "app":
-        root_dir = os.path.dirname(current_dir)  # Go up one level if we're in the app directory
-    else:
-        root_dir = current_dir  # We're already at the root
-
-    logger.info(f"Root directory determined to be: {root_dir}")
-
-    # Check if ffmpeg_bin exists at the root level
-    ffmpeg_bin_dir = os.path.join(root_dir, "ffmpeg_bin")
-    if not os.path.exists(ffmpeg_bin_dir):
-        # If not, check adjacent to the app directory
-        ffmpeg_bin_dir = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "ffmpeg_bin")
-        if not os.path.exists(ffmpeg_bin_dir):
-            # As a last resort, just use the current directory
-            ffmpeg_bin_dir = current_dir
-
-    logger.info(f"Using FFmpeg bin directory: {ffmpeg_bin_dir}")
-
-    ffmpeg_exe = os.path.join(ffmpeg_bin_dir, "ffmpeg.exe") 
-    ffprobe_exe = os.path.join(ffmpeg_bin_dir, "ffprobe.exe")
-    ffplay_exe = os.path.join(ffmpeg_bin_dir, "ffplay.exe")
-
-    # Check if files exist
-    if not os.path.exists(ffmpeg_exe):
-        logger.warning(f"FFmpeg executable not found at {ffmpeg_exe}")
-        # Try to find ffmpeg.exe in PATH
-        ffmpeg_exe = "ffmpeg"
-    if not os.path.exists(ffprobe_exe):
-        logger.warning(f"FFprobe executable not found at {ffprobe_exe}")
-        # Try to find ffprobe.exe in PATH
-        ffprobe_exe = "ffprobe"
-    if not os.path.exists(ffplay_exe):
-        logger.warning(f"FFplay executable not found at {ffplay_exe}")
-        # Try to find ffplay.exe in PATH  
-        ffplay_exe = "ffplay"
-
-    # Check if files exist
-    if not os.path.exists(ffmpeg_exe):
-        logger.warning(f"FFmpeg executable not found at {ffmpeg_exe}")
-        # Try to find ffmpeg.exe in PATH
-        ffmpeg_exe = "ffmpeg.exe"
-    if not os.path.exists(ffprobe_exe):
-        logger.warning(f"FFprobe executable not found at {ffprobe_exe}")
-        # Try to find ffprobe.exe in PATH
-        ffprobe_exe = "ffprobe.exe"
-    if not os.path.exists(ffplay_exe):
-        logger.warning(f"FFplay executable not found at {ffplay_exe}")
-        # Try to find ffplay.exe in PATH  
-        ffplay_exe = "ffplay.exe"
-
-    logger.info(f"FFmpeg path: {ffmpeg_exe}")
-    logger.info(f"FFprobe path: {ffprobe_exe}")
-
-    return (ffmpeg_exe, ffprobe_exe, ffplay_exe)
+    # Fallback for legacy behavior
+    return FFmpegPaths(f"ffmpeg{exe_suffix}")
 
 
 class FileManager:
@@ -357,11 +336,22 @@ def validate_application_state(app_instance):
     Validate that the application is in a consistent state
     
     Args:
-        app_instance: Reference to the main application window
+        app_instance: Reference to the main application window or options_manager
         
     Returns:
-        Dictionary with validation results
+        Dictionary with validation results (or bool if options_manager checked directly)
     """
+    if hasattr(app_instance, "get_settings") or hasattr(app_instance, "get_all_settings"):
+        try:
+            settings = (
+                app_instance.get_all_settings()
+                if hasattr(app_instance, "get_all_settings")
+                else app_instance.get_settings()
+            )
+        except AttributeError:
+            settings = {}
+        return isinstance(settings, dict)
+
     results = {
         'status': 'PASS',
         'issues': [],
@@ -490,32 +480,15 @@ def normalize_path(path, for_ffmpeg=False):
 
 
 def get_subprocess_startupinfo():
-    """
-    Get a STARTUPINFO object configured to suppress Windows console windows and error dialogs
-
-    Returns:
-        Tuple containing (startupinfo, creationflags, env) for subprocess calls
-    """
-    startupinfo = None
-    creationflags = 0
-    env = os.environ.copy()
-
-    if platform.system() == 'Windows':
+    """Return Windows startupinfo/creationflags to suppress console dialogs."""
+    if platform.system() == "Windows":
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = 0  # SW_HIDE
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        return startupinfo, creationflags
+    return None, 0
 
-        # Use CREATE_NO_WINDOW flag if available
-        if hasattr(subprocess, 'CREATE_NO_WINDOW'):
-            creationflags = subprocess.CREATE_NO_WINDOW
-
-        # Add environment variables to suppress FFmpeg dialogs
-        env.update({
-            "FFMPEG_HIDE_BANNER": "1",
-            "AV_LOG_FORCE_NOCOLOR": "1"
-        })
-
-    return startupinfo, creationflags, env
 
 def run_ffmpeg_without_dialogs(cmd, timeout=None, input_data=None, universal_newlines=True):
     """
@@ -530,13 +503,17 @@ def run_ffmpeg_without_dialogs(cmd, timeout=None, input_data=None, universal_new
     Returns:
         CompletedProcess object or subprocess.Popen object if input_data is provided
     """
-    startupinfo, creationflags, env = get_subprocess_startupinfo()
+    startupinfo, creationflags = get_subprocess_startupinfo()
+    env = os.environ.copy()
+    if platform.system() == "Windows":
+        env.update({
+            "FFMPEG_HIDE_BANNER": "1",
+            "AV_LOG_FORCE_NOCOLOR": "1"
+        })
 
-    # Log the command being executed
     logging.getLogger(__name__).debug(f"Running FFmpeg command: {' '.join(cmd)}")
 
     if input_data is not None:
-        # When stdin input is needed, use Popen
         process = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -550,7 +527,6 @@ def run_ffmpeg_without_dialogs(cmd, timeout=None, input_data=None, universal_new
         stdout, stderr = process.communicate(input=input_data, timeout=timeout)
         return process
     else:
-        # For simple commands, use run
         return subprocess.run(
             cmd,
             stdout=subprocess.PIPE, 
@@ -563,99 +539,75 @@ def run_ffmpeg_without_dialogs(cmd, timeout=None, input_data=None, universal_new
         )
 
 
-def get_video_info(video_path):
+def get_video_info(video_path: str) -> Optional[dict]:
     """
-    Get detailed information about a video file using FFprobe
-
-    Args:
-        video_path: Path to video file
-
-    Returns:
-        Dictionary with video information or None on error
+    Extract video metadata via ffprobe.
+    Returns dictionary with metadata (including 'total_frames') or None on failure.
     """
+    if not video_path:
+        return None
+
+    _, ffprobe, _ = get_ffmpeg_path()
+    startupinfo, creationflags = get_subprocess_startupinfo()
+
+
+    cmd = [
+        ffprobe, "-v", "quiet", "-print_format", "json",
+        "-show_format", "-show_streams", video_path,
+    ]
     try:
-        # Get FFprobe executable path
-        ffmpeg_exe, ffprobe_exe, ffplay_exe = get_ffmpeg_path()
-
-        # Normalize path for FFprobe
-        video_path_ffmpeg = video_path.replace("\\", "/")
-
-        cmd = [
-            ffprobe_exe,
-            "-v", "quiet",
-            "-print_format", "json",
-            "-show_format", 
-            "-show_streams",
-            video_path_ffmpeg
-        ]
-
-        # Get startup info to suppress dialogs
-        startupinfo, creationflags, env = get_subprocess_startupinfo()
-
         result = subprocess.run(
-            cmd, 
-            capture_output=True, 
-            text=True,
-            startupinfo=startupinfo,
-            creationflags=creationflags
+            cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT,
+            startupinfo=startupinfo, creationflags=creationflags,
         )
-
         if result.returncode != 0:
             logger.error(f"FFprobe failed: {result.stderr}")
             return None
 
-        # Parse JSON output
-        import json
-        info = json.loads(result.stdout)
-
-        # Get video stream info
-        video_stream = None
-        for stream in info.get('streams', []):
-            if stream.get('codec_type') == 'video':
-                video_stream = stream
-                break
-
-        if not video_stream:
+        data = json.loads(result.stdout)
+        video_stream = next(
+            (s for s in data.get("streams", []) if s.get("codec_type") == "video"), None
+        )
+        if video_stream is None:
             logger.error(f"No video stream found in {video_path}")
             return None
 
-        # Extract key information
-        format_info = info.get('format', {})
-        duration = float(format_info.get('duration', 0))
+        # Parse frame rate safely without eval
+        try:
+            rate_str = str(video_stream.get("avg_frame_rate", "0/1"))
+            fps = float(Fraction(rate_str)) if "/" in rate_str else float(rate_str)
+        except Exception:
+            fps = 0.0
 
-        # Parse frame rate
-        frame_rate_str = video_stream.get('avg_frame_rate', '0/0')
-        if '/' in frame_rate_str:
-            num, den = map(int, frame_rate_str.split('/'))
-            if den == 0:
-                frame_rate = 0
+        format_info = data.get("format", {})
+        duration = float(format_info.get("duration", 0))
+
+        frame_count = video_stream.get("nb_frames")
+        if frame_count is not None:
+            try:
+                frame_count = int(frame_count)
+            except (ValueError, TypeError):
+                frame_count = None
+
+        if frame_count is None or frame_count == 0:
+            # Estimate from duration and fps
+            if fps and duration:
+                frame_count = int(round(fps * duration))
             else:
-                frame_rate = num / den
-        else:
-            frame_rate = float(frame_rate_str or 0)
-
-        # Get dimensions and frame count
-        width = int(video_stream.get('width', 0))
-        height = int(video_stream.get('height', 0))
-        frame_count = int(video_stream.get('nb_frames', 0))
-
-        # If nb_frames is missing or zero, estimate from duration
-        if frame_count == 0 and frame_rate > 0:
-            frame_count = int(round(duration * frame_rate))
-
-        # Get pixel format
-        pix_fmt = video_stream.get('pix_fmt', 'unknown')
+                frame_count = 0
 
         return {
-            'path': video_path,
-            'duration': duration,
-            'frame_rate': frame_rate,
-            'width': width,
-            'height': height,
-            'frame_count': frame_count,
-            'pix_fmt': pix_fmt
+            "path": video_path,
+            "width": int(video_stream.get("width", 0)),
+            "height": int(video_stream.get("height", 0)),
+            "fps": fps,
+            "frame_rate": fps,
+            "duration": duration,
+            "frame_count": frame_count,
+            "total_frames": frame_count,   # alias required by BookendAligner
+            "codec": video_stream.get("codec_name", ""),
+            "pix_fmt": video_stream.get("pix_fmt", "unknown"),
         }
-
-    except Exception as e:
-        logger.error(f"Error getting video info for {video_path}: {str(e)}")
-        return None
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as e:
+        logger.error(f"Error getting video info for {video_path}: {e}")
+        return None

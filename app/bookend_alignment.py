@@ -1,19 +1,49 @@
+import json
 import logging
 import os
+import platform
+import shutil
 import subprocess
 import time
+import traceback
 from datetime import datetime
+from enum import Enum
 
 import cv2
 import numpy as np
 from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal
 
-from app.utils import get_ffmpeg_path, get_subprocess_startupinfo
+from app.utils import (
+    get_ffmpeg_path,
+    get_subprocess_startupinfo,
+    get_video_info,
+    run_ffmpeg_without_dialogs,
+)
 
 logger = logging.getLogger(__name__)
 
-# Define MAX_REPAIR_ATTEMPTS constant
+
+class AlignmentState(Enum):
+    IDLE = "idle"
+    ANALYZING = "analyzing"
+    ALIGNING = "aligning"
+    REPAIRING = "repairing"
+    COMPLETED = "completed"
+    COMPLETE = "completed"  # backward compatibility alias
+    FAILED = "failed"
+    ERROR = "failed"        # backward compatibility alias
+    RUNNING = "aligning"    # backward compatibility alias
+
+
+# Named timing constants (replace magic numbers)
+INITIAL_SKIP_SECONDS = 0.2
+BUFFER_FRAMES = 1.5
+DEFAULT_CONFIDENCE = 0.95
 MAX_REPAIR_ATTEMPTS = 3
+FFMPEG_TIMEOUT = 60
+MOTION_COMPENSATION_TIMEOUT = 300
+DEFAULT_FRAME_OFFSET = 3
+
 
 def validate_video_file(file_path):
     """Validate if a video file is intact and can be read"""
@@ -26,8 +56,8 @@ def validate_video_file(file_path):
         return False
 
     try:
-        # Use ffprobe to validate file
         _, ffprobe_exe, _ = get_ffmpeg_path()
+        startupinfo, creationflags = get_subprocess_startupinfo()
         cmd = [
             ffprobe_exe,
             "-v", "error",
@@ -37,176 +67,150 @@ def validate_video_file(file_path):
             file_path
         ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=10,
+            startupinfo=startupinfo, creationflags=creationflags
+        )
 
         if result.returncode != 0:
             logger.error(f"FFprobe validation failed: {result.stderr}")
             return False
 
-        # Check if we got valid JSON output with a video stream
-        import json
-        try:
-            info = json.loads(result.stdout)
-            return 'streams' in info and len(info['streams']) > 0
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON response from FFprobe")
-            return False
+        info = json.loads(result.stdout)
+        return 'streams' in info and len(info['streams']) > 0
 
     except Exception as e:
         logger.error(f"Error validating video file: {e}")
         return False
 
-    return True
 
-def repair_video_file(video_path):
+def repair_video_file(video_path: str, error_callback=None) -> bool:
     """
-    Repair a video file with missing moov atom by remuxing it with FFmpeg
-
-    Args:
-        video_path: Path to the video file that needs repair
-
-    Returns:
-        bool: True if repair was successful, False otherwise
+    Repair a video file with missing moov atom by remuxing it with FFmpeg.
+    Uses atomic os.replace and cleans up temp files on failure.
     """
     if not os.path.exists(video_path):
         logger.error(f"Cannot repair nonexistent file: {video_path}")
         return False
 
-    try:
-        # Create a temporary file name
-        temp_path = f"{video_path}.repaired.mp4"
-        logger.info(f"Attempting to repair video file: {video_path}")
+    temp_path = f"{video_path}.repaired.mp4"
+    ffmpeg_exe, _, _ = get_ffmpeg_path()
+    startupinfo, creationflags = get_subprocess_startupinfo()
 
-        # Use FFmpeg to remux the file - this often fixes moov atom issues
-        ffmpeg_exe, _, _ = get_ffmpeg_path()
-        cmd = [
-            ffmpeg_exe, "-hide_banner", "-loglevel", "warning",
-            "-i", video_path, 
-            "-c", "copy",  # Copy streams without re-encoding
-            "-movflags", "faststart",  # Place moov atom at the beginning
-            temp_path
-        ]
-
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            logger.error(f"FFmpeg repair failed: {result.stderr}")
-            return False
-
-        # Replace the original file with the repaired one
+    for attempt in range(1, MAX_REPAIR_ATTEMPTS + 1):
         try:
-            # Remove original if repair was successful
-            os.remove(video_path)
-            os.rename(temp_path, video_path)
-            logger.info(f"Successfully repaired video file: {video_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Error replacing original file after repair: {e}")
-            return False
+            cmd = [
+                ffmpeg_exe, "-hide_banner", "-loglevel", "warning", "-y",
+                "-i", video_path,
+                "-c", "copy",
+                "-movflags", "faststart",
+                temp_path
+            ]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT,
+                startupinfo=startupinfo, creationflags=creationflags
+            )
+            if result.returncode == 0 and os.path.isfile(temp_path):
+                os.replace(temp_path, video_path)  # atomic replacement
+                logger.info(f"Successfully repaired video file: {video_path}")
+                return True
+            err_msg = f"Repair attempt {attempt}/{MAX_REPAIR_ATTEMPTS} failed: {result.stderr[-500:]}"
+            logger.warning(err_msg)
+            if error_callback:
+                error_callback(err_msg)
+        except subprocess.TimeoutExpired:
+            err_msg = f"Repair attempt {attempt} timed out"
+            logger.warning(err_msg)
+            if error_callback:
+                error_callback(err_msg)
+        except OSError as e:
+            err_msg = f"Repair attempt {attempt} error: {e}"
+            logger.warning(err_msg)
+            if error_callback:
+                error_callback(err_msg)
+        finally:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+    return False
 
-    except Exception as e:
-        logger.error(f"Error during video repair: {e}")
-        return False
 
 class BookendAligner(QObject):
     """
     Class for aligning captured video with reference video using white frame bookends
     """
     alignment_progress = pyqtSignal(int)  # 0-100%
+    progress_updated = alignment_progress
     alignment_complete = pyqtSignal(dict)  # Results including offset
     error_occurred = pyqtSignal(str)
     status_update = pyqtSignal(str)
+    status_updated = status_update
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, options_manager=None, parent=None):
+        super().__init__(parent)
         ffmpeg_exe, ffprobe_exe, _ = get_ffmpeg_path()
         self._ffmpeg_path = ffmpeg_exe
         self._ffprobe_path = ffprobe_exe
-        
+
+        self.options_manager = options_manager
+        opts = {}
+        if options_manager:
+            try:
+                all_s = options_manager.get_settings() or {}
+                bookend_s = options_manager.get_setting("bookend") if hasattr(options_manager, "get_setting") else {}
+                if isinstance(bookend_s, dict):
+                    opts.update(bookend_s)
+                opts.update(all_s)
+            except Exception:
+                pass
+
+        self.frame_offset = int(opts.get("frame_offset", DEFAULT_FRAME_OFFSET))
+        self.white_threshold = float(opts.get("white_threshold", 230.0))
+
         # Default values for advanced options
-        self.frame_sampling_rate = 5  # Frames to sample per second during detection
-        self.adaptive_brightness = True  # Use adaptive brightness threshold
-        self.motion_compensation = False  # Apply motion compensation
-        self.fallback_to_full_video = True  # Use full video if no bookends detected
+        self.frame_sampling_rate = int(opts.get("frame_sampling_rate", 5))
+        self.adaptive_brightness = bool(opts.get("adaptive_brightness", True))
+        self.motion_compensation = bool(opts.get("motion_compensation", False))
+        self.fallback_to_full_video = bool(opts.get("fallback_to_full_video", True))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    def repair_video_file(self, video_path: str) -> bool:
+        return repair_video_file(video_path, error_callback=self.error_occurred.emit)
 
     def set_advanced_options(self, frame_sampling_rate=5, adaptive_brightness=True, 
-                        motion_compensation=True, fallback_to_full_video=True):
+                             motion_compensation=False, fallback_to_full_video=True):
         """Set advanced options for bookend alignment"""
-        # Store the previous settings for logging
         prev_motion_comp = self.motion_compensation
-        
-        # Update the settings
         self.frame_sampling_rate = frame_sampling_rate
         self.adaptive_brightness = adaptive_brightness
         self.motion_compensation = motion_compensation
         self.fallback_to_full_video = fallback_to_full_video
         
-        # Log the change in motion compensation setting
         if prev_motion_comp != motion_compensation:
             logger.info(f"Motion compensation setting changed: {prev_motion_comp} -> {motion_compensation}")
         
         logger.info(f"Set advanced bookend options: sampling_rate={frame_sampling_rate}, "
-                f"adaptive_brightness={adaptive_brightness}, "
-                f"motion_compensation={motion_compensation}, "
-                f"fallback_to_full_video={fallback_to_full_video}")
-
-
-
-
-
-
-
-
-
-
-
-
-
+                    f"adaptive_brightness={adaptive_brightness}, "
+                    f"motion_compensation={motion_compensation}, "
+                    f"fallback_to_full_video={fallback_to_full_video}")
 
     def _apply_motion_compensation(self, video_path, start_time, duration):
         """
         Apply motion compensation to the video to improve alignment for fast-moving content
-        
-        Args:
-            video_path: Path to the input video
-            start_time: Start time for content section
-            duration: Duration of content
-            
-        Returns:
-            Path to motion-compensated video or None if failed
         """
         try:
-            # Create output filename with _motion_comp suffix
             output_dir = os.path.dirname(video_path)
             base_name = os.path.splitext(os.path.basename(video_path))[0]
             output_path = os.path.join(output_dir, f"{base_name}_motion_comp.mp4")
             
-            # Get input video frame rate
-            video_info = self._get_video_info(video_path)
+            video_info = get_video_info(video_path) or {}
             original_fps = video_info.get('frame_rate', 30)
             
             logger.info(f"Applying motion compensation from {start_time:.3f}s for {duration:.3f}s with fps={original_fps}")
             
-            # Create FFmpeg command for motion compensation
-            # First extract the section we want to process
             ffmpeg_exe, _, _ = get_ffmpeg_path()
+            startupinfo, creationflags = get_subprocess_startupinfo()
             cmd = [
                 ffmpeg_exe, "-hide_banner", "-y",
                 "-i", video_path,
@@ -214,56 +218,36 @@ class BookendAligner(QObject):
                 "-t", str(duration),
                 "-vf", f"minterpolate=fps={original_fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
                 "-c:v", "libx264", "-crf", "23", "-preset", "fast",
-                "-r", str(original_fps),  # Ensure output frame rate matches source
+                "-r", str(original_fps),
                 output_path
             ]
             
-            # Run the command
             logger.info(f"Running motion compensation: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True,
+                timeout=MOTION_COMPENSATION_TIMEOUT,
+                startupinfo=startupinfo, creationflags=creationflags
+            )
             
             if result.returncode != 0:
                 logger.error(f"Motion compensation failed: {result.stderr}")
                 return None
                 
-            # Verify the output file exists and is valid
             if not os.path.exists(output_path) or not validate_video_file(output_path):
                 logger.error("Motion compensation output file is invalid")
                 return None
                 
             return output_path
-            
         except Exception as e:
             logger.error(f"Error applying motion compensation: {e}")
             return None
 
-
-
-
-
-
-
-    def align_bookend_videos(self, reference_path, captured_path):
+    def align_bookend_videos(self, reference_path, captured_path, output_path=None):
         """
         Align videos based on white frame bookends that surround the content
-
-        Returns a dictionary with:
-        - aligned_reference: Path to trimmed reference video
-        - aligned_captured: Path to trimmed captured video
         """
         try:
-            # Log the current setting of motion_compensation at the start
             logger.info(f"Starting alignment with motion_compensation={self.motion_compensation}")
-            
-            self.status_update.emit("Starting white bookend alignment process...")
-            logger.info("Starting white bookend alignment process")           
-            
-            
-            
-            
-            
-            
-            
             self.status_update.emit("Starting white bookend alignment process...")
             logger.info("Starting white bookend alignment process")
 
@@ -283,7 +267,7 @@ class BookendAligner(QObject):
             # Validate video files first
             if not validate_video_file(captured_path):
                 self.status_update.emit("Captured video file appears invalid, attempting repair...")
-                if not repair_video_file(captured_path):
+                if not self.repair_video_file(captured_path):
                     error_msg = "Failed to repair captured video file"
                     logger.error(error_msg)
                     self.error_occurred.emit(error_msg)
@@ -292,8 +276,8 @@ class BookendAligner(QObject):
                     self.status_update.emit("Video file repaired successfully")
 
             # Get video info
-            ref_info = self._get_video_info(reference_path)
-            cap_info = self._get_video_info(captured_path)
+            ref_info = get_video_info(reference_path)
+            cap_info = get_video_info(captured_path)
 
             if not ref_info or not cap_info:
                 error_msg = "Failed to get video information"
@@ -301,7 +285,6 @@ class BookendAligner(QObject):
                 self.error_occurred.emit(error_msg)
                 return None
 
-            # First find the white bookends in the captured video
             self.status_update.emit("Detecting white bookend frames in captured video...")
             self.alignment_progress.emit(10)
 
@@ -312,14 +295,12 @@ class BookendAligner(QObject):
                 logger.error(error_msg)
                 self.error_occurred.emit(error_msg)
                 
-                # If fallback is enabled, use the entire video
                 if self.fallback_to_full_video:
                     logger.info("Falling back to using entire captured video as content")
                     self.status_update.emit("No bookends detected. Using entire video instead...")
                     
-                    # Create fallback bookends
-                    content_start_time = 0.2  # Skip first 0.2 sec to avoid any initial issues
-                    content_duration = cap_info.get('duration', 0) - 0.4  # Leave 0.2 sec at the end
+                    content_start_time = INITIAL_SKIP_SECONDS
+                    content_duration = cap_info.get('duration', 0) - 2 * INITIAL_SKIP_SECONDS
                     
                     if content_duration <= 0:
                         error_msg = "Video duration too short for proper alignment"
@@ -328,78 +309,69 @@ class BookendAligner(QObject):
                         return None
                 else:
                     return None
+            else:
+                first_bookend = bookend_frames[0]
+                last_bookend = bookend_frames[-1]
 
-            # We need at least 2 bookends
-            first_bookend = bookend_frames[0]
-            last_bookend = bookend_frames[-1]
+                logger.info(f"Detected first white bookend at: {first_bookend['start_time']:.3f}s - {first_bookend['end_time']:.3f}s")
+                logger.info(f"Detected last white bookend at: {last_bookend['start_time']:.3f}s - {last_bookend['end_time']:.3f}s")
 
-            logger.info(f"Detected first white bookend at: {first_bookend['start_time']:.3f}s - {first_bookend['end_time']:.3f}s")
-            logger.info(f"Detected last white bookend at: {last_bookend['start_time']:.3f}s - {last_bookend['end_time']:.3f}s")
+                frame_buffer_time = BUFFER_FRAMES / cap_info.get('frame_rate', 30)
+                content_start_time = first_bookend['end_time'] + frame_buffer_time
+                content_end_time = last_bookend['start_time'] - frame_buffer_time
 
-            # The content is between the end of the first bookend and the start of the last bookend
-            # Calculate frame buffer time based on actual frame rate
-            frame_buffer_time = 1.5 / cap_info.get('frame_rate', 30)  # Buffer of 1.5 frames
-            content_start_time = first_bookend['end_time'] + frame_buffer_time
-            content_end_time = last_bookend['start_time'] - frame_buffer_time
+                if content_end_time <= content_start_time:
+                    error_msg = "Invalid content timing between bookends"
+                    logger.error(error_msg)
+                    self.error_occurred.emit(error_msg)
+                    return None
 
-            # Make sure we have valid timing
-            if content_end_time <= content_start_time:
-                error_msg = "Invalid content timing between bookends"
-                logger.error(error_msg)
-                self.error_occurred.emit(error_msg)
-                return None
+                content_duration = content_end_time - content_start_time
+                logger.info(f"Content duration between bookends: {content_duration:.3f}s")
 
-            content_duration = content_end_time - content_start_time
-            logger.info(f"Content duration between bookends: {content_duration:.3f}s")
+                ref_duration = ref_info.get('duration', 0)
 
-            # Check if reference video duration is similar
-            ref_duration = ref_info.get('duration', 0)
+                # Handle multi-loop videos
+                if content_duration > ref_duration * 1.5:
+                    logger.info(f"Reference duration ({ref_duration:.3f}s) - content duration ({content_duration:.3f}s)")
+                    logger.info("Detected multiple loops in captured video, looking for individual loops")
 
-            # Handle multi-loop videos
-            if content_duration > ref_duration * 1.5:
-                logger.info(f"Reference duration ({ref_duration:.3f}s) - content duration ({content_duration:.3f}s)")
-                logger.info("Detected multiple loops in captured video, looking for individual loops")
+                    if len(bookend_frames) > 2:
+                        best_start_idx = 0
+                        best_duration_diff = float('inf')
 
-                # If we have more than 2 bookends, try to find the correct loop
-                if len(bookend_frames) > 2:
-                    # Try to find consecutive bookends that match the reference duration
-                    best_start_idx = 0
-                    best_duration_diff = float('inf')
+                        for i in range(len(bookend_frames) - 1):
+                            start_bookend = bookend_frames[i]
+                            end_bookend = bookend_frames[i + 1]
 
-                    for i in range(len(bookend_frames) - 1):
-                        start_bookend = bookend_frames[i]
-                        end_bookend = bookend_frames[i + 1]
+                            loop_start = start_bookend['end_time'] + frame_buffer_time
+                            loop_end = end_bookend['start_time'] - frame_buffer_time
+                            loop_duration = loop_end - loop_start
 
-                        loop_start = start_bookend['end_time'] + frame_buffer_time
-                        loop_end = end_bookend['start_time'] - frame_buffer_time
-                        loop_duration = loop_end - loop_start
+                            duration_diff = abs(loop_duration - ref_duration)
+                            logger.info(f"Loop {i+1}: {loop_start:.3f}s - {loop_end:.3f}s = {loop_duration:.3f}s (diff: {duration_diff:.3f}s)")
 
-                        duration_diff = abs(loop_duration - ref_duration)
+                            if duration_diff < best_duration_diff:
+                                best_duration_diff = duration_diff
+                                best_start_idx = i
 
-                        logger.info(f"Loop {i+1}: {loop_start:.3f}s - {loop_end:.3f}s = {loop_duration:.3f}s (diff: {duration_diff:.3f}s)")
+                        start_bookend = bookend_frames[best_start_idx]
+                        end_bookend = bookend_frames[best_start_idx + 1]
 
-                        if duration_diff < best_duration_diff:
-                            best_duration_diff = duration_diff
-                            best_start_idx = i
+                        content_start_time = start_bookend['end_time'] + frame_buffer_time
+                        content_end_time = end_bookend['start_time'] - frame_buffer_time
+                        content_duration = content_end_time - content_start_time
 
-                    # Use the best matching loop
-                    start_bookend = bookend_frames[best_start_idx]
-                    end_bookend = bookend_frames[best_start_idx + 1]
-
-                    content_start_time = start_bookend['end_time'] + frame_buffer_time
-                    content_end_time = end_bookend['start_time'] - frame_buffer_time
-                    content_duration = content_end_time - content_start_time
-
-                    logger.info(f"Selected loop {best_start_idx+1}: {content_start_time:.3f}s - {content_end_time:.3f}s = {content_duration:.3f}s")
-                else:
-                    # Just use a single reference duration from the start
-                    logger.info(f"Using only first {ref_duration:.3f}s of content")
-                    content_duration = ref_duration
+                        logger.info(f"Selected loop {best_start_idx+1}: {content_start_time:.3f}s - {content_end_time:.3f}s = {content_duration:.3f}s")
+                    else:
+                        msg = f"Multi-loop video detected with only 2 bookends: trimming to first {ref_duration:.3f}s matching reference"
+                        logger.info(msg)
+                        self.status_update.emit(msg)
+                        content_duration = ref_duration
 
             self.alignment_progress.emit(50)
             self.status_update.emit("Creating aligned videos...")
 
-            # KEY FIX: Only apply motion compensation if explicitly enabled
             processed_captured_path = captured_path
             if self.motion_compensation:
                 logger.info("Motion compensation is ENABLED in settings, applying it...")
@@ -415,19 +387,19 @@ class BookendAligner(QObject):
                     logger.info(f"Motion compensation applied, using: {motion_compensated_path}")
                     processed_captured_path = motion_compensated_path
                     content_start_time = 0
-                    content_duration = self._get_video_info(motion_compensated_path).get('duration', content_duration)
+                    mc_info = get_video_info(motion_compensated_path) or {}
+                    content_duration = mc_info.get('duration', content_duration)
                 else:
                     logger.warning("Motion compensation failed, proceeding with original footage")
             else:
-                # Explicitly log that we're skipping motion compensation
                 logger.info("Motion compensation is DISABLED in settings, skipping...")
-            
-            # Create aligned videos without motion compensation
+
             aligned_reference, aligned_captured = self._create_aligned_videos_by_bookends(
                 reference_path,
                 processed_captured_path,
                 content_start_time,
-                content_duration
+                content_duration,
+                output_dir=os.path.dirname(output_path) if output_path else None
             )
 
             if not aligned_reference or not aligned_captured:
@@ -439,45 +411,35 @@ class BookendAligner(QObject):
             self.alignment_progress.emit(100)
             self.status_update.emit("White bookend alignment complete!")
 
-            # Prepare result object
             result = {
                 'alignment_method': 'bookend',
-                'offset_frames': 0,  # Not applicable for bookend method
-                'offset_seconds': 0, # Not applicable for bookend method
-                'confidence': 0.95,  # High confidence with bookend method
+                'offset_frames': 0,
+                'offset_seconds': 0,
+                'confidence': DEFAULT_CONFIDENCE,
                 'aligned_reference': aligned_reference,
                 'aligned_captured': aligned_captured,
                 'bookend_info': {
-                    'first_bookend': first_bookend,
-                    'last_bookend': last_bookend,
+                    'first_bookend': bookend_frames[0] if bookend_frames else None,
+                    'last_bookend': bookend_frames[-1] if bookend_frames else None,
                     'content_duration': content_duration,
-                    'motion_compensated': self.motion_compensation  # Record whether we actually used motion compensation
+                    'motion_compensated': self.motion_compensation
                 }
             }
 
             self.alignment_complete.emit(result)
             return result
-
         except Exception as e:
             error_msg = f"Error in bookend alignment: {str(e)}"
             logger.error(error_msg)
-            import traceback
             logger.error(traceback.format_exc())
             self.error_occurred.emit(error_msg)
             return None
 
-
-
-
-
-
-
-    def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration):
+    def _create_aligned_videos_by_bookends(self, reference_path, captured_path, content_start_time, content_duration, output_dir=None):
         """Create aligned videos based on bookend content timing with improved naming"""
         try:
-            # Get frame rates and counts to ensure we preserve them
-            ref_info = self._get_video_info(reference_path)
-            cap_info = self._get_video_info(captured_path)
+            ref_info = get_video_info(reference_path) or {}
+            cap_info = get_video_info(captured_path) or {}
             ref_fps = ref_info.get('frame_rate', 30)
             cap_fps = cap_info.get('frame_rate', 30)
             ref_frame_count = ref_info.get('frame_count', 0)
@@ -485,175 +447,150 @@ class BookendAligner(QObject):
             logger.info(f"Preserving original frame rates: reference={ref_fps}fps, captured={cap_fps}fps")
             logger.info(f"Reference frame count: {ref_frame_count}")
             
-            # IMPORTANT: Include directory handling code
-            # First try to get output directory from parent of reference path
-            # This ensures results go in test_results, not test_references
-            ref_parent_dir = os.path.dirname(os.path.dirname(reference_path))
-            if os.path.basename(ref_parent_dir) == "test_references":
-                # If reference is in test_references, use test_results instead
-                test_results_dir = os.path.join(os.path.dirname(ref_parent_dir), "test_results")
-                if os.path.exists(test_results_dir):
-                    # Get test name from captured_path directory
-                    capture_dir_name = os.path.basename(os.path.dirname(captured_path))
-                    # Create matching directory in test_results
-                    output_dir = os.path.join(test_results_dir, capture_dir_name)
-                    os.makedirs(output_dir, exist_ok=True)
-                    logger.info(f"Using test_results directory for aligned output: {output_dir}")
+            if not output_dir:
+                ref_parent_dir = os.path.dirname(os.path.dirname(reference_path))
+                if os.path.basename(ref_parent_dir) == "test_references":
+                    test_results_dir = os.path.join(os.path.dirname(ref_parent_dir), "test_results")
+                    if os.path.exists(test_results_dir):
+                        capture_dir_name = os.path.basename(os.path.dirname(captured_path))
+                        output_dir = os.path.join(test_results_dir, capture_dir_name)
+                        os.makedirs(output_dir, exist_ok=True)
+                        logger.info(f"Using test_results directory for aligned output: {output_dir}")
+                    else:
+                        output_dir = os.path.dirname(captured_path)
                 else:
-                    # Fallback to captured path directory
                     output_dir = os.path.dirname(captured_path)
-                    logger.warning(f"test_results directory not found, using: {output_dir}")
-            else:
-                # If not in test_references, use the captured path directory
-                output_dir = os.path.dirname(captured_path)
 
-            # Get the timestamp from the directory name if possible
+            os.makedirs(output_dir, exist_ok=True)
+
             dir_name = os.path.basename(output_dir)
             timestamp = ""
             if "_" in dir_name:
                 parts = dir_name.split("_")
                 if len(parts) >= 2 and parts[-1].isdigit():
                     timestamp = parts[-1]
-                else:
-                    # Use current timestamp if we can't extract it
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            else:
-                # Use current timestamp if there's no underscore
+            if not timestamp:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
-            # Get base name parts
             ref_base = os.path.splitext(os.path.basename(reference_path))[0]
             cap_base = os.path.splitext(os.path.basename(captured_path))[0]
-            
-            # Remove any existing "_motion_comp" suffix from captured file base name
             if "_motion_comp" in cap_base:
                 cap_base = cap_base.replace("_motion_comp", "")
 
-            # Create output paths
             aligned_reference = os.path.join(output_dir, f"{ref_base}_{timestamp}_aligned.mp4")
             aligned_captured = os.path.join(output_dir, f"{cap_base}_{timestamp}_aligned.mp4")
 
-            # Trim reference video - use the whole reference with high quality settings
+            startupinfo, creationflags = get_subprocess_startupinfo()
+
+            # Trim reference video
             ref_cmd = [
                 self._ffmpeg_path, "-y", "-i", reference_path,
-                "-r", str(ref_fps),  # Preserve original frame rate
+                "-r", str(ref_fps),
                 "-c:v", "libx264", "-crf", "23", 
                 "-preset", "fast", "-c:a", "copy",
                 aligned_reference
             ]
-
             logger.info(f"Creating aligned reference video: {aligned_reference}")
-            subprocess.run(ref_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            ref_res = subprocess.run(
+                ref_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT,
+                startupinfo=startupinfo, creationflags=creationflags
+            )
+            if ref_res.returncode != 0:
+                logger.error(f"Failed to create aligned reference video: {ref_res.stderr}")
+                return None, None
 
-            # Ensure exact reference frame count for perfect alignment
-            ref_aligned_info = self._get_video_info(aligned_reference)
+            ref_aligned_info = get_video_info(aligned_reference) or {}
             exact_ref_frames = ref_aligned_info.get('frame_count', ref_frame_count)
             logger.info(f"Exact reference frame count: {exact_ref_frames}")
-            
-            # Calculate exact duration for frame matching
-            frame_duration = exact_ref_frames / ref_fps if ref_fps > 0 else content_duration
-            
-            # Get frame offset from options manager
-            frame_offset = 6  # Default value if not configured
-            
-            # Check if options_manager is directly available
+
+            frame_offset = getattr(self, 'frame_offset', DEFAULT_FRAME_OFFSET)
             if hasattr(self, 'options_manager') and self.options_manager:
                 try:
-                    frame_offset = self.options_manager.get_setting("bookend", "frame_offset")
-                    logger.info(f"Using frame offset from options_manager: {frame_offset}")
+                    if hasattr(self.options_manager, "get_setting"):
+                        val = self.options_manager.get_setting("bookend", "frame_offset")
+                        if val is not None:
+                            frame_offset = int(val)
                 except Exception as e:
                     logger.warning(f"Error getting frame_offset from options_manager: {e}")
-            
-            # Calculate the offset time based on frame rate
-            offset_time = frame_offset / cap_fps
-            logger.info(f"Applied frame offset: {frame_offset} frames ({offset_time:.6f}s) at {cap_fps} fps")
-            
-            # Adjust start time to skip white frames at the beginning
-            # The 0.2 second adjustment is to ensure we start after any white frames
-            adjusted_start = content_start_time + 0.2
-            
-            logger.info(f"Adjusting content timing: original={content_start_time:.3f}s, adjusted={adjusted_start:.3f}s")
-            logger.info(f"Content duration: {content_duration:.3f}s, frame-based duration: {frame_duration:.3f}s")
 
-            # Trim captured video with precise frame count control
+            offset_time = frame_offset / cap_fps if cap_fps > 0 else 0
+            logger.info(f"Applied frame offset: {frame_offset} frames ({offset_time:.6f}s) at {cap_fps} fps")
+
+            adjusted_start = content_start_time + INITIAL_SKIP_SECONDS
+
             if adjusted_start > 0 or "motion_comp" not in captured_path:
                 cap_cmd = [
                     self._ffmpeg_path, "-y",
-                    "-itsoffset", str(offset_time),  # Offset to align with reference
+                    "-itsoffset", str(offset_time),
                     "-i", captured_path,
                     "-ss", str(adjusted_start),
                     "-c:v", "libx264", "-crf", "23",
                     "-preset", "fast", 
-                    "-r", str(ref_fps),  # Use reference frame rate instead of capture frame rate
-                    "-frames:v", str(exact_ref_frames),  # Force exact frame count match
+                    "-r", str(ref_fps),
+                    "-frames:v", str(exact_ref_frames),
                     aligned_captured
                 ]
-                
-                logger.info(f"Creating aligned captured video from {adjusted_start:.3f}s with exact {exact_ref_frames} frames")
-                logger.info(f"Aligning captured video to reference frame rate: {ref_fps}fps")
             else:
-                # Motion compensated clip needs different handling
                 cap_cmd = [
                     self._ffmpeg_path, "-y", 
                     "-i", captured_path,
                     "-c:v", "libx264", "-crf", "23",
                     "-preset", "fast",
-                    "-r", str(ref_fps),  # Use reference frame rate
-                    "-frames:v", str(exact_ref_frames),  # Force exact frame count match
+                    "-r", str(ref_fps),
+                    "-frames:v", str(exact_ref_frames),
                     aligned_captured
                 ]
-                
-                logger.info(f"Using motion-compensated clip with forced {exact_ref_frames} frames")
-            
-            # Run the alignment command
-            subprocess.run(cap_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            # Verify aligned videos
+            cap_res = subprocess.run(
+                cap_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT,
+                startupinfo=startupinfo, creationflags=creationflags
+            )
+            if cap_res.returncode != 0:
+                logger.error(f"Failed to create aligned captured video: {cap_res.stderr}")
+                return None, None
+
             if not os.path.exists(aligned_reference) or not os.path.exists(aligned_captured):
                 logger.error("Failed to create aligned videos")
                 return None, None
 
             # Verify frame counts match exactly
-            ref_aligned_info = self._get_video_info(aligned_reference)
-            cap_aligned_info = self._get_video_info(aligned_captured)
-
-            if ref_aligned_info and cap_aligned_info:
-                ref_frames = ref_aligned_info.get('frame_count', 0)
-                cap_frames = cap_aligned_info.get('frame_count', 0)
+            ref_aligned_info = get_video_info(aligned_reference) or {}
+            cap_aligned_info = get_video_info(aligned_captured) or {}
+            ref_frames = ref_aligned_info.get('frame_count', 0)
+            cap_frames = cap_aligned_info.get('frame_count', 0)
+            
+            if ref_frames != cap_frames and cap_frames > 0:
+                logger.warning(f"Frame count mismatch: reference={ref_frames}, captured={cap_frames}")
+                logger.info("Attempting final frame count correction...")
                 
-                logger.info(f"Final frame counts: reference={ref_frames}, captured={cap_frames}")
-                
-                if ref_frames != cap_frames:
-                    logger.warning(f"Frame count mismatch: reference={ref_frames}, captured={cap_frames}")
-                    
-                    # If still mismatched, try one more fix to ensure exact frame count
-                    if cap_frames != ref_frames:
-                        logger.info("Attempting final frame count correction...")
-                        
-                        # One more try with direct frame extraction
-                        final_fix_cmd = [
-                            self._ffmpeg_path, "-y",
-                            "-i", aligned_captured,
-                            "-vf", f"select=1:n={ref_frames}",  # Select exact number of frames
-                            "-vsync", "0",  # Do not duplicate/drop frames
-                            "-c:v", "libx264", "-crf", "23",
-                            "-preset", "fast",
-                            f"{aligned_captured}.fixed.mp4"
-                        ]
-                        
+                fixed_path = f"{aligned_captured}.fixed.mp4"
+                final_fix_cmd = [
+                    self._ffmpeg_path, "-y",
+                    "-i", aligned_captured,
+                    "-frames:v", str(ref_frames),
+                    "-c:v", "libx264", "-crf", "23",
+                    "-preset", "fast",
+                    fixed_path
+                ]
+                try:
+                    fix_res = subprocess.run(
+                        final_fix_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT,
+                        startupinfo=startupinfo, creationflags=creationflags
+                    )
+                    if fix_res.returncode == 0 and os.path.exists(fixed_path):
+                        os.replace(fixed_path, aligned_captured)
+                        logger.info("Frame count correction applied successfully")
+                    else:
+                        logger.warning(f"Final frame count correction failed: {fix_res.stderr}")
+                except Exception as e:
+                    logger.warning(f"Final frame count correction error: {e}")
+                finally:
+                    if os.path.exists(fixed_path):
                         try:
-                            subprocess.run(final_fix_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                            
-                            # If successful, replace the original
-                            if os.path.exists(f"{aligned_captured}.fixed.mp4"):
-                                os.replace(f"{aligned_captured}.fixed.mp4", aligned_captured)
-                                logger.info("Frame count correction applied successfully")
-                        except Exception as e:
-                            logger.warning(f"Final frame count correction failed: {e}")
-            else:
-                logger.warning("Could not verify aligned video info")
+                            os.remove(fixed_path)
+                        except OSError:
+                            pass
 
-            # Delete temporary motion-compensated file if it exists
             if "_motion_comp.mp4" in captured_path and os.path.exists(captured_path):
                 try:
                     os.remove(captured_path)
@@ -662,482 +599,281 @@ class BookendAligner(QObject):
                     logger.warning(f"Could not delete temporary file: {e}")
 
             return aligned_reference, aligned_captured
-
         except Exception as e:
             logger.error(f"Error creating aligned videos by bookends: {str(e)}")
-            import traceback
             logger.error(traceback.format_exc())
             return None, None
 
+    @staticmethod
+    def _deduplicate_bookends(candidates: list) -> list:
+        """
+        Cluster overlapping intervals and pick the best representative per group.
+        Never mutates `candidates`. Preference: longest duration, then highest brightness.
+        """
+        if not candidates:
+            return []
 
+        def key(c):
+            return (c["start_frame"], c.get("end_frame", c["start_frame"]))
 
+        sorted_c = sorted(candidates, key=key)
+        groups = []
+        current = [sorted_c[0]]
+        current_end = key(sorted_c[0])[1]
 
-
-
-
-
-
-
-
-
-
-
-
-
-    def _get_video_info(self, video_path):
-        """Get detailed information about a video file using FFprobe"""
-        try:
-            _, ffprobe_exe, _ = get_ffmpeg_path()
-            cmd = [
-                ffprobe_exe,
-                "-v", "quiet",
-                "-print_format", "json",
-                "-show_format", 
-                "-show_streams",
-                video_path
-            ]
-
-            result = subprocess.run(cmd, capture_output=True, text=True)
-
-            if result.returncode != 0:
-                logger.error(f"FFprobe failed: {result.stderr}")
-                return None
-
-            # Parse JSON output
-            import json
-            info = json.loads(result.stdout)
-
-            # Get video stream info
-            video_stream = None
-            for stream in info.get('streams', []):
-                if stream.get('codec_type') == 'video':
-                    video_stream = stream
-                    break
-
-            if not video_stream:
-                logger.error(f"No video stream found in {video_path}")
-                return None
-
-            # Extract key information
-            format_info = info.get('format', {})
-            duration = float(format_info.get('duration', 0))
-
-            # Parse frame rate
-            frame_rate_str = video_stream.get('avg_frame_rate', '0/0')
-            if '/' in frame_rate_str:
-                num, den = map(int, frame_rate_str.split('/'))
-                if den == 0:
-                    frame_rate = 0
-                else:
-                    frame_rate = num / den
+        for cand in sorted_c[1:]:
+            start, end = key(cand)
+            if start <= current_end:  # overlapping
+                current.append(cand)
+                current_end = max(current_end, end)
             else:
-                frame_rate = float(frame_rate_str or 0)
+                groups.append(current)
+                current = [cand]
+                current_end = end
+        groups.append(current)
 
-            # Get dimensions and frame count
-            width = int(video_stream.get('width', 0))
-            height = int(video_stream.get('height', 0))
-            frame_count = int(video_stream.get('nb_frames', 0))
-
-            # If nb_frames is missing or zero, estimate from duration
-            if frame_count == 0 and frame_rate > 0:
-                frame_count = int(round(duration * frame_rate))
-
-            # Get pixel format
-            pix_fmt = video_stream.get('pix_fmt', 'unknown')
-
-            return {
-                'path': video_path,
-                'duration': duration,
-                'frame_rate': frame_rate,
-                'width': width,
-                'height': height,
-                'frame_count': frame_count,
-                'pix_fmt': pix_fmt,
-                'total_frames': frame_count
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting video info for {video_path}: {str(e)}")
-            return None 
+        best = []
+        for group in groups:
+            best.append(
+                max(group, key=lambda c: (
+                    (c.get("end_frame", c["start_frame"]) - c["start_frame"]),
+                    c.get("brightness", 0.0),
+                ))
+            )
+        return best
 
     def _detect_white_bookends(self, video_path):
         """
-        Performance-optimized white bookend detection that maintains accuracy
-        while significantly reducing processing time
+        Performance-optimized white bookend detection with adaptive thresholds
+        and non-mutating interval deduplication.
         """
         try:
-            bookends = []
             cap = cv2.VideoCapture(video_path)
-
             if not cap.isOpened():
                 logger.error(f"Could not open video: {video_path}")
                 return None
 
-            # Get video properties
             fps = cap.get(cv2.CAP_PROP_FPS)
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             duration = frame_count / fps if fps > 0 else 0
 
             logger.info(f"Video details: duration={duration:.2f}s, frames={frame_count}, fps={fps:.2f}")
 
-            # Sample brightness values across the video
-            brightness_samples = []
-            
-            # Use frame_sampling_rate to determine sample interval
-            # Higher frame_sampling_rate = more precise detection
-            sample_interval = int(fps / self.frame_sampling_rate)
+            sample_interval = int(fps / self.frame_sampling_rate) if self.frame_sampling_rate > 0 else 1
             if sample_interval < 1:
                 sample_interval = 1
-                
-            logger.info(f"Using frame sampling interval of {sample_interval} frames " +
-                    f"({self.frame_sampling_rate} samples per second)")
-            
-            # Sample frames throughout the video for brightness analysis
+
+            brightness_samples = []
             sample_frames = []
             for i in range(0, frame_count, sample_interval):
                 cap.set(cv2.CAP_PROP_POS_FRAMES, i)
                 ret, frame = cap.read()
                 if ret:
                     sample_frames.append((i, frame))
-            
-            # Calculate brightness statistics
+
             for i, frame in sample_frames:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                brightness = np.mean(gray)
-                std_dev = np.std(gray)
+                brightness = float(np.mean(gray))
+                std_dev = float(np.std(gray))
                 brightness_samples.append((i, brightness, std_dev))
-                
+
             if not brightness_samples:
                 logger.error("Could not sample brightness levels from video")
+                cap.release()
                 return None
-                
-            # Calculate stats for adaptive thresholds
+
             all_brightness = [b for _, b, _ in brightness_samples]
             all_std_devs = [s for _, _, s in brightness_samples]
-            avg_brightness = np.mean(all_brightness)
-            std_brightness = np.std(all_brightness)
-            max_brightness = np.max(all_brightness)
-            avg_std_dev = np.mean(all_std_devs)
+            avg_brightness = float(np.mean(all_brightness))
+            std_brightness = float(np.std(all_brightness))
+            max_brightness = float(np.max(all_brightness))
+            avg_std_dev = float(np.mean(all_std_devs))
 
-            logger.info(f"Video brightness stats: avg={avg_brightness:.1f}, std={std_brightness:.1f}, " +
-                    f"max={max_brightness:.1f}, avg_std_dev={avg_std_dev:.1f}")
-
-    
-            # Dynamic threshold calculation based on adaptive brightness
+            white_threshold = getattr(self, "white_threshold", 230.0)
             if self.adaptive_brightness:
-                # Smarter threshold calculation for varying lighting conditions
                 dynamic_threshold = max(
-                    avg_brightness + 2.0 * std_brightness,  # Statistical outlier detection
-                    max_brightness * 0.85,  # Percentage of maximum
-                    180  # Minimum acceptable value for white
+                    avg_brightness + 2.0 * std_brightness,
+                    max_brightness * 0.85,
+                    white_threshold * 0.8,
+                    180.0
                 )
-                
-                # Adjust for very bright or dim videos
-                if max_brightness > 240:  # Very bright video
-                    dynamic_threshold = max(dynamic_threshold, 220)
-                elif max_brightness < 200:  # Dim video
-                    dynamic_threshold = max(avg_brightness + 1.5 * std_brightness, 160)
-                    
+                if max_brightness > 240:
+                    dynamic_threshold = max(dynamic_threshold, 220.0)
+                elif max_brightness < 200:
+                    dynamic_threshold = max(avg_brightness + 1.5 * std_brightness, 160.0)
+
                 thresholds = [
                     dynamic_threshold,
-                    dynamic_threshold * 0.9,  # First fallback
-                    max(avg_brightness + 20, 160)  # Second fallback
+                    dynamic_threshold * 0.9,
+                    max(avg_brightness + 20, 160.0)
                 ]
             else:
-                # Use white threshold value from settings
-                white_threshold = 230  # Default value if not set
-                
-                # If options_manager is available, get the configured white threshold
-                if hasattr(self, 'options_manager') and self.options_manager:
-                    try:
-                        white_threshold = self.options_manager.get_setting("bookend", "white_threshold")
-                        logger.info(f"Using configured white threshold: {white_threshold}")
-                    except Exception as e:
-                        logger.warning(f"Error getting white threshold from options: {e}")
-                
-                # Use the white threshold as fixed threshold with fallbacks
                 fixed_threshold = white_threshold
                 thresholds = [fixed_threshold, fixed_threshold * 0.9, fixed_threshold * 0.8]
 
-
-
-
-
-
-
-
-
-
-            
             logger.info(f"Using brightness thresholds: {[round(t, 1) for t in thresholds]}")
-            
-            # Quick scan to identify potential bookend regions
-            regions_of_interest = []
-            
-            # Define minimum white frame sequence based on frame rate
+
             if fps > 25:
                 min_white_frames = max(3, int(0.1 * fps))
             else:
                 min_white_frames = 3
-                
-            logger.info(f"Using minimum bookend size of {min_white_frames} frames ({min_white_frames/fps:.3f}s)")
-            
-            # Use a larger sampling interval for initial scan
-            initial_sample_rate = max(3, int(fps // 8))
-            
-            # Std dev threshold based on video characteristics
-            std_dev_threshold = min(45, avg_std_dev * 1.8)
-            
-            # First pass: Quick scan to find potential bookend regions
+
+            initial_sample_rate = max(3, int(fps // 8)) if fps > 0 else 3
+            std_dev_threshold = min(45.0, avg_std_dev * 1.8)
+
+            regions_of_interest = []
             for threshold_idx, whiteness_threshold in enumerate(thresholds):
-                logger.info(f"Quick scan with threshold: {whiteness_threshold:.1f}")
-                
-                # Reset video position
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                
                 potential_regions = []
                 current_region = None
-                
-                # Process frames at the initial sampling rate
+
                 for frame_idx in range(0, frame_count, initial_sample_rate):
                     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
                     ret, frame = cap.read()
-                    
                     if not ret:
                         break
-                    
-                    # Calculate brightness
+
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    avg_brightness = np.mean(gray)
-                    std_dev = np.std(gray)
-                    
-                    # Determine if this is a candidate white frame
-                    is_white_frame = False
-                    
-                    # Adaptive criteria for white frame detection
+                    avg_b = float(np.mean(gray))
+                    s_dev = float(np.std(gray))
+
                     if threshold_idx < 2:
-                        is_white_frame = avg_brightness > whiteness_threshold
+                        is_white = avg_b > whiteness_threshold
                     else:
-                        is_white_frame = (avg_brightness > whiteness_threshold and std_dev < std_dev_threshold)
-                    
-                    if is_white_frame:
+                        is_white = (avg_b > whiteness_threshold and s_dev < std_dev_threshold)
+
+                    if is_white:
                         if current_region is None:
                             current_region = {
                                 'start_frame': max(0, frame_idx - initial_sample_rate),
-                                'brightness': avg_brightness
+                                'brightness': avg_b
                             }
                     else:
                         if current_region is not None:
                             current_region['end_frame'] = min(frame_count - 1, frame_idx + initial_sample_rate)
                             potential_regions.append(current_region)
                             current_region = None
-                
-                # Handle last region if exists
+
                 if current_region is not None:
-                    current_region['end_frame'] = min(frame_count - 1, frame_idx + initial_sample_rate)
+                    current_region['end_frame'] = min(frame_count - 1, frame_count - 1)
                     potential_regions.append(current_region)
-                
-                # If we found potential regions, add them to our analysis list
+
                 if potential_regions:
-                    logger.info(f"Found {len(potential_regions)} potential bookend regions with threshold {whiteness_threshold:.1f}")
                     for region in potential_regions:
-                        # Expand region slightly to ensure we don't miss any frames
-                        padding = initial_sample_rate
-                        start = max(0, region['start_frame'] - padding)
-                        end = min(frame_count - 1, region['end_frame'] + padding)
+                        start = max(0, region['start_frame'] - initial_sample_rate)
+                        end = min(frame_count - 1, region['end_frame'] + initial_sample_rate)
                         regions_of_interest.append((start, end, whiteness_threshold))
-            
-            # If no regions found, scan the entire video with the most lenient threshold
+
             if not regions_of_interest:
-                logger.info("No potential regions found in quick scan, will scan entire video")
                 regions_of_interest = [(0, frame_count - 1, thresholds[-1])]
-            
-            # Merge overlapping regions to avoid duplicate processing
+
             if len(regions_of_interest) > 1:
-                regions_of_interest.sort()  # Sort by start frame
+                regions_of_interest.sort()
                 merged_regions = []
                 current_start, current_end, current_threshold = regions_of_interest[0]
-                
                 for start, end, threshold in regions_of_interest[1:]:
-                    if start <= current_end:  # Regions overlap
+                    if start <= current_end:
                         current_end = max(current_end, end)
-                        current_threshold = min(current_threshold, threshold)  # Use the more lenient threshold
+                        current_threshold = min(current_threshold, threshold)
                     else:
                         merged_regions.append((current_start, current_end, current_threshold))
                         current_start, current_end, current_threshold = start, end, threshold
-                
                 merged_regions.append((current_start, current_end, current_threshold))
                 regions_of_interest = merged_regions
-                
-                logger.info(f"Merged into {len(regions_of_interest)} regions for detailed analysis")
-            
-            # Second pass: Detailed analysis of potential regions
-            logger.info("Starting detailed analysis of potential bookend regions")
-            
+
             all_bookends = []
-            
             for region_idx, (start_frame, end_frame, threshold) in enumerate(regions_of_interest):
-                logger.info(f"Analyzing region {region_idx+1}/{len(regions_of_interest)}: frames {start_frame}-{end_frame}")
-                
-                # Skip too small regions
                 if end_frame - start_frame < min_white_frames:
-                    logger.info(f"Region too small, skipping")
                     continue
-                    
+
                 consecutive_white_frames = 0
                 current_bookend = None
                 region_bookends = []
-                
-                # Process each frame in this region
+
                 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-                
                 for frame_idx in range(start_frame, end_frame + 1):
-                    if frame_idx > start_frame:
-                        ret, frame = cap.read()
-                    else:
-                        ret = cap.isOpened()
-                        if ret:
-                            ret, frame = cap.read()
-                    
+                    ret, frame = cap.read()
                     if not ret:
                         break
-                    
-                    # Calculate brightness
+
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    avg_brightness = np.mean(gray)
-                    std_dev = np.std(gray)
-                    
-                    # Enhanced white frame detection logic for fast-moving content
-                    is_white_frame = False
-                    
-                    # For high-speed content, we need to be more flexible with white detection
-                    if std_dev < std_dev_threshold * 1.2:
-                        # Low std dev means more uniform frame - good for white detection
-                        if avg_brightness > threshold * 0.95:
-                            is_white_frame = True
+                    avg_b = float(np.mean(gray))
+                    s_dev = float(np.std(gray))
+
+                    is_white = False
+                    if s_dev < std_dev_threshold * 1.2:
+                        if avg_b > threshold * 0.95:
+                            is_white = True
                     else:
-                        # Higher std dev might mean partial white frame or motion blur
-                        # Check if a significant portion is white
-                        if avg_brightness > threshold:
-                            is_white_frame = True
-                        elif avg_brightness > threshold * 0.9:
-                            # Check for large white areas (could be partial white frame)
+                        if avg_b > threshold:
+                            is_white = True
+                        elif avg_b > threshold * 0.9:
                             white_pixels = np.sum(gray > threshold)
-                            white_ratio = white_pixels / gray.size
-                            if white_ratio > 0.7:  # If >70% of pixels are above threshold
-                                is_white_frame = True
-                    
-                    if is_white_frame:
+                            if (white_pixels / gray.size) > 0.7:
+                                is_white = True
+
+                    if is_white:
                         consecutive_white_frames += 1
-                        
-                        # Start a new bookend if needed
                         if current_bookend is None:
-                            frame_time = frame_idx / fps
                             current_bookend = {
                                 'start_frame': frame_idx,
-                                'start_time': frame_time,
+                                'start_time': frame_idx / fps if fps > 0 else 0,
                                 'frame_count': 1,
-                                'brightness': avg_brightness,
-                                'std_dev': std_dev
+                                'brightness': avg_b,
+                                'std_dev': s_dev
                             }
                     else:
-                        # Check if we just finished a bookend
                         if current_bookend is not None:
-                            # Update end time
                             current_bookend['end_frame'] = frame_idx - 1
-                            current_bookend['end_time'] = current_bookend['end_frame'] / fps
+                            current_bookend['end_time'] = (frame_idx - 1) / fps if fps > 0 else 0
                             current_bookend['frame_count'] = consecutive_white_frames
-                            
-                            # Add to bookends if long enough
                             if consecutive_white_frames >= min_white_frames:
                                 region_bookends.append(current_bookend)
-                                logger.info(f"Detected white bookend: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s " +
-                                        f"(brightness: {current_bookend.get('brightness', 0):.1f}, frames: {consecutive_white_frames})")
-                            
-                            # Reset for next bookend
                             current_bookend = None
                             consecutive_white_frames = 0
-                
-                # Check for unfinished bookend
+
                 if current_bookend is not None and consecutive_white_frames >= min_white_frames:
                     current_bookend['end_frame'] = end_frame
-                    current_bookend['end_time'] = end_frame / fps
+                    current_bookend['end_time'] = end_frame / fps if fps > 0 else 0
                     current_bookend['frame_count'] = consecutive_white_frames
                     region_bookends.append(current_bookend)
-                    logger.info(f"Detected white bookend at region end: {current_bookend['start_time']:.3f}s - {current_bookend['end_time']:.3f}s " +
-                            f"(brightness: {current_bookend.get('brightness', 0):.1f}, frames: {consecutive_white_frames})")
-                
-                # Add all bookends from this region
-                all_bookends.extend(region_bookends)
-            
-            # Remove duplicate bookends (can happen with overlapping regions)
-            if all_bookends:
-                unique_bookends = []
-                for bookend in all_bookends:                            
-                    
-                    
-                    
-                    # Check if this bookend overlaps with any existing ones
-                    is_duplicate = False
-                    for existing in unique_bookends:
-                        # If frames overlap significantly, consider it a duplicate
-                        if (bookend['start_frame'] <= existing['end_frame'] and 
-                            bookend['end_frame'] >= existing['start_frame']):
-                            # Keep the larger/brighter one
-                            if bookend['frame_count'] > existing['frame_count'] or bookend['brightness'] > existing['brightness']:
-                                # Replace existing with this one
-                                unique_bookends.remove(existing)
-                                unique_bookends.append(bookend)
-                            is_duplicate = True
-                            break
-                    
-                    if not is_duplicate:
-                        unique_bookends.append(bookend)
-                
-                # Sort bookends by start time
-                bookends = sorted(unique_bookends, key=lambda x: x['start_frame'])
-                logger.info(f"Found {len(bookends)} unique bookends after deduplication")
-            
-            cap.release()
-            
-            # Final check and summary
-            if len(bookends) < 2:
-                logger.warning(f"Failed to detect at least two white bookends")
-                
-                # Last resort: use the beginning and end of the video
-                if self.fallback_to_full_video:
-                    logger.warning("Falling back to using entire video as no bookends were detected")
-                    bookends = [
-                        {
-                            'start_frame': 0,
-                            'end_frame': min(5, frame_count - 1),
-                            'start_time': 0,
-                            'end_time': min(5, frame_count - 1) / fps,
-                            'frame_count': min(5, frame_count),
-                            'brightness': 0,
-                            'std_dev': 0,
-                            'is_fallback': True
-                        },
-                        {
-                            'start_frame': max(0, frame_count - 5),
-                            'end_frame': frame_count - 1,
-                            'start_time': max(0, frame_count - 5) / fps,
-                            'end_time': duration,
-                            'frame_count': min(5, frame_count),
-                            'brightness': 0,
-                            'std_dev': 0,
-                            'is_fallback': True
-                        }
-                    ]
-                    logger.warning("Created fallback bookends at beginning and end of video")
-            else:
-                logger.info(f"Successfully detected {len(bookends)} white bookend sections")
-                
-            return bookends
 
+                all_bookends.extend(region_bookends)
+
+            cap.release()
+
+            # Non-mutating deduplication
+            bookends = self._deduplicate_bookends(all_bookends)
+            bookends = sorted(bookends, key=lambda x: x['start_frame'])
+
+            if len(bookends) < 2 and self.fallback_to_full_video:
+                logger.warning("Falling back to using entire video as no bookends were detected")
+                bookends = [
+                    {
+                        'start_frame': 0,
+                        'end_frame': min(5, frame_count - 1),
+                        'start_time': 0,
+                        'end_time': min(5, frame_count - 1) / fps if fps > 0 else 0,
+                        'frame_count': min(5, frame_count),
+                        'brightness': 0,
+                        'std_dev': 0,
+                        'is_fallback': True
+                    },
+                    {
+                        'start_frame': max(0, frame_count - 5),
+                        'end_frame': frame_count - 1,
+                        'start_time': max(0, frame_count - 5) / fps if fps > 0 else 0,
+                        'end_time': duration,
+                        'frame_count': min(5, frame_count),
+                        'brightness': 0,
+                        'std_dev': 0,
+                        'is_fallback': True
+                    }
+                ]
+
+            return bookends
         except Exception as e:
-            logger.error(f"Error detecting white bookends: {str(e)}")
-            import traceback
+            logger.error(f"Error detecting white bookends: {e}")
             logger.error(traceback.format_exc())
             return None
 
@@ -1145,98 +881,36 @@ class BookendAligner(QObject):
 class BookendAlignmentThread(QThread):
     """Thread for bookend video alignment with reliable progress reporting"""
     alignment_progress = pyqtSignal(int)
+    progress_updated = alignment_progress
     alignment_complete = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
     status_update = pyqtSignal(str)
-    delete_capture_file = pyqtSignal(bool)  # Signal to indicate if primary capture file should be deleted
+    status_updated = status_update
+    delete_capture_file = pyqtSignal(bool)
 
-    def __init__(self, reference_path, captured_path, delete_primary=True, options_manager=None):
-        super().__init__()
-        self.reference_path = reference_path
-        self.captured_path = captured_path
-        self.delete_primary = delete_primary  # Default to True to delete original capture file
+    def __init__(self, reference_path=None, captured_path=None, delete_primary=True,
+                 options_manager=None, parent=None, ref_path=None, main_path=None, output_path=None):
+        super().__init__(parent)
+        self.reference_path = reference_path or ref_path
+        self.captured_path = captured_path or main_path
+        self.output_path = output_path
+        self.delete_primary = delete_primary
         self.options_manager = options_manager
-        self.aligner = BookendAligner()
+        self.aligner = BookendAligner(options_manager=options_manager)
         self._running = True
-        
-        # Log the delete_primary setting
+
         logger.info(f"BookendAlignmentThread initialized with delete_primary={delete_primary}")
-        logger.info(f"Reference path: {reference_path}")
-        logger.info(f"Captured path: {captured_path}")
+        logger.info(f"Reference path: {self.reference_path}")
+        logger.info(f"Captured path: {self.captured_path}")
 
-        # Initialize advanced options from options_manager if provided
-        if options_manager:
-            try:
-                # DEBUGGING: Add logging of the entire options dictionary
-                all_settings = options_manager.get_settings()
-                logger.info(f"All settings from options_manager: {all_settings}")
-                
-                # Get the specific bookend settings
-                bookend_settings = options_manager.get_setting('bookend')
-                logger.info(f"Raw bookend settings from options_manager: {bookend_settings}")
-                
-                if isinstance(bookend_settings, dict):
-                    # Extract settings with more explicit error checking
-                    frame_sampling_rate = bookend_settings.get('frame_sampling_rate', 5)
-                    adaptive_brightness = bookend_settings.get('adaptive_brightness', True)
-                    
-                    # IMPORTANT: Force log the motion compensation setting to diagnose
-                    motion_comp_setting = bookend_settings.get('motion_compensation', False)  # Default to False if not found
-                    logger.info(f"Motion compensation setting from options_manager: {motion_comp_setting}")
-                    
-                    fallback_to_full_video = bookend_settings.get('fallback_to_full_video', True)
-                    
-                    # Apply the settings to the aligner
-                    self.aligner.set_advanced_options(
-                        frame_sampling_rate=frame_sampling_rate,
-                        adaptive_brightness=adaptive_brightness,
-                        motion_compensation=motion_comp_setting,  # Use the explicit variable
-                        fallback_to_full_video=fallback_to_full_video
-                    )
-                    
-                    # Double-check that settings were applied correctly
-                    logger.info(f"Aligner motion_compensation after setting: {self.aligner.motion_compensation}")
-                    
-                    logger.info(f"Applied bookend settings from options_manager: " +
-                            f"frame_sampling_rate={frame_sampling_rate}, " +
-                            f"adaptive_brightness={adaptive_brightness}, " +
-                            f"motion_compensation={motion_comp_setting}, " + 
-                            f"fallback_to_full_video={fallback_to_full_video}")
-            except Exception as e:
-                logger.error(f"Error loading bookend options: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
-                
-                # Set default values explicitly if there's an error
-                self.aligner.set_advanced_options(
-                    frame_sampling_rate=5,
-                    adaptive_brightness=True,
-                    motion_compensation=False,  # Default to FALSE for motion compensation
-                    fallback_to_full_video=True
-                )
-
-        # Connect signals with direct connections for responsive UI updates
-        self.aligner.alignment_progress.connect(self.alignment_progress, Qt.DirectConnection)
-        self.aligner.alignment_complete.connect(self.alignment_complete, Qt.DirectConnection)
-        self.aligner.error_occurred.connect(self.error_occurred, Qt.DirectConnection)
-        self.aligner.status_update.connect(self.status_update, Qt.DirectConnection)               
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
+        # Connect signals without Qt.DirectConnection to ensure thread safety
+        self.aligner.alignment_progress.connect(self.alignment_progress)
+        self.aligner.alignment_complete.connect(self.alignment_complete)
+        self.aligner.error_occurred.connect(self.error_occurred)
+        self.aligner.status_update.connect(self.status_update)
 
     def __del__(self):
-        """Clean up resources when thread is destroyed"""
-        self.wait()  # Wait for thread to finish before destroying
+        pass  # dangerous to call self.wait() in destructor
 
     def run(self):
         """Run alignment in thread"""
@@ -1245,11 +919,8 @@ class BookendAlignmentThread(QThread):
                 return
 
             self.status_update.emit("Starting bookend alignment process...")
-
-            # Report initial progress
             self.alignment_progress.emit(0)
 
-            # Verify input files
             if not os.path.exists(self.reference_path):
                 self.error_occurred.emit(f"Reference video not found: {self.reference_path}")
                 return
@@ -1258,68 +929,50 @@ class BookendAlignmentThread(QThread):
                 self.error_occurred.emit(f"Captured video not found: {self.captured_path}")
                 return
 
-            # Store the original capture path before alignment
             original_capture_path = self.captured_path
             
-            # Run alignment
             result = self.aligner.align_bookend_videos(
                 self.reference_path,
-                self.captured_path
+                self.captured_path,
+                self.output_path
             )
 
-            # Check if thread is still running before emitting signals
             if not self._running:
                 return
 
             if result:
-                # After successful alignment, delete the primary capture file
-                # Use the stored original path to ensure we're deleting the right file
                 if self.delete_primary and os.path.exists(original_capture_path):
                     try:
-                        # Add a small delay to ensure file is not still in use
-                        time.sleep(1)
-                        
-                        # Directly delete the file here
+                        time.sleep(0.5)
                         os.remove(original_capture_path)
                         logger.info(f"Successfully deleted original capture file: {original_capture_path}")
-                        
-                        # Also signal that we deleted this file (for backward compatibility)
                         self.delete_capture_file.emit(True)
                     except Exception as e:
-                        # Log detailed error for debugging
-                        logger.error(f"Error deleting original capture file: {str(e)}")
-                        import traceback
-                        logger.error(traceback.format_exc())
-                        
-                        # Signal that deletion failed
+                        logger.error(f"Error deleting original capture file: {e}")
                         self.delete_capture_file.emit(False)
-                else:
-                    logger.warning(f"Not deleting capture file. delete_primary={self.delete_primary}, file exists={os.path.exists(original_capture_path)}")
-
-                # Ensure progress is set to 100% at completion
-                self.alignment_progress.emit(100)
                 
-                self.status_update.emit("Bookend alignment complete! Original capture file deleted.")
-            else:
-                self.error_occurred.emit("Bookend alignment failed")
+                self.alignment_progress.emit(100)
+                self.status_update.emit("Bookend alignment complete!")
         except Exception as e:
-            if self._running:  # Only emit errors if thread is still running
+            if self._running:
                 error_msg = f"Error in bookend alignment thread: {str(e)}"
                 self.error_occurred.emit(error_msg)
                 logger.error(error_msg)
-                import traceback
                 logger.error(traceback.format_exc())
 
     def quit(self):
-        """Override quit to properly clean up resources"""
         self._running = False
         super().quit()
 
+
 class Aligner(QObject):
     alignment_progress = pyqtSignal(int)
-    alignment_complete = pyqtSignal(str)
+    progress_updated = alignment_progress
+    alignment_complete = pyqtSignal(object)
     alignment_error = pyqtSignal(str)
-    alignment_state_changed = pyqtSignal(int)
+    error_occurred = alignment_error
+    alignment_state_changed = pyqtSignal(object)
+    status_updated = pyqtSignal(str)
     options_manager = None
     alignment_state = None
 
@@ -1330,45 +983,23 @@ class Aligner(QObject):
     def set_options_manager(self, options_manager):
         self.options_manager = options_manager
 
-
-
-
     def align_videos_with_bookends(self, reference_path, captured_path):
         """Align videos based on bookend frames"""
-        logger.info(f"Starting bookend alignment process")
+        logger.info("Starting bookend alignment process")
         logger.info(f"Reference: {reference_path}")
         logger.info(f"Captured: {captured_path}")
 
         self.alignment_state = AlignmentState.RUNNING
         self.alignment_state_changed.emit(self.alignment_state)
 
-        # Debug log to show options_manager settings
-        if self.options_manager:
-            try:
-                bookend_settings = self.options_manager.get_setting('bookend')
-                logger.info(f"Bookend settings from options_manager before thread creation: {bookend_settings}")
-                
-                # Specific debug for motion compensation
-                motion_comp_setting = False
-                if isinstance(bookend_settings, dict):
-                    motion_comp_setting = bookend_settings.get('motion_compensation', False)
-                logger.info(f"Motion compensation setting to be passed to thread: {motion_comp_setting}")
-            except Exception as e:
-                logger.error(f"Error accessing bookend settings: {e}")
-
-        # Start alignment thread with options manager
-        thread = BookendAlignmentThread(reference_path, captured_path, options_manager=self.options_manager)
+        thread = BookendAlignmentThread(
+            reference_path, captured_path, options_manager=self.options_manager
+        )
         thread.alignment_progress.connect(self.alignment_progress)
         thread.alignment_complete.connect(lambda result: self._on_alignment_complete(result))
         thread.error_occurred.connect(self.alignment_error)
         thread.delete_capture_file.connect(self._on_delete_capture_file)
         thread.start()
-
-        self.alignment_state = AlignmentState.RUNNING
-        self.alignment_state_changed.emit(self.alignment_state)
-
-
-
 
     def _on_alignment_complete(self, result):
         """Handle alignment completion"""
@@ -1376,22 +1007,10 @@ class Aligner(QObject):
         self.alignment_state_changed.emit(self.alignment_state)
         self.alignment_complete.emit(f"Alignment complete: {result}")
 
-    def _on_delete_capture_file(self, should_delete):
-        """Handle deletion of capture file (if not already deleted in the thread)"""
-        if should_delete and hasattr(self, 'captured_path'):
-            try:
-                if os.path.exists(self.captured_path):
-                    os.remove(self.captured_path)
-                    logger.info(f"Successfully deleted capture file: {self.captured_path}")
-                else:
-                    logger.info(f"Capture file already deleted: {self.captured_path}")
-            except Exception as e:
-                logger.error(f"Error deleting capture file: {e}")
-
-
-from enum import Enum
-
-class AlignmentState(Enum):
-    COMPLETE = 0
-    RUNNING = 1
-    ERROR = 2
+    def _on_delete_capture_file(self, success: bool):
+        """Handle deletion notification from BookendAlignmentThread without deleting again."""
+        if success:
+            logger.info("Original capture file successfully removed by alignment thread.")
+            self.status_updated.emit("Capture file deleted.")
+        else:
+            logger.warning("Capture file deletion was not completed.")

@@ -1,5 +1,6 @@
 # === Python cache and log files ===
 *.log
+logs/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -38,7 +39,10 @@ coverage.xml
 .cache/
 .pytest_cache/
 nosetests.xml
-tests/
+tests/test_results/
+tests/test_references/
+tests/test_data/
+tests/staging/
 tests_data/
 test_results/
 .vscode/settings.json

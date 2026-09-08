@@ -20,6 +20,7 @@ class CaptureTab(QWidget):
         self.parent = parent
         self._frame_count = 0
         self._setup_ui()
+        self.update_stop_mode_warning()
 
     def _setup_ui(self):
         """Set up the Capture tab UI with scroll area"""
@@ -108,6 +109,12 @@ class CaptureTab(QWidget):
 
         self.lbl_capture_status = QLabel("Ready to capture")
         capture_layout.addWidget(self.lbl_capture_status)
+
+        self.lbl_immediate_warning = QLabel("⚠ Immediate stop mode active: captures may be truncated / unplayable")
+        self.lbl_immediate_warning.setStyleSheet("color: #b45309; font-weight: bold; background-color: #fef3c7; padding: 6px 10px; border-radius: 4px; border: 1px solid #f59e0b;")
+        self.lbl_immediate_warning.setWordWrap(True)
+        self.lbl_immediate_warning.setVisible(False)
+        capture_layout.addWidget(self.lbl_immediate_warning)
 
         # Progress bar without frame counter
         progress_layout = QHBoxLayout()
@@ -911,7 +918,7 @@ class CaptureTab(QWidget):
             # Check if we have a reference video
             if hasattr(self.parent, 'reference_info') and self.parent.reference_info:
                 reference_path = self.parent.reference_info.get('path')
-                if reference_path and os.path.exists(reference_path):
+                if isinstance(reference_path, str) and os.path.exists(reference_path):
                     # Use the same preview loading code from SetupTab
                     import cv2
 
@@ -980,3 +987,15 @@ class CaptureTab(QWidget):
             logger.error(f"Error showing reference preview: {e}")
             self.lbl_preview.setText("Error loading reference preview")
             self.lbl_preview_status.setText(f"Error: {str(e)}")
+
+    def update_stop_mode_warning(self, stop_mode=None):
+        """Update warning banner based on stop_mode in options"""
+        if stop_mode is None:
+            if hasattr(self, "parent") and hasattr(self.parent, "options_manager") and self.parent.options_manager:
+                stop_mode = self.parent.options_manager.get_setting("capture", "stop_mode")
+        self.lbl_immediate_warning.setVisible(stop_mode == "immediate")
+
+    def showEvent(self, event):
+        """Refresh warning banner when tab becomes visible"""
+        super().showEvent(event)
+        self.update_stop_mode_warning()

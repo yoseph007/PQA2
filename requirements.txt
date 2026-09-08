@@ -1,23 +1,23 @@
 # Core Qt framework
-PyQt5==5.15.9
-PyQt5-Qt5==5.15.2
-PyQt5-sip==12.12.1
-PyQtChart==5.15.6
+PyQt5>=5.15.10
+PyQt5-Qt5>=5.15.2
+PyQt5-sip>=12.13.0
+PyQtChart>=5.15.6
 
 # Video/image processing
-numpy==1.24.3
-Pillow==10.0.0
+numpy>=1.26.0
+Pillow>=10.0.0
 opencv-python>=4.8.0
 
 # Data analysis & reporting
-pandas==2.0.3
-scipy==1.10.1
-matplotlib==3.7.2
-reportlab==4.0.4
+pandas>=2.0.3
+scipy>=1.11.0
+matplotlib>=3.7.2
+reportlab>=4.0.4
 
 # System utilities
 psutil>=5.9.0
 
 # Testing
-pytest==7.4.0
-pytest-qt==4.2.0
+pytest>=7.4.0
+pytest-qt>=4.2.0

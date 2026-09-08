@@ -68,11 +68,13 @@ class OptionsManager(QObject):
                 "enable_temporal_features": False,
                 "psnr_enabled": True,
                 "ssim_enabled": True,
+                "delete_aligned_original": True,
                 "tester_name": "",
                 "test_location": ""
             },
             # Capture settings - Blackmagic Intensity Shuttle specific
             "capture": {
+                "stop_mode": "graceful",  # graceful | immediate
                 "default_device": "Intensity Shuttle",
                 "resolution": "1920x1080",
                 "frame_rate": 29.97,  # Common default
@@ -101,6 +103,11 @@ class OptionsManager(QObject):
                 "use_temp_files": True,
                 "auto_alignment": True,
                 "alignment_method": "Bookend Detection"
+            },
+            # Repeatability / Gage R&R settings
+            "repeatability": {
+                "runs": 5,
+                "drift_warning_threshold": 1.0,  # VMAF points
             },
             # Encoder settings
             "encoder": {
@@ -224,6 +231,10 @@ class OptionsManager(QObject):
     def get_settings(self) -> Dict[str, Any]:
         """Get all settings"""
         return self.settings
+
+    def get_all_settings(self) -> Dict[str, Any]:
+        """Backward-compatible alias for get_settings()."""
+        return self.get_settings()
 
     def get_setting(self, category: str, key: Optional[str] = None) -> Any:
         """Get a setting value by category and key"""

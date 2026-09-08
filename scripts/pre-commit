@@ -2,7 +2,16 @@
 # Pre-commit hook to run tests before committing
 
 echo "Running tests..."
-python run_tests.py
+
+if [ -f "./.venv/Scripts/python.exe" ]; then
+    PYTHON_BIN="./.venv/Scripts/python.exe"
+elif [ -f "./venv/Scripts/python.exe" ]; then
+    PYTHON_BIN="./venv/Scripts/python.exe"
+else
+    PYTHON_BIN="python"
+fi
+
+$PYTHON_BIN run_tests.py
 
 if [ $? -ne 0 ]; then
     echo "Tests failed. Commit aborted."

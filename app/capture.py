@@ -1,9 +1,13 @@
+import collections
 import logging
 import math
 import os
 import platform
+import queue
 import re
+import signal
 import subprocess
+import threading
 import time
 from enum import Enum
 
@@ -17,6 +21,12 @@ logger = logging.getLogger(__name__)
 # Constants
 MAX_REPAIR_ATTEMPTS = 3  # Maximum number of attempts to repair a video file
 
+# Precompiled regex patterns for stderr parsing
+FRAME_PATTERN = re.compile(r'frame=\s*(\d+)')
+FPS_PATTERN = re.compile(r'fps=\s*([\d.]+)')
+TIME_PATTERN = re.compile(r'time=(\d+):(\d+):(\d+\.\d+)')
+
+
 # Define capture states for better management
 class CaptureState(Enum):
     IDLE = 0
@@ -26,239 +36,310 @@ class CaptureState(Enum):
     COMPLETED = 4
     ERROR = 5
 
+
 class CaptureMonitor(QThread):
-    """Thread to monitor FFmpeg capture process"""
+    """Thread to monitor FFmpeg capture process with non-blocking stderr reading"""
     progress_updated = pyqtSignal(int)
     capture_complete = pyqtSignal()
     capture_failed = pyqtSignal(str)
     frame_count_updated = pyqtSignal(int, int)  # current_frame, total_frames
+    capture_metadata = pyqtSignal(dict)
+    capture_truncated = pyqtSignal(str)
 
-    def __init__(self, process, duration=None, total_frames=0):
+    def __init__(self, process, duration=None, total_frames=0, output_path=None, stop_mode="graceful"):
         super().__init__()
         self.process = process
         self._running = True
-        self.error_output = ""
-        self.start_time = time.time()
         self.duration = duration  # Expected duration in seconds
-        self.is_bookend_capture = True  # Always true since we only use bookend mode now
-        self.last_frame_count = 0
         self.total_frames = total_frames  # Use predefined total frames if provided
-        self.last_progress_time = time.time()  # Throttle progress updates
+        self.output_path = output_path
+        self.stop_mode = stop_mode
+
+        self.start_time = time.time()
+        self.is_bookend_capture = True
+        self.last_frame_count = 0
+        self.last_progress_time = time.time()
         self.last_progress_value = 0
+        self.last_frame_emit_time = 0
+        self.last_emitted_frame = -1
+
+        self.gaps_detected = False
+        self.gap_warning_emitted = False
+        self.capture_truncated_flag = False
+        self.escalation_used = False
+
+        self._stderr_buffer = collections.deque(maxlen=200)
+        self._stderr_queue = queue.Queue(maxsize=1000)
+        self._pump_thread = None
+
+    @property
+    def error_output(self) -> str:
+        return "".join(self._stderr_buffer)
+
+    def _stderr_pump(self):
+        """Dedicated pump thread reading stderr line-by-line without blocking monitor loop"""
+        try:
+            if hasattr(self.process, 'stderr') and self.process.stderr:
+                for line in iter(self.process.stderr.readline, ''):
+                    if not line:
+                        break
+                    if isinstance(line, bytes):
+                        line = line.decode('utf-8', errors='replace')
+                    self._stderr_buffer.append(line)
+                    try:
+                        self._stderr_queue.put(line, block=False)
+                    except queue.Full:
+                        try:
+                            self._stderr_queue.get_nowait()
+                        except queue.Empty:
+                            pass
+                        self._stderr_queue.put(line, block=False)
+            self._stderr_queue.put(None)
+        except (OSError, ValueError):
+            self._stderr_queue.put(None)
 
     def run(self):
-        """Monitor process output and emit signals"""
+        """Monitor process output and emit signals using bounded queue"""
         logger.debug("Starting capture monitor")
-
-        # Send initial progress
         self.progress_updated.emit(0)
 
+        self._pump_thread = threading.Thread(target=self._stderr_pump, daemon=True)
+        self._pump_thread.start()
+
+        fps = 30.0
         while self._running:
             # Check for process completion
             if self.process.poll() is not None:
+                # Drain remaining lines from queue
+                while True:
+                    try:
+                        drain_line = self._stderr_queue.get_nowait()
+                        if drain_line is None:
+                            break
+                    except queue.Empty:
+                        break
+
                 if self.process.returncode == 0:
                     logger.info("Capture completed successfully")
-                    # Set progress to 99% - we'll set to 100% after post-processing
                     self.progress_updated.emit(99)
+                    self._verify_output_and_emit_metadata()
                     self.capture_complete.emit()
                 else:
-                    # Get any remaining error output
                     error = self.error_output
-                    if hasattr(self.process.stderr, 'read'):
-                        try:
-                            remaining = self.process.stderr.read()
-                            if remaining:
-                                error += remaining.decode('utf-8') if isinstance(remaining, bytes) else remaining
-                        except Exception:
-                            pass
-
                     logger.error(f"Capture failed with code {self.process.returncode}: {error}")
                     self.capture_failed.emit(error)
-                break
+                return
 
             # Check for duration timeout - be more lenient with bookend captures
             if self.duration and (time.time() - self.start_time) > self.duration * 2.0:
-                logger.warning(f"Capture exceeded expected duration ({self.duration}s), terminating")
-                self._terminate_process()
-                self.progress_updated.emit(99)  # Almost complete
+                logger.warning(f"Capture exceeded expected duration ({self.duration}s), terminating gracefully")
+                self._graceful_shutdown()
+                self.progress_updated.emit(99)
                 self.capture_complete.emit()
-                break
+                return
 
-            # Parse process output
-            if hasattr(self.process.stderr, 'readline'):
-                try:
-                    line = self.process.stderr.readline()
-                    if line:
-                        # Convert bytes to string if needed
-                        if isinstance(line, bytes):
-                            line = line.decode('utf-8', errors='replace')
-                            
-                        self.error_output += line
-                        logger.debug(f"FFmpeg output: {line.strip()}")
-
-                        # Parse progress (frame number)
-                        if "frame=" in line:
-                            try:
-                                match = re.search(r'frame=\s*(\d+)', line)
-                                if match:
-                                    frame_num = int(match.group(1))
-                                    self.last_frame_count = frame_num
-
-                                    # Try to estimate total frames from fps and duration
-                                    fps = 30  # Default fps assumption
-                                    fps_match = re.search(r'fps=\s*([\d.]+)', line)
-                                    if fps_match:
-                                        try:
-                                            fps = float(fps_match.group(1))
-                                        except Exception:
-                                            pass  # Keep the default
-
-                                    # Always update total_frames when we have fps info, even if it was set before
-                                    if self.duration and fps > 0:
-                                        self.total_frames = int(self.duration * fps)
-                                        logger.debug(f"Estimated total frames: {self.total_frames} (fps={fps}, duration={self.duration}s)")
-
-                                    # Try to find time encoding information as fallback for progress
-                                    time_elapsed = None
-                                    time_match = re.search(r'time=(\d+):(\d+):(\d+\.\d+)', line)
-                                    if time_match:
-                                        hours = int(time_match.group(1))
-                                        minutes = int(time_match.group(2))
-                                        seconds = float(time_match.group(3))
-                                        time_elapsed = hours * 3600 + minutes * 60 + seconds
-
-                                    # Calculate progress percentage
-                                    current_time = time.time()
-                                    # Only update every 0.25 seconds to avoid too many updates
-                                    if current_time - self.last_progress_time >= 0.25:
-                                        progress = 0
-
-                                        if self.duration and self.total_frames > 0:
-                                            # If we have both duration and total frames (most accurate)
-                                            progress = min(int((frame_num / self.total_frames) * 95), 95)
-                                        elif time_elapsed is not None and self.duration:
-                                            # If we have elapsed time from output and expected duration
-                                            progress = min(int((time_elapsed / self.duration) * 95), 95)
-                                        elif self.duration:
-                                            # If we only have process duration, use elapsed time
-                                            elapsed = current_time - self.start_time
-                                            progress = min(int((elapsed / self.duration) * 95), 95)
-                                        else:
-                                            # Fallback - increment in small steps based on frames
-                                            # Ensure we never report 0% after starting
-                                            progress = max(5, min(int((frame_num % 1000) / 10), 95))
-
-                                        # Only emit if progress changed to avoid flooding UI
-                                        if progress != self.last_progress_value:
-                                            self.progress_updated.emit(progress)
-                                            self.last_progress_value = progress
-
-                                        # Update timestamp
-                                        self.last_progress_time = current_time
-
-                                    # Always emit frame count updates for UI display
-                                    self.frame_count_updated.emit(frame_num, self.total_frames)
-                            except (ValueError, AttributeError) as e:
-                                logger.warning(f"Error parsing frame number: {e}")
-
-                        # Check for common error patterns
-                        if "Error" in line or "Invalid" in line:
-                            logger.warning(f"Potential error in FFmpeg output: {line.strip()}")
-                except Exception as e:
-                    logger.warning(f"Error reading FFmpeg output: {e}")
-
-            # Don't burn CPU with polling
-            time.sleep(0.1)
-
-            # Update progress based on elapsed time for smoother appearance
-            # Only if no recent frame-based updates
-            current_time = time.time()
-            if self.duration and (current_time - self.last_progress_time) >= 1.0:
-                elapsed = current_time - self.start_time
-                time_progress = min(int((elapsed / self.duration) * 95), 95)
-
-                # Only emit if progress increased to avoid jumping back
-                if time_progress > self.last_progress_value:
-                    self.progress_updated.emit(time_progress)
-                    self.last_progress_value = time_progress
-                    self.last_progress_time = current_time
-                else:
-                    # Do nothing if progress didn't increase
-                    logger.debug("Skipping progress update as value didn't increase")
-
-    def _terminate_process(self):
-        """Safely terminate the FFmpeg process with proper signal to finalize file"""
-        if self.process and self.process.poll() is None:
+            # Parse process output from queue
             try:
-                logger.info("Sending graceful termination signal to FFmpeg process")
+                line = self._stderr_queue.get(timeout=0.25)
+            except queue.Empty:
+                line = None
 
-                # For Windows, use a more reliable approach to gracefully terminate FFmpeg
-                if platform.system() == 'Windows':
-                    # Send 'q' key to stdin which signals FFmpeg to stop gracefully
-                    try:
-                        if hasattr(self.process.stdin, 'write'):
-                            if hasattr(self.process.stdin, 'buffer'):
-                                # Handle text mode
-                                self.process.stdin.write('q\n')
-                            else:
-                                # Handle binary mode
-                                self.process.stdin.write(b'q\n')
-                            self.process.stdin.flush()
-                            logger.info("Sent 'q' command to FFmpeg")
-                    except Exception as e:
-                        logger.warning(f"Could not send 'q' command: {e}")
+            if line is None:
+                if self.process.poll() is not None:
+                    continue
+                time.sleep(0.05)
+                continue
 
-                    # Give FFmpeg time to finalize the output
-                    logger.info("Waiting for FFmpeg to finalize output file...")
-                    for _ in range(50):  # 5 second timeout
-                        if self.process.poll() is not None:
-                            logger.info("FFmpeg process finalized and terminated")
-                            break
-                        time.sleep(0.1)
+            logger.debug(f"FFmpeg output: {line.strip()}")
 
-                    # If still running, try terminate() instead of kill()
-                    if self.process.poll() is None:
-                        logger.info("FFmpeg still running, sending terminate signal")
-                        self.process.terminate()
-                        # Wait up to 10 more seconds
-                        for _ in range(100):
-                            if self.process.poll() is not None:
-                                logger.info("FFmpeg process terminated")
-                                break
-                            time.sleep(0.1)
-                else:
-                    # Unix-like systems
-                    import signal
-                    self.process.send_signal(signal.SIGINT)
+            frame_match = FRAME_PATTERN.search(line)
+            if frame_match:
+                try:
+                    frame_num = int(frame_match.group(1))
+                    self.last_frame_count = frame_num
 
-                    # Wait for process to terminate
-                    logger.info("Waiting for FFmpeg to finalize output file...")
-                    for _ in range(100):  # 10 second timeout
-                        if self.process.poll() is not None:
-                            logger.info("FFmpeg process finalized and terminated")
-                            break
-                        time.sleep(0.1)
+                    fps_match = FPS_PATTERN.search(line)
+                    if fps_match:
+                        try:
+                            fps = float(fps_match.group(1))
+                        except Exception:
+                            pass
 
-                # Force kill if still running (last resort)
+                    if self.duration and fps > 0:
+                        self.total_frames = int(self.duration * fps)
+
+                    time_elapsed = None
+                    time_match = TIME_PATTERN.search(line)
+                    if time_match:
+                        hours = int(time_match.group(1))
+                        minutes = int(time_match.group(2))
+                        seconds = float(time_match.group(3))
+                        time_elapsed = hours * 3600 + minutes * 60 + seconds
+
+                    # Frame gap / drop detection
+                    elapsed_run = time.time() - self.start_time
+                    if elapsed_run > 2.0 and fps > 0:
+                        expected_so_far = elapsed_run * fps
+                        delta = frame_num - expected_so_far
+                        if abs(delta) > max(expected_so_far * 0.02, 5):
+                            self.gaps_detected = True
+                            if not self.gap_warning_emitted:
+                                logger.warning(
+                                    f"Frame gap detected: expected ~{int(expected_so_far)}, captured {frame_num}"
+                                )
+                                self.gap_warning_emitted = True
+
+                    # Calculate progress percentage throttled to 0.25s
+                    current_time = time.time()
+                    if current_time - self.last_progress_time >= 0.25:
+                        progress = 0
+                        if self.duration and self.total_frames > 0:
+                            progress = min(int((frame_num / self.total_frames) * 95), 95)
+                        elif time_elapsed is not None and self.duration:
+                            progress = min(int((time_elapsed / self.duration) * 95), 95)
+                        elif self.duration:
+                            progress = min(int((elapsed_run / self.duration) * 95), 95)
+                        else:
+                            progress = max(5, min(int((frame_num % 1000) / 10), 95))
+
+                        if progress != self.last_progress_value:
+                            self.progress_updated.emit(progress)
+                            self.last_progress_value = progress
+                        self.last_progress_time = current_time
+
+                    # Throttle frame count emissions (every 5 frames or 100ms)
+                    if (frame_num - self.last_emitted_frame >= 5) or (current_time - self.last_frame_emit_time >= 0.1):
+                        self.frame_count_updated.emit(frame_num, self.total_frames)
+                        self.last_emitted_frame = frame_num
+                        self.last_frame_emit_time = current_time
+
+                except Exception as e:
+                    logger.debug(f"Error parsing frame number: {e}")
+
+            if "Error" in line or "Invalid" in line:
+                logger.warning(f"Potential error in FFmpeg output: {line.strip()}")
+
+    def _graceful_shutdown(self, deadline=5.0):
+        """Safely terminate FFmpeg process with 'q' key and escalating signals to avoid MP4 corruption"""
+        if not self.process or self.process.poll() is not None:
+            self._verify_output_and_emit_metadata()
+            return
+
+        logger.info(f"Initiating FFmpeg shutdown (mode={self.stop_mode})...")
+
+        if self.stop_mode == "immediate":
+            logger.warning("Immediate stop mode: terminating FFmpeg directly")
+            self.escalation_used = True
+            try:
+                self.process.terminate()
+                for _ in range(10):
+                    if self.process.poll() is not None:
+                        break
+                    time.sleep(0.1)
                 if self.process.poll() is None:
-                    logger.warning("Process did not terminate gracefully, forcing kill")
                     self.process.kill()
-                    try:
-                        self.process.wait(timeout=5)  # Wait with timeout
-                    except Exception:
-                        pass
+                    self.capture_truncated_flag = True
             except Exception as e:
                 logger.error(f"Error terminating process: {e}")
-                # As a last resort, try to kill it
+            self._verify_output_and_emit_metadata()
+            return
+
+        # 1. Send 'q' key to stdin
+        try:
+            if hasattr(self.process, 'stdin') and self.process.stdin:
                 try:
-                    self.process.kill()
-                except Exception:
-                    pass
+                    self.process.stdin.write('q\n')
+                except TypeError:
+                    self.process.stdin.write(b'q\n')
+                self.process.stdin.flush()
+                logger.info("Sent 'q' command to FFmpeg via stdin")
+        except Exception as e:
+            logger.warning(f"Could not send 'q' command to FFmpeg: {e}")
+
+        # 2. Wait up to 2 seconds for clean exit
+        for _ in range(20):
+            if self.process.poll() is not None:
+                logger.info("FFmpeg stopped cleanly after 'q' command")
+                self._verify_output_and_emit_metadata()
+                return
+            time.sleep(0.1)
+
+        # 3. Send CTRL_BREAK_EVENT (Windows) or SIGINT (POSIX)
+        logger.info("FFmpeg still running; sending break/interrupt signal...")
+        try:
+            if platform.system() == "Windows":
+                if hasattr(signal, "CTRL_BREAK_EVENT"):
+                    self.process.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    self.process.send_signal(signal.SIGINT)
+            else:
+                self.process.send_signal(signal.SIGINT)
+        except Exception as e:
+            logger.warning(f"Error sending interrupt signal: {e}")
+
+        # Wait up to 2 seconds more
+        for _ in range(20):
+            if self.process.poll() is not None:
+                logger.info("FFmpeg stopped cleanly after interrupt signal")
+                self._verify_output_and_emit_metadata()
+                return
+            time.sleep(0.1)
+
+        # 4. Escalate to terminate() then kill()
+        logger.warning("FFmpeg did not stop gracefully; escalating to terminate()")
+        self.escalation_used = True
+        try:
+            self.process.terminate()
+            for _ in range(10):
+                if self.process.poll() is not None:
+                    logger.info("FFmpeg terminated after terminate()")
+                    self._verify_output_and_emit_metadata()
+                    return
+                time.sleep(0.1)
+        except Exception as e:
+            logger.warning(f"Error escalating to terminate(): {e}")
+
+        if self.process.poll() is None:
+            logger.warning("FFmpeg still alive; forcing kill()")
+            self.capture_truncated_flag = True
+            try:
+                self.process.kill()
+                self.process.wait(timeout=2)
+            except Exception as e:
+                logger.error(f"Error force-killing FFmpeg: {e}")
+
+        self._verify_output_and_emit_metadata()
+
+    def _verify_output_and_emit_metadata(self):
+        """Verify output integrity with ffprobe if escalated, and emit metadata"""
+        if self.output_path and os.path.isfile(self.output_path):
+            if self.escalation_used:
+                from app.utils import get_video_info
+                info = get_video_info(self.output_path)
+                if not info or not info.get("total_frames"):
+                    self.capture_truncated_flag = True
+                    logger.warning(f"Capture output {self.output_path} appears unfinalized / truncated")
+                    self.capture_truncated.emit(self.output_path)
+        self._emit_final_metadata()
+
+    def _emit_final_metadata(self):
+        fps = 30.0
+        expected = self.total_frames
+        if not expected and self.duration:
+            expected = int(self.duration * fps)
+        metadata = {
+            "frames_captured": self.last_frame_count,
+            "expected_frames": expected,
+            "gaps_detected": self.gaps_detected,
+            "driver_tier": "unknown",
+            "capture_truncated": self.capture_truncated_flag,
+        }
+        self.capture_metadata.emit(metadata)
 
     def stop(self):
-        """Stop monitoring"""
+        """Stop monitoring and shut down FFmpeg gracefully"""
         self._running = False
-        self._terminate_process()
+        self._graceful_shutdown()
 
 
 class CaptureManager(QObject):
@@ -284,6 +365,8 @@ class CaptureManager(QObject):
         self.state = CaptureState.IDLE
         self.ffmpeg_process = None
         self.capture_monitor = None
+        self._spawned_pids = set()
+        self.latest_capture_metadata = None
 
         # Video info
         self.reference_info = None
@@ -410,48 +493,38 @@ class CaptureManager(QObject):
         return self.current_output_path
 
     def _kill_all_ffmpeg(self):
-        """Kill any lingering FFmpeg processes to avoid device conflicts"""
+        """Kill only FFmpeg processes spawned by this manager to avoid collateral damage"""
         try:
-            logger.info("Looking for lingering FFmpeg processes to terminate")
+            logger.info("Looking for recorded FFmpeg child processes to terminate")
             killed_count = 0
-            
-            if platform.system() == 'Windows':
-                # On Windows, use taskkill for more reliable FFmpeg process termination
+            remaining_pids = set()
+
+            for pid in list(self._spawned_pids):
                 try:
-                    # Use subprocess with startupinfo to suppress dialog boxes
-                    startupinfo = subprocess.STARTUPINFO()
-                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                    startupinfo.wShowWindow = 0  # SW_HIDE
-                    
-                    subprocess.run(
-                        ["taskkill", "/F", "/IM", "ffmpeg.exe"],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        startupinfo=startupinfo,
-                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-                    )
-                    logger.info("Used taskkill to terminate FFmpeg processes")
-                    time.sleep(1)  # Give Windows time to fully release resources
-                    return
-                except Exception as e:
-                    logger.warning(f"Taskkill failed, falling back to psutil: {e}")
-            
-            # Standard psutil approach (works on all platforms)
-            for proc in psutil.process_iter(['pid', 'name']):
-                if proc.info['name'] and 'ffmpeg' in proc.info['name'].lower():
-                    try:
-                        proc.kill()
-                        killed_count += 1
-                        logger.info(f"Killed FFmpeg process with PID {proc.info['pid']}")
-                    except Exception as e:
-                        logger.warning(f"Failed to kill FFmpeg process with PID {proc.info['pid']}: {e}")
+                    if psutil.pid_exists(pid):
+                        proc = psutil.Process(pid)
+                        if "ffmpeg" in proc.name().lower():
+                            proc.kill()
+                            killed_count += 1
+                            logger.info(f"Killed spawned FFmpeg PID {pid}")
+                        else:
+                            remaining_pids.add(pid)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+            self._spawned_pids = remaining_pids
+
+            if killed_count == 0 and self.ffmpeg_process and self.ffmpeg_process.poll() is None:
+                try:
+                    self.ffmpeg_process.kill()
+                    killed_count += 1
+                except Exception:
+                    pass
 
             if killed_count > 0:
-                logger.info(f"Killed {killed_count} lingering FFmpeg processes")
-                # Brief pause to ensure processes are fully terminated
-                time.sleep(0.5)
+                time.sleep(0.2)
         except Exception as e:
-            logger.error(f"Error killing FFmpeg processes: {e}")
+            logger.error(f"Error terminating spawned FFmpeg processes: {e}")
 
     def update_frame_counter(self, current_frame, total_frames):
         """Update frame counter display during capture process"""
@@ -472,18 +545,12 @@ class CaptureManager(QObject):
         except Exception as e:
             logger.error(f"Error updating frame counter: {e}")
 
-
-
-
-
-
-
-
     def _get_expected_duration(self):
         """Get expected capture duration in seconds"""
-        # Use bookend settings from options
         if self.options_manager:
-            return self.options_manager.get_setting("bookend", "max_capture_time") or 30
+            val = self.options_manager.get_setting("bookend", "max_capture_time")
+            if val is not None and val > 0:
+                return val
         return 30  # Default fallback
 
     def start_preview(self):
@@ -764,39 +831,25 @@ class CaptureManager(QObject):
         self.status_update.emit("Capture completed successfully!")
         self.capture_finished.emit(True, output_path)
         
-        # Stop preview
-        self.stop_preview()
+    def _on_capture_metadata(self, metadata: dict):
+        self.latest_capture_metadata = metadata
+        logger.info(f"Capture metadata recorded: {metadata}")
+
+    def _on_capture_truncated(self, path: str):
+        logger.warning(f"Capture output flagged as truncated: {path}")
+        self.status_update.emit("Warning: Capture file may be truncated.")
 
     def stop_capture(self, cleanup_temp=False):
-        """Stop any active capture process"""
+        """Stop any active capture process gracefully"""
         if not self.is_capturing:
             return
 
         logger.info("Stopping capture")
         self.status_update.emit("Stopping capture...")
 
-        # Stop capture monitor if active
+        # Delegate graceful shutdown to capture monitor (runs without freezing UI)
         if hasattr(self, 'capture_monitor') and self.capture_monitor:
             self.capture_monitor.stop()
-
-        # Force kill any lingering FFmpeg processes
-        if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
-            try:
-                # Try to terminate gracefully first
-                self.ffmpeg_process.terminate()
-                # Wait a short time for it to terminate
-                for _ in range(10):  # 1 second timeout
-                    if self.ffmpeg_process.poll() is not None:
-                        break
-                    time.sleep(0.1)
-
-                # If still running, force kill
-                if self.ffmpeg_process.poll() is None:
-                    self.ffmpeg_process.kill()
-                    # Make sure it's dead
-                    self.ffmpeg_process.wait()
-            except Exception as e:
-                logger.error(f"Error killing FFmpeg process: {e}")
 
         # Reset state
         self.state = CaptureState.IDLE
@@ -812,20 +865,11 @@ class CaptureManager(QObject):
             except Exception as e:
                 logger.error(f"Error removing temporary file: {e}")
 
-        # Add delay before allowing another capture
-        time.sleep(1)  # 1 second delay
-
         # Stop preview
         self.stop_preview()
 
         self.status_update.emit("Capture stopped by user")
         self.capture_finished.emit(False, "Capture cancelled by user")
-
-
-
-
-
-
 
     def start_bookend_capture(self, device_name):
         """
@@ -957,17 +1001,16 @@ class CaptureManager(QObject):
 
             # Start FFmpeg process with enhanced error suppression for Windows
             if platform.system() == 'Windows':
-                # Windows-specific settings to completely suppress error dialogs
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 startupinfo.wShowWindow = 0  # SW_HIDE
                 
-                # Use all available methods to suppress dialog boxes
                 creationflags = 0
                 if hasattr(subprocess, 'CREATE_NO_WINDOW'):
                     creationflags |= subprocess.CREATE_NO_WINDOW
+                if hasattr(subprocess, 'CREATE_NEW_PROCESS_GROUP'):
+                    creationflags |= subprocess.CREATE_NEW_PROCESS_GROUP
                 
-                # Also redirect stderr to a pipe to intercept error messages
                 env = os.environ.copy()
                 env.update({"FFMPEG_HIDE_BANNER": "1", "AV_LOG_FORCE_NOCOLOR": "1"})
                 
@@ -981,7 +1024,6 @@ class CaptureManager(QObject):
                     env=env
                 )
             else:
-                # Regular process creation for non-Windows platforms
                 self.ffmpeg_process = subprocess.Popen(
                     cmd,
                     stderr=subprocess.PIPE,
@@ -989,17 +1031,31 @@ class CaptureManager(QObject):
                     stdin=subprocess.PIPE
                 )
 
-            # Create a more reliable monitor with proper frame estimation based on capture_duration
+            if self.ffmpeg_process:
+                self._spawned_pids.add(self.ffmpeg_process.pid)
+
             total_frames = int(capture_duration * frame_rate)
             logger.info(f"Estimated total frames: {total_frames} based on capture_duration={capture_duration}s and fps={frame_rate}")
             
-            self.capture_monitor = CaptureMonitor(self.ffmpeg_process, capture_duration, total_frames)
+            stop_mode = "graceful"
+            if self.options_manager:
+                stop_mode = self.options_manager.get_setting("capture", "stop_mode") or "graceful"
+
+            self.capture_monitor = CaptureMonitor(
+                self.ffmpeg_process,
+                capture_duration,
+                total_frames,
+                output_path=self.current_output_path,
+                stop_mode=stop_mode
+            )
             
             # Connect signals
             self.capture_monitor.progress_updated.connect(self.progress_update)
             self.capture_monitor.capture_complete.connect(self._on_bookend_capture_complete)
             self.capture_monitor.capture_failed.connect(self._on_capture_failed)
             self.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
+            self.capture_monitor.capture_metadata.connect(self._on_capture_metadata)
+            self.capture_monitor.capture_truncated.connect(self._on_capture_truncated)
             
             # Start monitor thread
             self.capture_monitor.start()

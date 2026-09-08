@@ -26,7 +26,7 @@ class ReferenceAnalyzer(QObject):
             
             # Use FFprobe to get video information
             _, ffprobe_exe, _ = get_ffmpeg_path()
-            startupinfo, creationflags, env = get_subprocess_startupinfo()
+            startupinfo, creationflags = get_subprocess_startupinfo()[:2]
             cmd = [
                 ffprobe_exe,
                 "-v", "quiet",

@@ -320,6 +320,19 @@ class OptionsTab(QWidget):
         self.chk_force_format.setToolTip("Force format even if device reports it's not supported")
         advanced_layout.addRow("Force Format:", self.chk_force_format)
 
+        self.combo_stop_mode = QComboBox()
+        self.combo_stop_mode.addItem("Graceful (Finalize MP4)", "graceful")
+        self.combo_stop_mode.addItem("Immediate (Abort / fast)", "immediate")
+        self.combo_stop_mode.setToolTip("Capture stop behavior: Graceful finalizes MP4 cleanly; Immediate stops instantly but risks corruption.")
+        self.combo_stop_mode.currentIndexChanged.connect(self._on_stop_mode_changed)
+        advanced_layout.addRow("Stop Mode:", self.combo_stop_mode)
+
+        self.lbl_stop_mode_warning = QLabel("⚠ Immediate stop mode may produce truncated, potentially unplayable captures; repair may be required.")
+        self.lbl_stop_mode_warning.setStyleSheet("color: #b45309; font-weight: bold; background-color: #fef3c7; padding: 6px 10px; border-radius: 4px; border: 1px solid #f59e0b;")
+        self.lbl_stop_mode_warning.setWordWrap(True)
+        self.lbl_stop_mode_warning.setVisible(False)
+        advanced_layout.addRow("", self.lbl_stop_mode_warning)
+
         advanced_group.setLayout(advanced_layout)
         format_layout.addWidget(advanced_group)
 
@@ -1053,6 +1066,7 @@ class OptionsTab(QWidget):
                 "disable_audio": self.chk_disable_audio.isChecked(),
                 "low_latency": self.chk_low_latency.isChecked(),
                 "force_format": self.chk_force_format.isChecked(),
+                "stop_mode": self.combo_stop_mode.currentData() or "graceful",
                 
                 # Add these essential fields with defaults if not available
                 "resolution": "1920x1080",
@@ -1637,6 +1651,16 @@ class OptionsTab(QWidget):
             if 'force_format' in capture_settings:
                 self.chk_force_format.setChecked(capture_settings['force_format'])
 
+            if 'stop_mode' in capture_settings and hasattr(self, 'combo_stop_mode'):
+                stop_mode = capture_settings['stop_mode']
+                for i in range(self.combo_stop_mode.count()):
+                    if self.combo_stop_mode.itemData(i) == stop_mode:
+                        self.combo_stop_mode.blockSignals(True)
+                        self.combo_stop_mode.setCurrentIndex(i)
+                        self.combo_stop_mode.blockSignals(False)
+                        break
+                self.lbl_stop_mode_warning.setVisible(stop_mode == "immediate")
+
             # Try to detect formats automatically if empty
             if self.combo_format_code.count() == 0:
                 logger.info("No formats loaded, attempting to detect formats")
@@ -1657,5 +1681,30 @@ class OptionsTab(QWidget):
             logger.error(f"Error loading capture settings: {e}")
             import traceback
             logger.error(traceback.format_exc())
+
+    def _on_stop_mode_changed(self, index=None):
+        """Handle stop mode dropdown change with non-blocking warning for immediate mode"""
+        mode = self.combo_stop_mode.currentData() or "graceful"
+        if mode == "immediate":
+            self.lbl_stop_mode_warning.setVisible(True)
+            msg_box = QMessageBox(
+                QMessageBox.Warning,
+                "Immediate Stop Mode Warning",
+                "Truncated, potentially unplayable captures; repair may be required.",
+                QMessageBox.Ok,
+                self
+            )
+            msg_box.setModal(False)
+            msg_box.show()
+            self._active_warning_box = msg_box
+        else:
+            self.lbl_stop_mode_warning.setVisible(False)
+
+        if hasattr(self, "options_manager") and self.options_manager:
+            self.options_manager.update_setting("capture", "stop_mode", mode)
+
+        if hasattr(self, "parent") and hasattr(self.parent, "capture_tab") and self.parent.capture_tab:
+            self.parent.capture_tab.update_stop_mode_warning(mode)
+
 
 
