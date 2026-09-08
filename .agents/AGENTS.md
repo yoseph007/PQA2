@@ -6,6 +6,7 @@ This file (`.agents/AGENTS.md`) is used to provide project-specific instructions
 Before modifying core architecture, refer to the following documents:
 - [ARCHITECTURE.md](references/ARCHITECTURE.md): Details on `CaptureManager`, `VMAFAnalyzer`, Bookend alignment, and the PyQt5 threading model.
 - [FFMPEG_GUIDELINES.md](references/FFMPEG_GUIDELINES.md): Rules for invoking `ffmpeg` and `ffprobe` as subprocesses.
+- [HARDWARE_RECAPTURE_RUNBOOK.md](references/HARDWARE_RECAPTURE_RUNBOOK.md): Operational protocol for the Capstone Hardware Re-Capture Gage R&R campaign.
 
 ## General Rules
 - **Thread Safety**: Never block the main UI thread. Use `QThread` and signals for long-running operations. See `manage-qt-ui` skill.

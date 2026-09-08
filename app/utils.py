@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -80,6 +81,25 @@ def get_ffmpeg_path() -> FFmpegPaths:
 
     # Fallback for legacy behavior
     return FFmpegPaths(f"ffmpeg{exe_suffix}")
+
+
+def get_file_sha256(file_path: str, prefix_len: int = 16) -> str:
+    """
+    Compute SHA-256 hash of a file for traceability.
+    Returns prefix_len hex characters (default 16), or 'unknown' on error/missing file.
+    """
+    if not file_path or not os.path.isfile(file_path):
+        return "unknown"
+    try:
+        h = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            while chunk := f.read(1024 * 1024):
+                h.update(chunk)
+        full_hex = h.hexdigest()
+        return full_hex[:prefix_len] if prefix_len else full_hex
+    except Exception as e:
+        logger.warning(f"Could not compute SHA-256 for {file_path}: {e}")
+        return "unknown"
 
 
 class FileManager:

@@ -76,6 +76,7 @@ class AnalysisTab(QWidget):
 
         # Run combined analysis button
         self.btn_run_combined_analysis = QPushButton("Run Analysis (Alignment + VMAF)")
+        self.btn_run_combined_analysis.setObjectName("primaryButton")
         self.btn_run_combined_analysis.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.btn_run_combined_analysis.setEnabled(False)
         self.btn_run_combined_analysis.clicked.connect(self.run_combined_analysis)
@@ -138,6 +139,7 @@ class AnalysisTab(QWidget):
         self.txt_analysis_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.txt_analysis_log.setMinimumHeight(200)
         self.txt_analysis_log.setMaximumHeight(400)
+        self.txt_analysis_log.setObjectName("logConsole")
         left_log_layout.addWidget(self.txt_analysis_log)
         logs_layout.addLayout(left_log_layout)
 
@@ -152,6 +154,7 @@ class AnalysisTab(QWidget):
         self.txt_alignment_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.txt_alignment_log.setMinimumHeight(200)
         self.txt_alignment_log.setMaximumHeight(400)
+        self.txt_alignment_log.setObjectName("logConsole")
         right_log_layout.addWidget(self.txt_alignment_log)
         logs_layout.addLayout(right_log_layout)
 
@@ -166,6 +169,7 @@ class AnalysisTab(QWidget):
         nav_layout.addStretch()
 
         self.btn_next_to_results = QPushButton("Next: Results")
+        self.btn_next_to_results.setObjectName("primaryButton")
         self.btn_next_to_results.setEnabled(False)
         nav_layout.addWidget(self.btn_next_to_results)
 
@@ -980,7 +984,7 @@ class AnalysisTab(QWidget):
 
         # Add special formatting for important messages
         if "complete" in message.lower() or "finished" in message.lower() or "success" in message.lower():
-            formatted_message = f'<span style="color: #388E3C; font-weight: bold;">{formatted_message}</span>'
+            formatted_message = f'<span style="color: #22c55e; font-weight: bold;">{formatted_message}</span>'
 
         # Ensure it also appears in alignment log
         self.txt_alignment_log.append(formatted_message)

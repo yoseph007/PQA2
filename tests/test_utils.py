@@ -12,7 +12,7 @@ try:
 except ImportError:
     pytest = None
 
-from app.utils import get_ffmpeg_path, get_video_info, get_subprocess_startupinfo
+from app.utils import get_ffmpeg_path, get_video_info, get_subprocess_startupinfo, get_file_sha256
 from app.options_manager import OptionsManager
 
 
@@ -77,6 +77,36 @@ def test_get_all_settings_alias():
     assert om.get_all_settings() == om.get_settings()
 
 
+def test_get_file_sha256():
+    with tempfile.NamedTemporaryFile("w", delete=False) as f:
+        f.write("hello world")
+        tmp_name = f.name
+    try:
+        # Known SHA256 of "hello world" is b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+        h16 = get_file_sha256(tmp_name, prefix_len=16)
+        assert h16 == "b94d27b9934d3e08"
+        h_full = get_file_sha256(tmp_name, prefix_len=0)
+        assert h_full == "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        # Missing file
+        assert get_file_sha256("non_existent_file_path.xyz") == "unknown"
+    finally:
+        if os.path.exists(tmp_name):
+            os.remove(tmp_name)
+
+
+def test_preflight_checker():
+    from scripts.preflight_check import PreflightChecker
+    checker = PreflightChecker(install_hooks_if_missing=False)
+    # Python environment must be valid
+    assert checker.check_python_environment() is True
+    # Toolchain probe must succeed
+    assert checker.check_ffmpeg_toolchain() is True
+    # Capture and storage preflight must succeed
+    assert checker.check_capture_and_storage() is True
+    # Overall run_all must succeed
+    assert checker.run_all() is True
+
+
 class TestUtils(unittest.TestCase):
     def test_get_ffmpeg_path_bundled(self):
         test_get_ffmpeg_path_bundled()
@@ -92,6 +122,12 @@ class TestUtils(unittest.TestCase):
 
     def test_get_all_settings_alias(self):
         test_get_all_settings_alias()
+
+    def test_get_file_sha256(self):
+        test_get_file_sha256()
+
+    def test_preflight_checker(self):
+        test_preflight_checker()
 
 
 if __name__ == "__main__":

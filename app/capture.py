@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -38,30 +39,54 @@ class CaptureState(Enum):
 
 
 class CaptureMonitor(QThread):
-    """Thread to monitor FFmpeg capture process with non-blocking stderr reading"""
+    """Thread to monitor FFmpeg capture process with non-blocking stderr reading and watchdog supervision"""
     progress_updated = pyqtSignal(int)
     capture_complete = pyqtSignal()
     capture_failed = pyqtSignal(str)
+    capture_stalled = pyqtSignal(str)  # Emitted with reason when stream stall is detected
     frame_count_updated = pyqtSignal(int, int)  # current_frame, total_frames
     capture_metadata = pyqtSignal(dict)
     capture_truncated = pyqtSignal(str)
 
-    def __init__(self, process, duration=None, total_frames=0, output_path=None, stop_mode="graceful"):
+    def __init__(
+        self,
+        process,
+        duration=None,
+        total_frames=0,
+        output_path=None,
+        stop_mode="graceful",
+        startup_timeout: float = 10.0,
+        stall_timeout: float = 5.0,
+        clock=None,
+    ):
         super().__init__()
         self.process = process
         self._running = True
+        self._stopping = False  # Set to True on deliberate user stop to disarm watchdog (Annotation 1)
+        self._watchdog_triggered = False  # True if watchdog triggered shutdown
+        self._watchdog_reason = ""
         self.duration = duration  # Expected duration in seconds
         self.total_frames = total_frames  # Use predefined total frames if provided
         self.output_path = output_path
         self.stop_mode = stop_mode
+        self.startup_timeout = float(startup_timeout)
+        self.stall_timeout = float(stall_timeout)
+        self._clock = clock or time.monotonic  # Injectable monotonic clock (Annotations 2 & 4)
+        self._is_custom_clock = clock is not None
 
-        self.start_time = time.time()
+        self.start_time = self._clock()
+        self.last_frame_rx_time = self._clock()
+        self.frames_received = False
         self.is_bookend_capture = True
         self.last_frame_count = 0
-        self.last_progress_time = time.time()
+        self.last_progress_time = self._clock()
         self.last_progress_value = 0
         self.last_frame_emit_time = 0
         self.last_emitted_frame = -1
+
+        # Telemetry flags for near-miss logging (Annotation 3)
+        self._startup_near_miss_logged = False
+        self._stall_near_miss_logged = False
 
         self.gaps_detected = False
         self.gap_warning_emitted = False
@@ -99,7 +124,7 @@ class CaptureMonitor(QThread):
             self._stderr_queue.put(None)
 
     def run(self):
-        """Monitor process output and emit signals using bounded queue"""
+        """Monitor process output and emit signals using bounded queue with watchdog supervision"""
         logger.debug("Starting capture monitor")
         self.progress_updated.emit(0)
 
@@ -119,7 +144,13 @@ class CaptureMonitor(QThread):
                     except queue.Empty:
                         break
 
-                if self.process.returncode == 0:
+                if self._watchdog_triggered:
+                    error = self._watchdog_reason or self.error_output
+                    logger.error(f"Capture failed due to watchdog trigger: {error}")
+                    self.capture_failed.emit(error)
+                elif self._stopping:
+                    logger.info("Capture stopped cleanly by deliberate user request")
+                elif self.process.returncode == 0:
                     logger.info("Capture completed successfully")
                     self.progress_updated.emit(99)
                     self._verify_output_and_emit_metadata()
@@ -130,8 +161,10 @@ class CaptureMonitor(QThread):
                     self.capture_failed.emit(error)
                 return
 
+            now = self._clock()
+
             # Check for duration timeout - be more lenient with bookend captures
-            if self.duration and (time.time() - self.start_time) > self.duration * 2.0:
+            if self.duration and (now - self.start_time) > self.duration * 2.0:
                 logger.warning(f"Capture exceeded expected duration ({self.duration}s), terminating gracefully")
                 self._graceful_shutdown()
                 self.progress_updated.emit(99)
@@ -139,85 +172,137 @@ class CaptureMonitor(QThread):
                 return
 
             # Parse process output from queue
+            timeout_val = 0.005 if self._is_custom_clock else 0.25
             try:
-                line = self._stderr_queue.get(timeout=0.25)
+                line = self._stderr_queue.get(timeout=timeout_val)
             except queue.Empty:
                 line = None
+
+            if line is not None:
+                logger.debug(f"FFmpeg output: {line.strip()}")
+
+                frame_match = FRAME_PATTERN.search(line)
+                if frame_match:
+                    try:
+                        frame_num = int(frame_match.group(1))
+                        self.last_frame_count = frame_num
+                        self.frames_received = True
+                        self.last_frame_rx_time = self._clock()
+                        self._stall_near_miss_logged = False
+
+                        fps_match = FPS_PATTERN.search(line)
+                        if fps_match:
+                            try:
+                                fps = float(fps_match.group(1))
+                            except Exception:
+                                pass
+
+                        if self.duration and fps > 0:
+                            self.total_frames = int(self.duration * fps)
+
+                        time_elapsed = None
+                        time_match = TIME_PATTERN.search(line)
+                        if time_match:
+                            hours = int(time_match.group(1))
+                            minutes = int(time_match.group(2))
+                            seconds = float(time_match.group(3))
+                            time_elapsed = hours * 3600 + minutes * 60 + seconds
+
+                        # Frame gap / drop detection
+                        elapsed_run = self._clock() - self.start_time
+                        if elapsed_run > 2.0 and fps > 0:
+                            expected_so_far = elapsed_run * fps
+                            delta = frame_num - expected_so_far
+                            if abs(delta) > max(expected_so_far * 0.02, 5):
+                                self.gaps_detected = True
+                                if not self.gap_warning_emitted:
+                                    logger.warning(
+                                        f"Frame gap detected: expected ~{int(expected_so_far)}, captured {frame_num}"
+                                    )
+                                    self.gap_warning_emitted = True
+
+                        # Calculate progress percentage throttled to 0.25s
+                        current_time = self._clock()
+                        if current_time - self.last_progress_time >= 0.25:
+                            progress = 0
+                            if self.duration and self.total_frames > 0:
+                                progress = min(int((frame_num / self.total_frames) * 95), 95)
+                            elif time_elapsed is not None and self.duration:
+                                progress = min(int((time_elapsed / self.duration) * 95), 95)
+                            elif self.duration:
+                                progress = min(int((elapsed_run / self.duration) * 95), 95)
+                            else:
+                                progress = max(5, min(int((frame_num % 1000) / 10), 95))
+
+                            if progress != self.last_progress_value:
+                                self.progress_updated.emit(progress)
+                                self.last_progress_value = progress
+                            self.last_progress_time = current_time
+
+                        # Throttle frame count emissions (every 5 frames or 100ms)
+                        if (frame_num - self.last_emitted_frame >= 5) or (current_time - self.last_frame_emit_time >= 0.1):
+                            self.frame_count_updated.emit(frame_num, self.total_frames)
+                            self.last_emitted_frame = frame_num
+                            self.last_frame_emit_time = current_time
+
+                    except Exception as e:
+                        logger.debug(f"Error parsing frame number: {e}")
+
+                if "Error" in line or "Invalid" in line:
+                    logger.warning(f"Potential error in FFmpeg output: {line.strip()}")
+
+            # Watchdog Evaluation (Annotation 1: disarmed during deliberate stops; Annotation 2: monotonic)
+            now = self._clock()
+            if not self._stopping and not self._watchdog_triggered:
+                if not self.frames_received:
+                    startup_elapsed = now - self.start_time
+                    # Annotation 3: Log warning when stall is within 2x of threshold without firing
+                    if startup_elapsed >= (self.startup_timeout * 0.5) and not self._startup_near_miss_logged:
+                        logger.warning(
+                            f"Watchdog telemetry: No video frames received for {startup_elapsed:.1f}s "
+                            f"(threshold is {self.startup_timeout:.1f}s)"
+                        )
+                        self._startup_near_miss_logged = True
+
+                    if startup_elapsed > self.startup_timeout:
+                        reason = (
+                            f"Capture pipeline stalled during initialization: no video frames "
+                            f"received from device within {self.startup_timeout:.1f}s"
+                        )
+                        logger.error(f"WATCHDOG TRIGGERED: {reason}")
+                        self._watchdog_triggered = True
+                        self._watchdog_reason = reason
+                        self.capture_stalled.emit(reason)
+                        self._graceful_shutdown()
+                        self.capture_failed.emit(reason)
+                        return
+                else:
+                    stall_elapsed = now - self.last_frame_rx_time
+                    # Annotation 3: Log warning when stall is within 2x of threshold without firing
+                    if stall_elapsed >= (self.stall_timeout * 0.5) and not self._stall_near_miss_logged:
+                        logger.warning(
+                            f"Watchdog telemetry: Frame ingestion delayed for {stall_elapsed:.1f}s "
+                            f"(threshold is {self.stall_timeout:.1f}s)"
+                        )
+                        self._stall_near_miss_logged = True
+
+                    if stall_elapsed > self.stall_timeout:
+                        reason = (
+                            f"Capture pipeline stalled during recording: video stream frozen, "
+                            f"no new frames for {stall_elapsed:.1f}s (threshold {self.stall_timeout:.1f}s)"
+                        )
+                        logger.error(f"WATCHDOG TRIGGERED: {reason}")
+                        self._watchdog_triggered = True
+                        self._watchdog_reason = reason
+                        self.capture_stalled.emit(reason)
+                        self._graceful_shutdown()
+                        self.capture_failed.emit(reason)
+                        return
 
             if line is None:
                 if self.process.poll() is not None:
                     continue
-                time.sleep(0.05)
-                continue
-
-            logger.debug(f"FFmpeg output: {line.strip()}")
-
-            frame_match = FRAME_PATTERN.search(line)
-            if frame_match:
-                try:
-                    frame_num = int(frame_match.group(1))
-                    self.last_frame_count = frame_num
-
-                    fps_match = FPS_PATTERN.search(line)
-                    if fps_match:
-                        try:
-                            fps = float(fps_match.group(1))
-                        except Exception:
-                            pass
-
-                    if self.duration and fps > 0:
-                        self.total_frames = int(self.duration * fps)
-
-                    time_elapsed = None
-                    time_match = TIME_PATTERN.search(line)
-                    if time_match:
-                        hours = int(time_match.group(1))
-                        minutes = int(time_match.group(2))
-                        seconds = float(time_match.group(3))
-                        time_elapsed = hours * 3600 + minutes * 60 + seconds
-
-                    # Frame gap / drop detection
-                    elapsed_run = time.time() - self.start_time
-                    if elapsed_run > 2.0 and fps > 0:
-                        expected_so_far = elapsed_run * fps
-                        delta = frame_num - expected_so_far
-                        if abs(delta) > max(expected_so_far * 0.02, 5):
-                            self.gaps_detected = True
-                            if not self.gap_warning_emitted:
-                                logger.warning(
-                                    f"Frame gap detected: expected ~{int(expected_so_far)}, captured {frame_num}"
-                                )
-                                self.gap_warning_emitted = True
-
-                    # Calculate progress percentage throttled to 0.25s
-                    current_time = time.time()
-                    if current_time - self.last_progress_time >= 0.25:
-                        progress = 0
-                        if self.duration and self.total_frames > 0:
-                            progress = min(int((frame_num / self.total_frames) * 95), 95)
-                        elif time_elapsed is not None and self.duration:
-                            progress = min(int((time_elapsed / self.duration) * 95), 95)
-                        elif self.duration:
-                            progress = min(int((elapsed_run / self.duration) * 95), 95)
-                        else:
-                            progress = max(5, min(int((frame_num % 1000) / 10), 95))
-
-                        if progress != self.last_progress_value:
-                            self.progress_updated.emit(progress)
-                            self.last_progress_value = progress
-                        self.last_progress_time = current_time
-
-                    # Throttle frame count emissions (every 5 frames or 100ms)
-                    if (frame_num - self.last_emitted_frame >= 5) or (current_time - self.last_frame_emit_time >= 0.1):
-                        self.frame_count_updated.emit(frame_num, self.total_frames)
-                        self.last_emitted_frame = frame_num
-                        self.last_frame_emit_time = current_time
-
-                except Exception as e:
-                    logger.debug(f"Error parsing frame number: {e}")
-
-            if "Error" in line or "Invalid" in line:
-                logger.warning(f"Potential error in FFmpeg output: {line.strip()}")
+                time.sleep(0.001 if self._is_custom_clock else 0.05)
 
     def _graceful_shutdown(self, deadline=5.0):
         """Safely terminate FFmpeg process with 'q' key and escalating signals to avoid MP4 corruption"""
@@ -337,7 +422,8 @@ class CaptureMonitor(QThread):
         self.capture_metadata.emit(metadata)
 
     def stop(self):
-        """Stop monitoring and shut down FFmpeg gracefully"""
+        """Stop monitoring and shut down FFmpeg gracefully (deliberate user stop, disarms watchdog)"""
+        self._stopping = True
         self._running = False
         self._graceful_shutdown()
 
@@ -348,6 +434,7 @@ class CaptureManager(QObject):
     status_update = pyqtSignal(str)
     progress_update = pyqtSignal(int)
     state_changed = pyqtSignal(CaptureState)
+    capture_stalled = pyqtSignal(str)  # Emitted when watchdog detects a stall
 
     # Process signals
     capture_started = pyqtSignal()
@@ -710,7 +797,11 @@ class CaptureManager(QObject):
             "force_format": False,
             "retry_attempts": 3,
             "retry_delay": 3,
-            "recovery_timeout": 10
+            "recovery_timeout": 10,
+            "startup_timeout_s": 10.0,
+            "stall_timeout_s": 5.0,
+            "preflight_min_disk_mb": 2048,
+            "bitrate_mbps": 50.0,
         }
         
         # Override with options from options_manager if available
@@ -723,8 +814,87 @@ class CaptureManager(QObject):
         
         return options
 
+    def _on_capture_stalled(self, reason: str):
+        """Handle capture pipeline stall detected by watchdog"""
+        logger.warning(f"Capture stalled: {reason}")
+        self.status_update.emit(f"Warning: {reason}")
+        self.capture_stalled.emit(reason)
 
+    def run_preflight_checks(
+        self,
+        device_name: str,
+        duration: float,
+        capture_options: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[bool, str]:
+        """
+        Perform preflight checks before launching FFmpeg capture process.
 
+        Semantics & Division of Labor (Annotation 5):
+        1. Directory & Storage: Validates destination directory existence, write permissions,
+           and checks available disk space against estimated run size + safety floor.
+        2. Device Presence: Checks device ENUMERATION only against options_manager / detected devices.
+           On Windows, DirectShow and DeckLink devices can be enumerable but busy/locked by another app.
+           Preflight intentionally does NOT attempt to open the device to prevent hardware side effects;
+           hardware open failures and stream lockups are handled by the startup watchdog.
+
+        Returns:
+            (success: bool, diagnostic_message: str)
+        """
+        import shutil
+
+        opts = capture_options or self._get_capture_options()
+        min_floor_mb = int(opts.get("preflight_min_disk_mb", 2048))
+
+        # 1. Directory & Storage Validation
+        target_dir = self.output_directory
+        if not target_dir and self.current_output_path:
+            target_dir = os.path.dirname(os.path.abspath(self.current_output_path))
+        if not target_dir:
+            target_dir = os.path.join(os.getcwd(), "captures")
+
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except Exception as e:
+            return False, f"Preflight failed: Unable to create destination directory '{target_dir}': {e}"
+
+        if not os.access(target_dir, os.W_OK):
+            return False, f"Preflight failed: Destination directory '{target_dir}' is not writable."
+
+        bitrate_mbps = float(opts.get("bitrate_mbps", 50.0))
+        estimated_run_mb = (bitrate_mbps * duration) / 8.0
+        required_mb = max(min_floor_mb, int(estimated_run_mb + min_floor_mb))
+
+        try:
+            _, _, free_bytes = shutil.disk_usage(target_dir)
+            free_mb = free_bytes // (1024 * 1024)
+            drive = os.path.splitdrive(os.path.abspath(target_dir))[0] or target_dir
+            if free_mb < required_mb:
+                return False, (
+                    f"Preflight failed: Insufficient disk space on {drive}. "
+                    f"Requires ~{required_mb} MB (estimated {int(estimated_run_mb)} MB + {min_floor_mb} MB buffer), "
+                    f"found {free_mb} MB free."
+                )
+        except Exception as e:
+            logger.warning(f"Could not check disk usage on {target_dir}: {e}")
+
+        # 2. Device Presence Check (Enumeration only)
+        if self.options_manager and hasattr(self.options_manager, "get_decklink_devices"):
+            try:
+                detected = self.options_manager.get_decklink_devices()
+                if detected is not None and len(detected) > 0:
+                    match = any(
+                        device_name.strip().lower() in d.strip().lower() or d.strip().lower() in device_name.strip().lower()
+                        for d in detected
+                    )
+                    if not match:
+                        return False, (
+                            f"Preflight failed: Capture device '{device_name}' not found in detected device list: {detected}."
+                        )
+            except Exception as dev_err:
+                logger.warning(f"Error querying detected devices during preflight: {dev_err}")
+
+        drive_str = os.path.splitdrive(os.path.abspath(target_dir))[0] or target_dir
+        return True, f"Preflight passed: Disk space OK (>= {required_mb} MB required on {drive_str}), device '{device_name}' enumerated."
 
     def _map_format_code(self, code):
         """Map internal format codes to Decklink format codes"""
@@ -738,12 +908,6 @@ class CaptureManager(QObject):
             # Add more mappings as needed
         }
         return format_map.get(code, code)  # Return original if no mapping found
-
-
-
-
-
-
 
     def _get_bookend_options(self):
         """Get bookend configuration from options manager"""
@@ -931,6 +1095,17 @@ class CaptureManager(QObject):
         logger.info(f"Maximum allowed duration: {max_loop_duration:.2f}s ({max_loops} loops)")
         logger.info(f"Final capture duration: {capture_duration:.2f}s")
 
+        # Run preflight validation checks (Annotation 5)
+        preflight_ok, preflight_msg = self.run_preflight_checks(device_name, capture_duration, capture_options)
+        if not preflight_ok:
+            logger.error(f"Preflight validation failed: {preflight_msg}")
+            self.status_update.emit(preflight_msg)
+            self.state = CaptureState.ERROR
+            self.state_changed.emit(self.state)
+            self.capture_finished.emit(False, preflight_msg)
+            self.stop_preview()
+            return False
+
         # Inform the user
         self.status_update.emit(f"Capturing video with bookend frames for approximately {capture_duration:.1f} seconds...")
         self.status_update.emit("Please ensure the video plays in a loop with white frames between repetitions")
@@ -1041,18 +1216,24 @@ class CaptureManager(QObject):
             if self.options_manager:
                 stop_mode = self.options_manager.get_setting("capture", "stop_mode") or "graceful"
 
+            startup_timeout = float(capture_options.get("startup_timeout_s", 10.0))
+            stall_timeout = float(capture_options.get("stall_timeout_s", 5.0))
+
             self.capture_monitor = CaptureMonitor(
                 self.ffmpeg_process,
                 capture_duration,
                 total_frames,
                 output_path=self.current_output_path,
-                stop_mode=stop_mode
+                stop_mode=stop_mode,
+                startup_timeout=startup_timeout,
+                stall_timeout=stall_timeout,
             )
             
             # Connect signals
             self.capture_monitor.progress_updated.connect(self.progress_update)
             self.capture_monitor.capture_complete.connect(self._on_bookend_capture_complete)
             self.capture_monitor.capture_failed.connect(self._on_capture_failed)
+            self.capture_monitor.capture_stalled.connect(self._on_capture_stalled)
             self.capture_monitor.frame_count_updated.connect(self.update_frame_counter)
             self.capture_monitor.capture_metadata.connect(self._on_capture_metadata)
             self.capture_monitor.capture_truncated.connect(self._on_capture_truncated)
@@ -1060,8 +1241,8 @@ class CaptureManager(QObject):
             # Start monitor thread
             self.capture_monitor.start()
 
-            # Set capture start time
-            self.capture_start_time = time.time()
+            # Set capture start time (monotonic per Annotation 2)
+            self.capture_start_time = time.monotonic()
             
             # Update state
             self.state = CaptureState.CAPTURING

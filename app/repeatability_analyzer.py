@@ -6,6 +6,7 @@ range, %CV, and metrology acceptance thresholds (<10% Acceptable, 10-30% Conditi
 >30% Rig-Dominated).
 """
 
+import json
 import logging
 import math
 import os
@@ -15,9 +16,126 @@ from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
+from app.utils import get_file_sha256
+from app.version import get_git_commit, get_version_string
 from .vmaf_analyzer import VMAFAnalyzer
 
 logger = logging.getLogger(__name__)
+
+
+def get_campaign_history_log_path() -> str:
+    """Return default path to logs/campaign_history.jsonl."""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(project_root, "logs", "campaign_history.jsonl")
+
+
+def log_campaign_history(
+    aggregated: Dict[str, Any],
+    log_path: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Append a one-line JSON record of a completed Gage R&R campaign to JSONL.
+
+    Schema:
+      timestamp, campaign_type, vmaf_mean, vmaf_stddev, cv_pct, psnr_mean, ssim_mean,
+      verdict, verdict_status, n_completed, n_requested, reference_file, reference_sha256,
+      distorted_file, distorted_sha256, ffmpeg_version, model, app_version, git_commit.
+    """
+    if not aggregated or not isinstance(aggregated, dict):
+        return None
+
+    target_log_path = log_path or get_campaign_history_log_path()
+
+    metrics = aggregated.get("metrics", {}) or {}
+    vmaf_stats = metrics.get("vmaf", {}) or {}
+    psnr_stats = metrics.get("psnr", {}) or {}
+    ssim_stats = metrics.get("ssim", {}) or {}
+    meas_meta = aggregated.get("measurement_metadata", {}) or {}
+
+    git_commit = meas_meta.get("git_commit")
+    if not git_commit or git_commit == "unknown":
+        git_commit = get_git_commit(short=True)
+
+    app_ver = meas_meta.get("app_version") or get_version_string()
+
+    ffmpeg_ver = meas_meta.get("ffmpeg_version") or meas_meta.get("libvmaf_version") or "unknown"
+
+    record = {
+        "timestamp": aggregated.get("timestamp") or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "campaign_type": aggregated.get("campaign_type") or meas_meta.get("campaign_type", "fixed_pair"),
+        "vmaf_mean": vmaf_stats.get("mean"),
+        "vmaf_stddev": vmaf_stats.get("stddev"),
+        "cv_pct": vmaf_stats.get("cv_pct"),
+        "psnr_mean": psnr_stats.get("mean"),
+        "ssim_mean": ssim_stats.get("mean"),
+        "verdict": aggregated.get("verdict"),
+        "verdict_status": aggregated.get("verdict_status"),
+        "n_completed": aggregated.get("n_completed"),
+        "n_requested": aggregated.get("n_requested"),
+        "reference_file": aggregated.get("reference_file") or meas_meta.get("reference_file"),
+        "reference_sha256": aggregated.get("reference_sha256") or meas_meta.get("reference_sha256"),
+        "distorted_file": aggregated.get("distorted_file") or meas_meta.get("distorted_file"),
+        "distorted_sha256": aggregated.get("distorted_sha256") or meas_meta.get("distorted_sha256"),
+        "ffmpeg_version": ffmpeg_ver,
+        "model": meas_meta.get("model") or "unknown",
+        "app_version": app_ver,
+        "git_commit": git_commit,
+    }
+
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(target_log_path)), exist_ok=True)
+        line = json.dumps(record, separators=(',', ':')) + "\n"
+        with open(target_log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+        logger.info(f"Appended campaign summary to JSONL log: {target_log_path}")
+        return line
+    except Exception as e:
+        logger.warning(f"Failed to append campaign history to {target_log_path}: {e}")
+        return None
+
+
+def read_campaign_history(
+    log_path: Optional[str] = None,
+    campaign_type: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Read campaign history records from the JSONL log file.
+
+    Args:
+        log_path: Path to the JSONL log file (default: logs/campaign_history.jsonl).
+        campaign_type: Optional filter by campaign type (e.g. 'fixed_pair', 'recapture').
+        limit: Optional maximum number of recent records to return.
+
+    Returns:
+        List of parsed record dictionaries in chronological order.
+    """
+    target_log_path = log_path or get_campaign_history_log_path()
+    if not os.path.isfile(target_log_path):
+        return []
+
+    records: List[Dict[str, Any]] = []
+    try:
+        with open(target_log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                try:
+                    rec = json.loads(line_str)
+                    if isinstance(rec, dict):
+                        if campaign_type is not None and rec.get("campaign_type") != campaign_type:
+                            continue
+                        records.append(rec)
+                except json.JSONDecodeError:
+                    continue
+    except Exception as e:
+        logger.warning(f"Failed to read campaign history from {target_log_path}: {e}")
+        return []
+
+    if limit is not None and limit > 0:
+        return records[-limit:]
+    return records
 
 
 def calculate_metric_statistics(
@@ -129,6 +247,8 @@ def aggregate_campaign_results(
     runs: List[Dict[str, Any]],
     warning_threshold_drift: float = 1.0,
     total_requested: Optional[int] = None,
+    campaign_type: str = "fixed_pair",
+    pair_metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Aggregate individual repeatability pass results into a comprehensive Gage R&R report structure.
@@ -176,14 +296,20 @@ def aggregate_campaign_results(
     measurement_metadata = {}
     for r in valid_runs:
         if r.get("measurement_metadata"):
-            measurement_metadata = r["measurement_metadata"]
+            measurement_metadata = dict(r["measurement_metadata"])
             break
 
-    return {
+    if pair_metadata:
+        measurement_metadata.update(pair_metadata)
+
+    measurement_metadata["campaign_type"] = campaign_type
+
+    res = {
         "n_requested": total,
         "n_completed": n_valid,
         "partial_run": partial_run,
         "caveat": caveat,
+        "campaign_type": campaign_type,
         "metrics": {
             "vmaf": vmaf_stats,
             "psnr": psnr_stats,
@@ -197,6 +323,9 @@ def aggregate_campaign_results(
         "measurement_metadata": measurement_metadata,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
+    if pair_metadata:
+        res.update(pair_metadata)
+    return res
 
 
 class RepeatabilityAnalyzer(QObject):
@@ -231,6 +360,8 @@ class RepeatabilityAnalyzer(QObject):
         cleanup_after_campaign: bool = True,
         alignment_metadata: Optional[dict] = None,
         capture_metadata: Optional[dict] = None,
+        campaign_type: str = "fixed_pair",
+        log_path: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Execute N identical analysis passes against the same reference/distorted pair.
@@ -257,8 +388,10 @@ class RepeatabilityAnalyzer(QObject):
         self.campaign_progress.emit(0)
 
         # 1. Session Capability Probe (Runs once per campaign)
+        capabilities = {}
         try:
-            VMAFAnalyzer.probe_capabilities()
+            capabilities = VMAFAnalyzer.probe_capabilities() or {}
+            logger.info(f"Gage R&R campaign capability probe: {capabilities}")
         except Exception as e:
             logger.warning(f"Capability probe warning during campaign start: {e}")
 
@@ -365,12 +498,31 @@ class RepeatabilityAnalyzer(QObject):
             self.error_occurred.emit(error_msg)
             return None
 
+        # Build pair metadata for traceability
+        pair_metadata = {
+            "reference_file": os.path.basename(reference_path),
+            "reference_path": reference_path,
+            "reference_sha256": get_file_sha256(reference_path),
+            "distorted_file": os.path.basename(distorted_path),
+            "distorted_path": distorted_path,
+            "distorted_sha256": get_file_sha256(distorted_path),
+            "ffmpeg_version": capabilities.get("ffmpeg_version", "unknown") if isinstance(capabilities, dict) else "unknown",
+        }
+
         # Aggregate results across all passes
         aggregated = aggregate_campaign_results(
             runs=runs_data,
             warning_threshold_drift=drift_threshold,
             total_requested=runs,
+            campaign_type=campaign_type,
+            pair_metadata=pair_metadata,
         )
+
+        # Log campaign history to JSONL
+        try:
+            log_campaign_history(aggregated, log_path=log_path)
+        except Exception as log_err:
+            logger.warning(f"Could not log campaign history: {log_err}")
 
         self.campaign_complete.emit(aggregated)
         self.status_update.emit(
@@ -398,6 +550,8 @@ class RepeatabilityCampaignThread(QThread):
         cleanup_after_campaign: bool = True,
         alignment_metadata: Optional[dict] = None,
         capture_metadata: Optional[dict] = None,
+        campaign_type: str = "fixed_pair",
+        log_path: Optional[str] = None,
     ):
         super().__init__()
         self.distorted_path = distorted_path
@@ -408,6 +562,8 @@ class RepeatabilityCampaignThread(QThread):
         self.cleanup_after_campaign = cleanup_after_campaign
         self.alignment_metadata = alignment_metadata
         self.capture_metadata = capture_metadata
+        self.campaign_type = campaign_type
+        self.log_path = log_path
 
         self.analyzer = RepeatabilityAnalyzer()
         self.analyzer.campaign_progress.connect(self.campaign_progress.emit)
@@ -426,6 +582,8 @@ class RepeatabilityCampaignThread(QThread):
             cleanup_after_campaign=self.cleanup_after_campaign,
             alignment_metadata=self.alignment_metadata,
             capture_metadata=self.capture_metadata,
+            campaign_type=self.campaign_type,
+            log_path=self.log_path,
         )
 
     def terminate(self):

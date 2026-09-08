@@ -41,7 +41,7 @@ class CaptureTab(QWidget):
 
         # Summary of setup with improved styling
         self.lbl_capture_summary = QLabel("No reference video selected")
-        self.lbl_capture_summary.setStyleSheet("font-weight: bold; color: #444; background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
+        self.lbl_capture_summary.setObjectName("summaryCard")
         self.lbl_capture_summary.setWordWrap(True)
         layout.addWidget(self.lbl_capture_summary)
 
@@ -99,6 +99,7 @@ class CaptureTab(QWidget):
 
         capture_buttons = QHBoxLayout()
         self.btn_start_capture = QPushButton("Start Capture")
+        self.btn_start_capture.setObjectName("primaryButton")
         self.btn_start_capture.clicked.connect(self.start_capture)
         self.btn_stop_capture = QPushButton("Stop Capture")
         self.btn_stop_capture.clicked.connect(self.stop_capture)
@@ -111,7 +112,7 @@ class CaptureTab(QWidget):
         capture_layout.addWidget(self.lbl_capture_status)
 
         self.lbl_immediate_warning = QLabel("⚠ Immediate stop mode active: captures may be truncated / unplayable")
-        self.lbl_immediate_warning.setStyleSheet("color: #b45309; font-weight: bold; background-color: #fef3c7; padding: 6px 10px; border-radius: 4px; border: 1px solid #f59e0b;")
+        self.lbl_immediate_warning.setObjectName("warningBanner")
         self.lbl_immediate_warning.setWordWrap(True)
         self.lbl_immediate_warning.setVisible(False)
         capture_layout.addWidget(self.lbl_immediate_warning)
@@ -151,18 +152,18 @@ class CaptureTab(QWidget):
         self.lbl_preview = QLabel("No video feed")
         self.lbl_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_preview.setMinimumSize(480, 270)
-        self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black; border-radius: 4px;")
+        self.lbl_preview.setObjectName("previewLabel")
         preview_inner_layout.addWidget(self.lbl_preview)
         preview_inner_layout.setContentsMargins(0, 0, 0, 0)
 
         # Add status indicator for preview
         preview_status_layout = QHBoxLayout()
         self.lbl_preview_status = QLabel("Status: No video feed")
-        self.lbl_preview_status.setStyleSheet("color: #666; font-size: 9pt;")
+        self.lbl_preview_status.setObjectName("mutedLabel")
 
         # Frame counter
         self.lbl_frame_counter = QLabel("Frame: 0")
-        self.lbl_frame_counter.setStyleSheet("color: #666; font-size: 9pt;")
+        self.lbl_frame_counter.setObjectName("mutedLabel")
 
         preview_status_layout.addWidget(self.lbl_preview_status)
         preview_status_layout.addStretch()
@@ -184,21 +185,10 @@ class CaptureTab(QWidget):
         # Create log text area with enhanced styling and error highlighting
         self.txt_capture_log = QTextEdit()
         self.txt_capture_log.setReadOnly(True)
-        self.txt_capture_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)  # Enable line wrapping
+        self.txt_capture_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.txt_capture_log.setMinimumHeight(150)
-        self.txt_capture_log.setMaximumHeight(200)  # Fix height to prevent stretching
         self.txt_capture_log.setFixedWidth(550)  # Fixed width to avoid UI stretching with long messages
-
-        # Set custom stylesheet for better readability
-        self.txt_capture_log.setStyleSheet("""
-            QTextEdit {
-                background-color: #f8f8f8;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 10pt;
-                padding: 4px;
-                border: 1px solid #ddd;
-            }
-        """)
+        self.txt_capture_log.setObjectName("logConsole")
 
         # Add clear log button
         log_controls = QHBoxLayout()
@@ -410,24 +400,26 @@ class CaptureTab(QWidget):
             # Show error frame
             try:
                 placeholder = np.zeros((270, 480, 3), dtype=np.uint8)
-                placeholder[:] = (50, 50, 70)  # Dark blue-gray background
+                placeholder[:] = (24, 24, 30)  # Clean dark slate background
                 
                 # Add red error banner
-                cv2.rectangle(placeholder, (0, 0), (480, 40), (0, 0, 150), -1)
-                cv2.putText(placeholder, "CAPTURE FAILED", (150, 30), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                cv2.rectangle(placeholder, (0, 0), (480, 40), (40, 40, 185), -1)
+                cv2.putText(placeholder, "CAPTURE FAILED", (150, 28), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
                 
-                # Add error message (truncate if too long)
-                error_msg = output_path
-                if len(error_msg) > 60:
-                    error_msg = error_msg[:57] + "..."
+                # Extract most meaningful error line from message
+                error_msg = str(output_path).strip()
+                for line in error_msg.splitlines():
+                    if any(kw in line.lower() for kw in ["error opening", "no such device", "failed", "cannot open", "invalid"]):
+                        error_msg = line.strip()
+                        break
                 
-                lines = self._wrap_text(error_msg, 60)  # Wrap text to avoid overflow
+                lines = self._wrap_text(error_msg, 50)
                 y_pos = 80
-                for line in lines:
-                    cv2.putText(placeholder, line, (30, y_pos), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-                    y_pos += 25
+                for line in lines[:5]:
+                    cv2.putText(placeholder, line, (24, y_pos), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (220, 225, 230), 1)
+                    y_pos += 24
                 
                 # Update preview
                 self.update_preview(placeholder)
@@ -798,8 +790,15 @@ class CaptureTab(QWidget):
 
     def handle_capture_started(self):
         """Handle capture start"""
+        self.lbl_capture_status.setStyleSheet("")
         self.btn_start_capture.setEnabled(False)
         self.btn_stop_capture.setEnabled(True)
+
+    def handle_capture_stalled(self, reason: str):
+        """Handle capture stalled signal with amber warning styling (Minor Notes)"""
+        self.lbl_capture_status.setText(f"STALLED: {reason}")
+        self.lbl_capture_status.setStyleSheet("color: #d97706; font-weight: bold;")
+        self.log_to_capture(f"WARNING (Watchdog): {reason}")
 
 
     def _show_placeholder_image(self, message="No video feed"):
@@ -863,7 +862,7 @@ class CaptureTab(QWidget):
             logger.error(f"Error creating status display: {str(e)}")
             # Fallback to text-only label
             self.lbl_preview.setText(message)
-            self.lbl_preview.setStyleSheet("background-color: #e0e0e0; color: black; padding: 10px;")
+            self.lbl_preview.setStyleSheet("padding: 10px; font-weight: 500;")
 
     def update_frame_counter(self, current_frame, total_frames):
         """Update frame counter display during capture"""
@@ -882,13 +881,13 @@ class CaptureTab(QWidget):
 
         # Format errors in red
         if "error" in message.lower() or "failed" in message.lower() or "exception" in message.lower():
-            formatted_message = f'<span style="color: #D32F2F; font-weight: bold;">[{timestamp}] {message}</span>'
+            formatted_message = f'<span style="color: #ef4444; font-weight: bold;">[{timestamp}] {message}</span>'
         # Format warnings in orange
         elif "warning" in message.lower() or "caution" in message.lower():
-            formatted_message = f'<span style="color: #FF9800;">[{timestamp}] {message}</span>'
+            formatted_message = f'<span style="color: #f59e0b; font-weight: bold;">[{timestamp}] {message}</span>'
         # Format success messages in green
         elif "success" in message.lower() or "complete" in message.lower() or "finished" in message.lower():
-            formatted_message = f'<span style="color: #388E3C; font-weight: bold;">[{timestamp}] {message}</span>'
+            formatted_message = f'<span style="color: #22c55e; font-weight: bold;">[{timestamp}] {message}</span>'
         # Regular messages with timestamp
         else:
             formatted_message = f'[{timestamp}] {message}'
@@ -901,15 +900,11 @@ class CaptureTab(QWidget):
             self.txt_capture_log.verticalScrollBar().maximum()
         )
 
-        # Update status bar (without HTML formatting)
-        self.parent.statusBar().showMessage(message)
-
-        # If error message, flash status bar to draw attention
-        if "error" in message.lower():
-            current_style = self.parent.statusBar().styleSheet()
-            self.parent.statusBar().setStyleSheet("background-color: #FFCDD2;")  # Light red
-            # Reset style after 2 seconds
-            QTimer.singleShot(2000, lambda: self.parent.statusBar().setStyleSheet(current_style))
+        # Update status bar with concise message
+        status_summary = message.strip().splitlines()[-1] if message else ""
+        if len(status_summary) > 120:
+            status_summary = status_summary[:117] + "..."
+        self.parent.statusBar().showMessage(status_summary)
 
 
     def _show_reference_preview(self):
@@ -980,7 +975,7 @@ class CaptureTab(QWidget):
 
             # Fall back to text message if couldn't load reference
             self.lbl_preview.setText("Reference video preview not available")
-            self.lbl_preview.setStyleSheet("background-color: #f0f0f0; color: #666; padding: 10px;")
+            self.lbl_preview.setObjectName("previewLabel")
             self.lbl_preview_status.setText("Status: No reference video loaded")
 
         except Exception as e:

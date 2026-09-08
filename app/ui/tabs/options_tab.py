@@ -66,6 +66,7 @@ class OptionsTab(QWidget):
         # Save/Reset buttons
         button_layout = QHBoxLayout()
         self.btn_save_settings = QPushButton("Save Settings")
+        self.btn_save_settings.setObjectName("primaryButton")
         self.btn_save_settings.clicked.connect(self.save_settings)
         self.btn_reset_settings = QPushButton("Reset to Defaults")
         self.btn_reset_settings.clicked.connect(self.reset_settings)
@@ -80,6 +81,26 @@ class OptionsTab(QWidget):
         """Set up the General tab UI"""
         general_tab = QWidget()
         general_layout = QVBoxLayout(general_tab)
+
+        # Appearance & Theme group
+        appearance_group = QGroupBox("Appearance & Theme")
+        appearance_form = QFormLayout()
+        appearance_form.setSpacing(10)
+        appearance_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self.combo_theme = QComboBox()
+        self.combo_theme.addItem("Dark (Modern Slate)", "Dark")
+        self.combo_theme.addItem("Light (Clean Daylight)", "Light")
+        self.combo_theme.addItem("System", "System")
+        self.combo_theme.currentIndexChanged.connect(self._on_theme_changed)
+
+        theme_help = QLabel("Select your preferred visual style. Changes apply immediately.")
+        theme_help.setObjectName("mutedLabel")
+
+        appearance_form.addRow("Theme:", self.combo_theme)
+        appearance_form.addRow("", theme_help)
+        appearance_group.setLayout(appearance_form)
+        general_layout.addWidget(appearance_group)
 
         # Directories group
         directories_group = QGroupBox("Directories")
@@ -221,7 +242,7 @@ class OptionsTab(QWidget):
 
         # Status message for format detection
         self.lbl_format_status = QLabel("No formats detected yet")
-        self.lbl_format_status.setStyleSheet("color: gray; font-style: italic;")
+        self.lbl_format_status.setObjectName("mutedLabel")
         device_layout.addWidget(self.lbl_format_status)
 
         # Format selection group
@@ -328,7 +349,7 @@ class OptionsTab(QWidget):
         advanced_layout.addRow("Stop Mode:", self.combo_stop_mode)
 
         self.lbl_stop_mode_warning = QLabel("⚠ Immediate stop mode may produce truncated, potentially unplayable captures; repair may be required.")
-        self.lbl_stop_mode_warning.setStyleSheet("color: #b45309; font-weight: bold; background-color: #fef3c7; padding: 6px 10px; border-radius: 4px; border: 1px solid #f59e0b;")
+        self.lbl_stop_mode_warning.setObjectName("warningBanner")
         self.lbl_stop_mode_warning.setWordWrap(True)
         self.lbl_stop_mode_warning.setVisible(False)
         advanced_layout.addRow("", self.lbl_stop_mode_warning)
@@ -347,7 +368,7 @@ class OptionsTab(QWidget):
             "For best results, ensure your device input matches the selected format."
         )
         help_text.setWordWrap(True)
-        help_text.setStyleSheet("font-style: italic; color: #666;")
+        help_text.setObjectName("mutedLabel")
         capture_layout.addWidget(help_text)
 
         # Populate device list on initialization
@@ -422,7 +443,7 @@ class OptionsTab(QWidget):
 
         # Add helper info
         advanced_help_label = QLabel("These settings control fine-tuning parameters for VMAF analysis:")
-        advanced_help_label.setStyleSheet("font-style: italic; color: #666;")
+        advanced_help_label.setObjectName("mutedLabel")
         advanced_vmaf_layout.addRow(advanced_help_label)
 
         # Pooling method with tooltip
@@ -492,7 +513,7 @@ class OptionsTab(QWidget):
 
         # Add helper info
         bookend_help_label = QLabel("These settings control the white frame bookend detection and alignment:")
-        bookend_help_label.setStyleSheet("font-style: italic; color: #666;")
+        bookend_help_label.setObjectName("mutedLabel")
         bookend_help_label.setWordWrap(True)
         bookend_layout.addRow(bookend_help_label)
 
@@ -681,7 +702,7 @@ class OptionsTab(QWidget):
 
         # Update status
         self.lbl_format_status.setText("Detecting formats... Please wait.")
-        self.lbl_format_status.setStyleSheet("color: blue;")
+        self.lbl_format_status.setStyleSheet("color: #38bdf8; font-weight: 500;")
         QApplication.processEvents()  # Ensure UI updates
 
         try:
@@ -717,7 +738,7 @@ class OptionsTab(QWidget):
 
                     # Update status message
                     self.lbl_format_status.setText(f"Detected {len(formats)} formats")
-                    self.lbl_format_status.setStyleSheet("color: green;")
+                    self.lbl_format_status.setStyleSheet("color: #22c55e; font-weight: 500;")
 
                     # Update format details based on selection
                     self._update_format_details()
@@ -851,7 +872,7 @@ class OptionsTab(QWidget):
 
                     # Update status message
                     self.lbl_format_status.setText(f"Detected {len(formats)} formats")
-                    self.lbl_format_status.setStyleSheet("color: green;")
+                    self.lbl_format_status.setStyleSheet("color: #22c55e; font-weight: 500;")
 
                     # Update format details based on selection
                     self._update_format_details()
@@ -864,7 +885,7 @@ class OptionsTab(QWidget):
                     # Handle no formats detected - add default formats for Intensity Shuttle
                     logger.warning("No formats detected - adding standard formats for Intensity Shuttle")
                     self.lbl_format_status.setText("Adding standard formats for Intensity Shuttle")
-                    self.lbl_format_status.setStyleSheet("color: orange;")
+                    self.lbl_format_status.setStyleSheet("color: #f59e0b; font-weight: 500;")
 
                     # Standard formats for Intensity Shuttle
                     manual_formats = [
@@ -917,13 +938,13 @@ class OptionsTab(QWidget):
                 process.kill()
                 logger.error("Timeout while detecting formats")
                 self.lbl_format_status.setText("Error: Detection timed out")
-                self.lbl_format_status.setStyleSheet("color: red;")
+                self.lbl_format_status.setStyleSheet("color: #ef4444; font-weight: 500;")
                 QMessageBox.critical(self, "Error", "Timeout while detecting formats.")
 
             except Exception as proc_error:
                 logger.error(f"Process error during format detection: {proc_error}")
                 self.lbl_format_status.setText("Error during detection")
-                self.lbl_format_status.setStyleSheet("color: red;")
+                self.lbl_format_status.setStyleSheet("color: #ef4444; font-weight: 500;")
                 QMessageBox.critical(self, "Error", f"Error during format detection: {proc_error}")
 
         except Exception as e:
@@ -931,7 +952,7 @@ class OptionsTab(QWidget):
             import traceback
             logger.error(traceback.format_exc())
             self.lbl_format_status.setText("Detection failed")
-            self.lbl_format_status.setStyleSheet("color: red;")
+            self.lbl_format_status.setStyleSheet("color: #ef4444; font-weight: 500;")
             QMessageBox.critical(self, "Error", f"Failed to detect formats: {e}")
 
 
@@ -1025,6 +1046,15 @@ class OptionsTab(QWidget):
                 'default_preset': self.combo_default_preset.currentText(),
             }
             self.options_manager.update_category("encoder", encoder_settings)
+
+            # Theme settings
+            if hasattr(self, 'combo_theme'):
+                selected_theme = self.combo_theme.currentData()
+                if hasattr(self.options_manager, 'update_setting'):
+                    if isinstance(self.options_manager.get_setting("branding"), dict):
+                        self.options_manager.update_setting("branding", "selected_theme", selected_theme)
+                    if isinstance(self.options_manager.get_setting("theme"), dict):
+                        self.options_manager.update_setting("theme", "selected_theme", selected_theme)
             
             logger.info("General settings saved successfully")
             return True
@@ -1214,9 +1244,6 @@ class OptionsTab(QWidget):
             import traceback
             logger.error(traceback.format_exc())
             return False
-            self.lbl_format_status.setText("Detection failed")
-            self.lbl_format_status.setStyleSheet("color: red;")
-            QMessageBox.critical(self, "Error", f"Failed to detect formats: {e}")
 
 
 
@@ -1497,6 +1524,21 @@ class OptionsTab(QWidget):
             self.combo_default_encoder.setCurrentText(encoder.get('default_encoder', 'libx264'))
             self.spin_default_crf.setValue(int(encoder.get('default_crf', 23)))
             self.combo_default_preset.setCurrentText(encoder.get('default_preset', 'medium'))
+
+            # Populate theme
+            if hasattr(self, 'combo_theme'):
+                current_theme = "Dark"
+                branding = settings.get('branding', {})
+                if isinstance(branding, dict):
+                    current_theme = branding.get('selected_theme', 'Dark')
+                elif isinstance(settings.get('theme'), dict):
+                    current_theme = settings['theme'].get('selected_theme', 'Dark')
+
+                idx = self.combo_theme.findData(current_theme)
+                if idx >= 0:
+                    self.combo_theme.blockSignals(True)
+                    self.combo_theme.setCurrentIndex(idx)
+                    self.combo_theme.blockSignals(False)
         except Exception as e:
             logger.error(f"Error loading general settings: {e}")
             import traceback
@@ -1707,6 +1749,13 @@ class OptionsTab(QWidget):
 
         if hasattr(self, "parent") and hasattr(self.parent, "capture_tab") and self.parent.capture_tab:
             self.parent.capture_tab.update_stop_mode_warning(mode)
+
+    def _on_theme_changed(self, index=None):
+        """Handle real-time theme switching from options"""
+        if hasattr(self, 'combo_theme'):
+            selected_theme = self.combo_theme.currentData() or "Dark"
+            if hasattr(self, 'parent') and hasattr(self.parent, 'theme_manager') and self.parent.theme_manager:
+                self.parent.theme_manager.set_theme(selected_theme)
 
 
 

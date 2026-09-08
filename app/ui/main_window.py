@@ -11,9 +11,9 @@ from .tabs.capture_tab import CaptureTab
 from .tabs.help_tab import HelpTab  # Added import for HelpTab
 from .tabs.options_tab import OptionsTab
 from .tabs.results_tab import ResultsTab
-# Import UI components
 from .tabs.setup_tab import SetupTab
 from .theme_manager import ThemeManager
+from app.version import get_version_string
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self):
         """Set up the application UI"""
-        self.setWindowTitle("VMAF Test App")
+        self.setWindowTitle(f"VMAF Test App - {get_version_string()}")
         self.setGeometry(100, 100, 1400, 900)
         self.setFixedSize(1400, 900)  # Set fixed size to prevent resizing
 
@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
             self.capture_mgr.state_changed.connect(self.capture_tab.handle_capture_state_change)
             self.capture_mgr.capture_started.connect(self.capture_tab.handle_capture_started)
             self.capture_mgr.capture_finished.connect(self.handle_capture_finished)
+            self.capture_mgr.capture_stalled.connect(self.capture_tab.handle_capture_stalled)
             self.capture_mgr.frame_available.connect(self.capture_tab.update_preview)
 
             # Connect to capture monitor frame counter if available

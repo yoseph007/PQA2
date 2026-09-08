@@ -2465,6 +2465,7 @@ class ResultsTab(QWidget):
         
         # Create tabs for current result and history
         results_tabs = QTabWidget()
+        self.results_tabs = results_tabs
         current_tab = QWidget()
         history_tab = QWidget()
         results_tabs.addTab(current_tab, "Current Result")
@@ -2498,6 +2499,7 @@ class ResultsTab(QWidget):
         
         export_buttons = QHBoxLayout()
         self.btn_export_pdf = QPushButton("Export PDF Report")
+        self.btn_export_pdf.setObjectName("primaryButton")
         self.btn_export_pdf.clicked.connect(self.export_pdf_report)
         self.btn_export_pdf.setEnabled(False)
         
@@ -2540,9 +2542,14 @@ class ResultsTab(QWidget):
         self.btn_export_selected = QPushButton("Export Selected")
         self.btn_export_selected.clicked.connect(self.export_selected_results)
         history_controls.addWidget(self.btn_export_selected)
-        
+
+        self.btn_diff_campaigns = QPushButton("Metrology Diff Mode...")
+        self.btn_diff_campaigns.setToolTip("Compare campaigns, compute combined 3-sigma noise floor gates, and export PDF diff reports")
+        self.btn_diff_campaigns.clicked.connect(self.open_diff_dialog)
+        history_controls.addWidget(self.btn_diff_campaigns)
+
         history_controls.addStretch()
-        
+
         history_layout.addLayout(history_controls)
         
         # Create table for results history
@@ -2793,6 +2800,16 @@ class ResultsTab(QWidget):
             "Report Error",
             f"Failed to generate PDF report: {error_message}"
         )
+
+    def open_diff_dialog(self):
+        """Opens the Metrology Campaign Diff dialog"""
+        try:
+            from app.ui.diff_dialog import CampaignDiffDialog
+            dialog = CampaignDiffDialog(self)
+            dialog.exec()
+        except Exception as e:
+            logger.error(f"Failed to open diff dialog: {e}")
+            QMessageBox.critical(self, "Diff Mode Error", f"Could not open comparison dialog: {e}")
     
     
     
