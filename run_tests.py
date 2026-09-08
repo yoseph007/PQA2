@@ -5,6 +5,9 @@ VMAF Test App - Test Runner
 
 This script runs a comprehensive suite of tests to verify
 that the VMAF Test application is ready for production deployment.
+
+Note on test count: run_tests.py executes 53 unittest test methods; pytest discovers
+68 items because pytest collects standalone test functions alongside TestCase class methods.
 """
 
 import os

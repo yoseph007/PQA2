@@ -1510,7 +1510,7 @@ class ProcessingTab(QWidget):
     
     def update_resize_options(self, state):
         """Enables or disables resize dropdown based on checkbox state"""
-        self.cmb_resize.setEnabled(state == Qt.CheckState.Checked.value or state == Qt.CheckState.Checked)
+        self.cmb_resize.setEnabled(Qt.CheckState(state) == Qt.CheckState.Checked)
     
     def apply_preset(self, index):
         """Applies a preset configuration of processing options"""
