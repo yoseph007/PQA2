@@ -53,6 +53,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Run Environment Preflight Check
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python scripts/preflight_check.py --skip-hooks
+
       - name: Run Test Suite
         shell: pwsh
         env:

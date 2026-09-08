@@ -18,15 +18,16 @@ class HelpTab(QWidget):
 
         # Create tabbed interface for different help sections
         help_tabs = QTabWidget()
+        self.help_subtabs = help_tabs
 
         # Quick Start Guide tab
         quick_start_tab = QWidget()
         quick_start_layout = QVBoxLayout(quick_start_tab)
 
-        quick_start_browser = QTextBrowser()
-        quick_start_browser.setOpenExternalLinks(True)
-        quick_start_browser.setHtml(self._get_quick_start_content())
-        quick_start_layout.addWidget(quick_start_browser)
+        self.quick_start_browser = QTextBrowser()
+        self.quick_start_browser.setOpenExternalLinks(True)
+        self.quick_start_browser.setHtml(self._get_quick_start_content())
+        quick_start_layout.addWidget(self.quick_start_browser)
 
         help_tabs.addTab(quick_start_tab, "Quick Start Guide")
 
@@ -34,10 +35,10 @@ class HelpTab(QWidget):
         user_guide_tab = QWidget()
         user_guide_layout = QVBoxLayout(user_guide_tab)
 
-        user_guide_browser = QTextBrowser()
-        user_guide_browser.setOpenExternalLinks(True)
-        user_guide_browser.setHtml(self._get_user_guide_content())
-        user_guide_layout.addWidget(user_guide_browser)
+        self.user_guide_browser = QTextBrowser()
+        self.user_guide_browser.setOpenExternalLinks(True)
+        self.user_guide_browser.setHtml(self._get_user_guide_content())
+        user_guide_layout.addWidget(self.user_guide_browser)
 
         help_tabs.addTab(user_guide_tab, "User Guide")
 
@@ -45,10 +46,10 @@ class HelpTab(QWidget):
         setup_tab = QWidget()
         setup_layout = QVBoxLayout(setup_tab)
 
-        setup_browser = QTextBrowser()
-        setup_browser.setOpenExternalLinks(True)
-        setup_browser.setHtml(self._get_installation_content())
-        setup_layout.addWidget(setup_browser)
+        self.setup_browser = QTextBrowser()
+        self.setup_browser.setOpenExternalLinks(True)
+        self.setup_browser.setHtml(self._get_installation_content())
+        setup_layout.addWidget(self.setup_browser)
 
         help_tabs.addTab(setup_tab, "Installation & Setup")
 
@@ -56,10 +57,10 @@ class HelpTab(QWidget):
         formats_tab = QWidget()
         formats_layout = QVBoxLayout(formats_tab)
 
-        formats_browser = QTextBrowser()
-        formats_browser.setOpenExternalLinks(True)
-        formats_browser.setHtml(self._get_capture_formats_content())
-        formats_layout.addWidget(formats_browser)
+        self.formats_browser = QTextBrowser()
+        self.formats_browser.setOpenExternalLinks(True)
+        self.formats_browser.setHtml(self._get_capture_formats_content())
+        formats_layout.addWidget(self.formats_browser)
 
         help_tabs.addTab(formats_tab, "Capture Formats")
 
@@ -67,10 +68,10 @@ class HelpTab(QWidget):
         standards_tab = QWidget()
         standards_layout = QVBoxLayout(standards_tab)
 
-        standards_browser = QTextBrowser()
-        standards_browser.setOpenExternalLinks(True)
-        standards_browser.setHtml(self._get_standards_content())
-        standards_layout.addWidget(standards_browser)
+        self.standards_browser = QTextBrowser()
+        self.standards_browser.setOpenExternalLinks(True)
+        self.standards_browser.setHtml(self._get_standards_content())
+        standards_layout.addWidget(self.standards_browser)
 
         help_tabs.addTab(standards_tab, "VMAF Standards")
 
@@ -78,29 +79,96 @@ class HelpTab(QWidget):
         troubleshooting_tab = QWidget()
         troubleshooting_layout = QVBoxLayout(troubleshooting_tab)
 
-        troubleshooting_browser = QTextBrowser()
-        troubleshooting_browser.setOpenExternalLinks(True)
-        troubleshooting_browser.setHtml(self._get_troubleshooting_content())
-        troubleshooting_layout.addWidget(troubleshooting_browser)
+        self.troubleshooting_browser = QTextBrowser()
+        self.troubleshooting_browser.setOpenExternalLinks(True)
+        self.troubleshooting_browser.setHtml(self._get_troubleshooting_content())
+        troubleshooting_layout.addWidget(self.troubleshooting_browser)
 
         help_tabs.addTab(troubleshooting_tab, "Troubleshooting")
 
         # Add the tabs to the main layout
         layout.addWidget(help_tabs)
 
+    def _get_css(self):
+        """Get theme-aware CSS stylesheet for embedded HTML documentation"""
+        theme = getattr(self, '_current_theme', None)
+        if not theme:
+            window = self.window() if callable(getattr(self, 'window', None)) else None
+            if window and hasattr(window, 'theme_manager') and window.theme_manager:
+                theme = window.theme_manager.get_current_theme_name()
+            else:
+                theme = "Dark"
+
+        if theme == "Light":
+            return """
+                body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; background-color: #ffffff; color: #0f172a; padding: 12px; }
+                h1 { color: #0284c7; margin-bottom: 12px; font-size: 18pt; }
+                h2 { color: #2563eb; margin-top: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; font-size: 14pt; }
+                h3 { color: #7c3aed; margin-top: 14px; font-size: 12pt; }
+                h4 { color: #0f172a; margin-top: 10px; font-size: 10.5pt; }
+                p, li { color: #0f172a; font-size: 10pt; }
+                b, strong { color: #000000; font-weight: bold; }
+                a { color: #2563eb; text-decoration: underline; }
+                .step, .section { background-color: #f0fdf4; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #16a34a; border-radius: 4px; color: #0f172a; }
+                .tip, .note { background-color: #eff6ff; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #2563eb; border-radius: 4px; color: #1e3a8a; }
+                .warning { background-color: #fffbeb; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #d97706; border-radius: 4px; color: #78350f; }
+                .reference { background-color: #f0fdf4; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #059669; border-radius: 4px; color: #064e3b; }
+                .issue { background-color: #fef2f2; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #dc2626; border-radius: 4px; color: #7f1d1d; }
+                .solution { background-color: #f0fdf4; padding: 12px 16px; margin: 8px 0 16px 16px; border-left: 4px solid #16a34a; border-radius: 4px; color: #14532d; }
+                .code, pre, code { font-family: Consolas, monospace; background-color: #f1f5f9; color: #0f172a; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 9.5pt; }
+                table { border-collapse: collapse; width: 100%; margin: 16px 0; background-color: #ffffff; }
+                th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: left; color: #0f172a; }
+                th { background-color: #f1f5f9; color: #0284c7; font-weight: bold; }
+                tr:nth-child(even) td { background-color: #f8fafc; }
+            """
+        else:
+            return """
+                body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; background-color: #18181b; color: #f4f4f5; padding: 12px; }
+                h1 { color: #38bdf8; margin-bottom: 12px; font-size: 18pt; }
+                h2 { color: #60a5fa; margin-top: 20px; border-bottom: 1px solid #27272a; padding-bottom: 6px; font-size: 14pt; }
+                h3 { color: #c084fc; margin-top: 14px; font-size: 12pt; }
+                h4 { color: #f4f4f5; margin-top: 10px; font-size: 10.5pt; }
+                p, li { color: #f4f4f5; font-size: 10pt; }
+                b, strong { color: #ffffff; font-weight: bold; }
+                a { color: #38bdf8; text-decoration: underline; }
+                .step, .section { background-color: #1e1e24; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #22c55e; border-radius: 4px; color: #f4f4f5; }
+                .tip, .note { background-color: #172554; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #3b82f6; border-radius: 4px; color: #e0f2fe; }
+                .warning { background-color: #451a03; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #f59e0b; border-radius: 4px; color: #fef3c7; }
+                .reference { background-color: #064e3b; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #10b981; border-radius: 4px; color: #ecfdf5; }
+                .issue { background-color: #3b1414; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #ef4444; border-radius: 4px; color: #fee2e2; }
+                .solution { background-color: #052e16; padding: 12px 16px; margin: 8px 0 16px 16px; border-left: 4px solid #22c55e; border-radius: 4px; color: #dcfce7; }
+                .code, pre, code { font-family: Consolas, monospace; background-color: #0d0f12; color: #e2e8f0; padding: 4px 8px; border: 1px solid #2d3139; border-radius: 4px; font-size: 9.5pt; }
+                table { border-collapse: collapse; width: 100%; margin: 16px 0; background-color: #1e1e24; }
+                th, td { border: 1px solid #3f3f46; padding: 10px 12px; text-align: left; color: #f4f4f5; }
+                th { background-color: #27272a; color: #38bdf8; font-weight: bold; }
+                tr:nth-child(even) td { background-color: #18181b; }
+            """
+
+    def reload_content(self, theme_name=None):
+        """Reload all HTML browsers with current theme styles"""
+        if theme_name:
+            self._current_theme = theme_name
+        if hasattr(self, 'quick_start_browser') and self.quick_start_browser:
+            self.quick_start_browser.setHtml(self._get_quick_start_content())
+        if hasattr(self, 'user_guide_browser') and self.user_guide_browser:
+            self.user_guide_browser.setHtml(self._get_user_guide_content())
+        if hasattr(self, 'setup_browser') and self.setup_browser:
+            self.setup_browser.setHtml(self._get_installation_content())
+        if hasattr(self, 'formats_browser') and self.formats_browser:
+            self.formats_browser.setHtml(self._get_capture_formats_content())
+        if hasattr(self, 'standards_browser') and self.standards_browser:
+            self.standards_browser.setHtml(self._get_standards_content())
+        if hasattr(self, 'troubleshooting_browser') and self.troubleshooting_browser:
+            self.troubleshooting_browser.setHtml(self._get_troubleshooting_content())
+
     def _get_quick_start_content(self):
         """Get the HTML content for the Quick Start Guide"""
-        return """
+        css = self._get_css()
+        return f"""
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; }
-                h1 { color: #4CAF50; }
-                h2 { color: #2196F3; }
-                h3 { color: #673AB7; }
-                .step { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-left: 4px solid #4CAF50; }
-                .tip { background-color: #e3f2fd; padding: 10px; margin: 10px 0; border-left: 4px solid #2196F3; }
-                .warning { background-color: #fff3e0; padding: 10px; margin: 10px 0; border-left: 4px solid #FF9800; }
+{css}
             </style>
         </head>
         <body>
@@ -167,20 +235,12 @@ class HelpTab(QWidget):
 
     def _get_user_guide_content(self):
         """Get the HTML content for the User Guide"""
-        return """
+        css = self._get_css()
+        return f"""
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; }
-                h1 { color: #4CAF50; }
-                h2 { color: #2196F3; }
-                h3 { color: #673AB7; }
-                .section { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-left: 4px solid #4CAF50; }
-                .tip { background-color: #e3f2fd; padding: 10px; margin: 10px 0; border-left: 4px solid #2196F3; }
-                .warning { background-color: #fff3e0; padding: 10px; margin: 10px 0; border-left: 4px solid #FF9800; }
-                table { border-collapse: collapse; width: 100%; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; }
+{css}
             </style>
         </head>
         <body>
@@ -330,18 +390,12 @@ class HelpTab(QWidget):
 
     def _get_installation_content(self):
         """Get the HTML content for the Installation & Setup tab"""
-        return """
+        css = self._get_css()
+        return f"""
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; }
-                h1 { color: #4CAF50; }
-                h2 { color: #2196F3; }
-                h3 { color: #673AB7; }
-                .section { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-left: 4px solid #4CAF50; }
-                .code { font-family: monospace; background-color: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto; }
-                .note { background-color: #e3f2fd; padding: 10px; margin: 10px 0; border-left: 4px solid #2196F3; }
-                .warning { background-color: #fff3e0; padding: 10px; margin: 10px 0; border-left: 4px solid #FF9800; }
+{css}
             </style>
         </head>
         <body>
@@ -421,19 +475,12 @@ class HelpTab(QWidget):
 
     def _get_standards_content(self):
         """Get the HTML content for the VMAF Standards tab"""
-        return """
+        css = self._get_css()
+        return f"""
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; }
-                h1 { color: #4CAF50; }
-                h2 { color: #2196F3; }
-                h3 { color: #673AB7; }
-                .section { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-left: 4px solid #4CAF50; }
-                .reference { background-color: #e8f5e9; padding: 10px; margin: 10px 0; border-left: 4px solid #388E3C; }
-                table { border-collapse: collapse; width: 100%; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; }
+{css}
             </style>
         </head>
         <body>
@@ -616,17 +663,12 @@ class HelpTab(QWidget):
 
     def _get_troubleshooting_content(self):
         """Get the HTML content for the Troubleshooting tab"""
-        return """
+        css = self._get_css()
+        return f"""
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; }
-                h1 { color: #4CAF50; }
-                h2 { color: #2196F3; }
-                h3 { color: #673AB7; }
-                .issue { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-left: 4px solid #F44336; }
-                .solution { background-color: #e8f5e9; padding: 10px; margin: 5px 0 15px 20px; border-left: 4px solid #4CAF50; }
-                .code { font-family: monospace; background-color: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto; }
+{css}
             </style>
         </head>
         <body>
@@ -843,20 +885,12 @@ class HelpTab(QWidget):
 
     def _get_capture_formats_content(self):
         """Get the HTML content for the Capture Formats section"""
-        return """
+        css = self._get_css()
+        return f"""
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; }
-                h1 { color: #4CAF50; }
-                h2 { color: #2196F3; }
-                h3 { color: #673AB7; }
-                .section { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-left: 4px solid #4CAF50; }
-                .note { background-color: #e3f2fd; padding: 10px; margin: 10px 0; border-left: 4px solid #2196F3; }
-                table { border-collapse: collapse; width: 100%; margin: 15px 0; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; }
-                .code { font-family: monospace; background-color: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto; }
+{css}
             </style>
         </head>
         <body>

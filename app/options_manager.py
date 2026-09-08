@@ -96,7 +96,10 @@ class OptionsManager(QObject):
                 "is_interlaced": False,
                 "retry_attempts": 3,  # Number of device connection retry attempts
                 "retry_delay": 3,  # Seconds between retry attempts
-                "recovery_timeout": 10  # Seconds to wait for device recovery
+                "recovery_timeout": 10,  # Seconds to wait for device recovery
+                "startup_timeout_s": 10.0,  # Max seconds to wait for initial video frames
+                "stall_timeout_s": 5.0,  # Max seconds without frame progress during capture
+                "preflight_min_disk_mb": 2048  # Minimum free disk buffer required in MB (2 GB)
             },
             # Analysis settings
             "analysis": {

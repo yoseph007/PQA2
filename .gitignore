@@ -57,8 +57,12 @@ test_results/
 # === Misc ===
 *.bak
 *.tmp
+scratch/
 *.mp4
 *.bat
+!setup_dev.bat
+!run_app.bat
+!scripts/*.bat
 *.iss
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -98,3 +102,5 @@ installer/
 config/
 ffmpeg_bin/
 ci_artifacts/
+reports/
+captures/

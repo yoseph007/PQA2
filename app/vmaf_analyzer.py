@@ -13,6 +13,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 # Now using the improved utility functions
 from .utils import get_ffmpeg_path, get_subprocess_startupinfo
+from app.version import get_version_string
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +220,7 @@ class VMAFAnalyzer(QObject):
             return cls._cached_capabilities
 
         caps = {
+            "ffmpeg_path": ffmpeg_exe,
             "has_libvmaf": False,
             "has_psnr_feature": False,
             "has_float_ssim": False,
@@ -971,9 +973,11 @@ class VMAFAnalyzer(QObject):
                         }
                     },
                     'measurement_metadata': {
+                        'app_version': get_version_string(),
                         'alignment': alignment_metadata or {},
                         'capture': capture_metadata or {},
                         'model': model,
+                        'ffmpeg_version': (caps or {}).get('ffmpeg_version', 'unknown'),
                         'libvmaf_version': (caps or {}).get('ffmpeg_version', 'unknown'),
                         'libvmaf_path_escaping': (caps or {}).get('libvmaf_path_escaping', 'unknown'),
                     }

@@ -29,7 +29,7 @@ class SetupTab(QWidget):
 
         # Summary header with improved styling
         self.lbl_setup_summary = QLabel("Select a reference video to begin")
-        self.lbl_setup_summary.setStyleSheet("font-weight: bold; color: #444; background-color: #f5f5f5; padding: 8px; border-radius: 4px;")
+        self.lbl_setup_summary.setObjectName("summaryCard")
         self.lbl_setup_summary.setWordWrap(True)
         main_layout.addWidget(self.lbl_setup_summary)
 
@@ -56,13 +56,13 @@ class SetupTab(QWidget):
 
         # Add reference directory path label
         self.lbl_ref_dir_path = QLabel("Directory: None")
-        self.lbl_ref_dir_path.setStyleSheet("color: #666; font-size: 9pt;")
+        self.lbl_ref_dir_path.setObjectName("mutedLabel")
         self.lbl_ref_dir_path.setWordWrap(True)
         reference_layout.addWidget(self.lbl_ref_dir_path)
 
         # Information about using default output directory
         note_label = QLabel("Output files will be saved to the location specified in Options.")
-        note_label.setStyleSheet("color: gray; font-style: italic;")
+        note_label.setObjectName("mutedLabel")
         reference_layout.addWidget(note_label)
 
 
@@ -141,14 +141,14 @@ class SetupTab(QWidget):
         self.video_preview = QLabel("No video selected")
         self.video_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_preview.setMinimumSize(400, 225)  # 16:9 aspect ratio
-        self.video_preview.setStyleSheet("background-color: #e0e0e0; border-radius: 4px;")
+        self.video_preview.setObjectName("previewLabel")
         preview_inner_layout.addWidget(self.video_preview)
 
         preview_layout.addWidget(preview_frame)
 
         # Preview status
         self.lbl_preview_status = QLabel("Status: No video selected")
-        self.lbl_preview_status.setStyleSheet("color: #666; font-size: 9pt;")
+        self.lbl_preview_status.setObjectName("mutedLabel")
         preview_layout.addWidget(self.lbl_preview_status)
 
         preview_group.setLayout(preview_layout)
@@ -163,15 +163,7 @@ class SetupTab(QWidget):
         self.txt_setup_log.setReadOnly(True)
         self.txt_setup_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.txt_setup_log.setMinimumHeight(150)
-        self.txt_setup_log.setStyleSheet("""
-            QTextEdit {
-                background-color: #f8f8f8;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 9pt;
-                padding: 4px;
-                border: 1px solid #ddd;
-            }
-        """)
+        self.txt_setup_log.setObjectName("logConsole")
         log_layout.addWidget(self.txt_setup_log)
 
         # Log controls
@@ -198,7 +190,7 @@ class SetupTab(QWidget):
 
         self.btn_next_to_capture = QPushButton("Next: Capture")
         self.btn_next_to_capture.setEnabled(False)
-        self.btn_next_to_capture.setStyleSheet("font-weight: bold;")
+        self.btn_next_to_capture.setObjectName("primaryButton")
         nav_layout.addWidget(self.btn_next_to_capture)
 
         main_layout.addLayout(nav_layout)
@@ -367,13 +359,13 @@ class SetupTab(QWidget):
 
         # Format errors in red
         if "error" in message.lower() or "failed" in message.lower() or "exception" in message.lower():
-            formatted_message = f'<span style="color: #D32F2F; font-weight: bold;">[{timestamp}] {message}</span>'
+            formatted_message = f'<span style="color: #ef4444; font-weight: bold;">[{timestamp}] {message}</span>'
         # Format warnings in orange
         elif "warning" in message.lower() or "caution" in message.lower():
-            formatted_message = f'<span style="color: #FF9800;">[{timestamp}] {message}</span>'
+            formatted_message = f'<span style="color: #f59e0b; font-weight: bold;">[{timestamp}] {message}</span>'
         # Format success messages in green
         elif "success" in message.lower() or "complete" in message.lower() or "finished" in message.lower():
-            formatted_message = f'<span style="color: #388E3C; font-weight: bold;">[{timestamp}] {message}</span>'
+            formatted_message = f'<span style="color: #22c55e; font-weight: bold;">[{timestamp}] {message}</span>'
         # Regular messages with timestamp
         else:
             formatted_message = f'[{timestamp}] {message}'
@@ -392,13 +384,6 @@ class SetupTab(QWidget):
 
         # Update main window status bar
         self.parent.statusBar().showMessage(message)
-
-        # If error message, flash status bar to draw attention
-        if "error" in message.lower():
-            current_style = self.parent.statusBar().styleSheet()
-            self.parent.statusBar().setStyleSheet("background-color: #FFCDD2;")  # Light red
-            # Reset style after 2 seconds
-            QTimer.singleShot(2000, lambda: self.parent.statusBar().setStyleSheet(current_style))
 
     def ensure_threads_finished(self):
         """Ensure all running threads are properly terminated"""
