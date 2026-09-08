@@ -1,8 +1,8 @@
 
 import logging
 
-from PyQt5.QtGui import QColor, QPalette
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtWidgets import QApplication
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class ThemeManager:
                 elif theme == "Dark":
                     try:
                         import qdarkstyle
-                        app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+                        app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt6'))
                     except ImportError:
                         logger.warning("QDarkStyle not installed, using default theme")
                         app.setStyleSheet("")
@@ -75,18 +75,18 @@ class ThemeManager:
                         text_color = branding_settings.get("text_color", text_color)
                         accent_color = branding_settings.get("accent_color", accent_color)
                     
-                    palette.setColor(QPalette.Window, QColor(bg_color))
-                    palette.setColor(QPalette.WindowText, QColor(text_color))
-                    palette.setColor(QPalette.Base, QColor(bg_color).lighter(110))
-                    palette.setColor(QPalette.AlternateBase, QColor(bg_color))
-                    palette.setColor(QPalette.ToolTipBase, QColor(text_color))
-                    palette.setColor(QPalette.ToolTipText, QColor(text_color))
-                    palette.setColor(QPalette.Text, QColor(text_color))
-                    palette.setColor(QPalette.Button, QColor(bg_color).lighter(110))
-                    palette.setColor(QPalette.ButtonText, QColor(text_color))
-                    palette.setColor(QPalette.BrightText, QColor(text_color).lighter(150))
-                    palette.setColor(QPalette.Highlight, QColor(accent_color))
-                    palette.setColor(QPalette.HighlightedText, QColor(text_color).lighter(150))
+                    palette.setColor(QPalette.ColorRole.Window, QColor(bg_color))
+                    palette.setColor(QPalette.ColorRole.WindowText, QColor(text_color))
+                    palette.setColor(QPalette.ColorRole.Base, QColor(bg_color).lighter(110))
+                    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(bg_color))
+                    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(text_color))
+                    palette.setColor(QPalette.ColorRole.ToolTipText, QColor(text_color))
+                    palette.setColor(QPalette.ColorRole.Text, QColor(text_color))
+                    palette.setColor(QPalette.ColorRole.Button, QColor(bg_color).lighter(110))
+                    palette.setColor(QPalette.ColorRole.ButtonText, QColor(text_color))
+                    palette.setColor(QPalette.ColorRole.BrightText, QColor(text_color).lighter(150))
+                    palette.setColor(QPalette.ColorRole.Highlight, QColor(accent_color))
+                    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(text_color).lighter(150))
                     
                     app.setPalette(palette)
                     

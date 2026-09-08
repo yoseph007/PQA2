@@ -1,6 +1,6 @@
 import logging
 
-from PyQt5.QtWidgets import QTabWidget, QTextBrowser, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QTabWidget, QTextBrowser, QVBoxLayout, QWidget
 
 logger = logging.getLogger(__name__)
 
@@ -772,7 +772,7 @@ class HelpTab(QWidget):
 
                 <div class="solution">
                     <h4>Solutions:</h4>                    <ol>
-                        <li>Verify PyQt5 is properly installed</li>
+                        <li>Verify PyQt6 is properly installed</li>
                         <li>Try resetting the application settings in the Options tab</li>
                         <li>Make sure your display resolution meets minimum requirements</li>
                         <li>Try changing the theme setting</li>

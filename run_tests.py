@@ -115,12 +115,9 @@ def run_tests(modules=None, verbose=False):
 def validate_app_installation():
     """Check if the app is correctly installed with all dependencies"""
     try:
-        # Check core PyQt5 dependencies
-        import PyQt5
-        from PyQt5 import QtWidgets, QtCore, QtGui
-        
-        # Check charting dependencies
-        from PyQt5 import QtChart
+        # Check core PyQt6 dependencies
+        import PyQt6
+        from PyQt6 import QtWidgets, QtCore, QtGui
         
         # Check reporting dependencies
         import reportlab
