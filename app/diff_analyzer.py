@@ -775,9 +775,18 @@ class DiffAnalyzer:
                 "hardware re-capture repeatability (σ_rig), replacing the declared resolution convention with measured instrument uncertainty.</font>"
             )
             elements.append(Paragraph(u_note, styles['Normal']))
-            elements.append(Spacer(1, 0.08 * inch))
-        else:
-            elements.append(Spacer(1, 0.15 * inch))
+            elements.append(Spacer(1, 0.04 * inch))
+
+        fn_text = (
+            "<font size=7 color='#64748b'>"
+            "<b>Statistical Footnote 1 (Coverage & Confidence):</b> 3σ corresponds to ~99.7% confidence under asymptotic normality. "
+            "For finite campaign sample sizes (e.g. N=8, ν=7 degrees of freedom), Student's t distribution yields wider confidence intervals at nominal 99.7% coverage.<br/>"
+            "<b>Statistical Footnote 2 (Quadrature Formulation):</b> In comparisons where treatment variance σ₂ represents the repeatability campaign itself, "
+            "σ_Δ = √(σ₁² + σ₂² + σ_rig²) distinguishes observed sample dispersion from the prospective measurement noise floor."
+            "</font>"
+        )
+        elements.append(Paragraph(fn_text, styles['Normal']))
+        elements.append(Spacer(1, 0.08 * inch))
 
         # 5. Embedded Comparison Chart
         elements.append(Paragraph(

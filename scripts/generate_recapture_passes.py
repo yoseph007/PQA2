@@ -35,11 +35,15 @@ print("=" * 76)
 
 created_files = []
 
+selected_passes = [int(p) for p in sys.argv[1:]] if len(sys.argv) > 1 else list(range(1, len(PASS_CONFIGS) + 1))
+
 for idx, cfg in enumerate(PASS_CONFIGS, 1):
+    if idx not in selected_passes:
+        continue
     out_name = f"recapture_pass_{idx:02d}_aligned.mp4"
     out_path = os.path.join(CAPTURES_DIR, out_name)
     
-    vf = f"noise=c0s={cfg['noise_strength']}:c1s={cfg['noise_strength']}:c2s={cfg['noise_strength']}:allf={cfg['flags']}"
+    vf = f"noise=c0s={cfg['noise_strength']}:c1s={cfg['noise_strength']}:c2s={cfg['noise_strength']}:allf={cfg['flags']}:all_seed={cfg['seed']}"
     cmd = [
         FFMPEG_BIN,
         "-y",
@@ -52,7 +56,7 @@ for idx, cfg in enumerate(PASS_CONFIGS, 1):
         out_path
     ]
     
-    print(f" [{idx}/8] Generating {out_name} (noise={cfg['noise_strength']}, flags={cfg['flags']}, crf={cfg['crf']})...", end=" ", flush=True)
+    print(f" [{idx}/8] Generating {out_name} (noise={cfg['noise_strength']}, flags={cfg['flags']}, seed={cfg['seed']}, crf={cfg['crf']})...", end=" ", flush=True)
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
         print(f"FAILED!\n{res.stderr}")

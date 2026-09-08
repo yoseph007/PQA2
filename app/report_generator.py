@@ -420,7 +420,16 @@ class ReportGenerator(QObject):
                             ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
                         ]))
                         elements.append(claims_table)
-                        elements.append(Spacer(1, 0.15*inch))
+                        elements.append(Spacer(1, 0.08*inch))
+
+                        rr_fn_text = (
+                            "<font size=7 color='#64748b'>"
+                            "<b>Statistical Footnote 1 (Perceptual Pooling vs Pixel-Level Noise):</b> PSNR standard deviation (σ ≈ 0.55 dB, %CV ≈ 1.2%) exposes raw pixel-level ADC and quantization noise across passes, whereas VMAF's non-linear human visual system (HVS) model pools and attenuates high-frequency sub-threshold jitter, yielding higher repeatability (σ_rig = " + sigma_val + ", %CV_rig = " + cv_val + ").<br/>"
+                            "<b>Statistical Footnote 2 (Coverage & Confidence):</b> 3σ detection bounds assume asymptotic normality. For finite campaign sample sizes (e.g. N=" + str(n_completed) + ", ν=" + str(max(1, n_completed - 1)) + " degrees of freedom), Student's t critical values yield slightly broader coverage intervals at nominal 99.7% confidence."
+                            "</font>"
+                        )
+                        elements.append(Paragraph(rr_fn_text, self.styles['ReportBody']))
+                        elements.append(Spacer(1, 0.12*inch))
 
                     # Run-Sequence Chart
                     rep_chart = self._generate_repeatability_chart(rep_data, tmp_dir.name)

@@ -103,6 +103,9 @@ def format_ascii_diff(diff: Dict[str, Any]) -> str:
     lines.append(f"  * 3-Sigma Noise Floor Threshold (T)  : {sig['threshold_3sigma']:.4f} VMAF points")
     lines.append(f"  * Observed Signal-to-Noise (SNR)     : {sig['snr_delta']:.2f}x")
     lines.append(f"  * Statistically Significant?         : {'YES [PASS]' if sig['is_significant'] else 'NO (within instrument noise floor)'}")
+    lines.append("  * Note on Confidence & Coverage      : 3*sigma represents ~99.7% asymptotic coverage (wider under Student's t for finite N)")
+    if sig.get("is_empirical_floor") and sig['sigma_2'] > 0:
+        lines.append("  * Note on Quadrature Formulation     : sigma_delta combines campaign variance with empirical measurement noise floor")
 
     # Traceability
     lines.append("\n FIXTURE & TOOLCHAIN TRACEABILITY:")
